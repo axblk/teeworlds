@@ -340,5 +340,9 @@ public:
 	bool ToggleFullscreen();
 	void ToggleWindowBordered();
 	void ToggleWindowVSync();
+
+	virtual void DemoSliceBegin();
+	virtual void DemoSliceEnd();
+	virtual void DemoSlice(const char *pDstPath);
 };
 #endif
