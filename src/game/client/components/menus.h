@@ -342,6 +342,7 @@ private:
 	bool m_KeyReaderWasActive;
 	bool m_KeyReaderIsActive;
 	int m_DemoPlayerState;
+	char m_aDemoPlayerPopupHint[256];
 
 	// generic popups
 	typedef void (CMenus::*FPopupButtonCallback)();
