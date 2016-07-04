@@ -149,6 +149,8 @@ MACRO_CONFIG_INT(WaAutoRecord, wa_auto_record, 1, 0, 1, CFGFLAG_SERVER, "Enables
 MACRO_CONFIG_INT(WaAutoAddMaps, wa_auto_add_maps, 0, 0, 1, CFGFLAG_SERVER, "Enables auto adding maps")
 
 MACRO_CONFIG_STR(WaVoteDescription, wa_vote_description, 64, "change map to %s", CFGFLAG_SERVER, "Vote description for update map vote command")
+
+MACRO_CONFIG_STR(WaMapTypes, wa_map_types, 128, "race", CFGFLAG_SERVER, "The type of maps to be fetched from teerace (e.g. 'race long')")
 #endif
 
 // debug

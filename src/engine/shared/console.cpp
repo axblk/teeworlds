@@ -35,6 +35,15 @@ float CConsole::CResult::GetFloat(unsigned Index)
 	return str_tofloat(m_apArgs[Index]);
 }
 
+#if defined(CONF_TEERACE)
+void CConsole::CResult::ChangeArgument(unsigned Index, const char *pArg)
+{
+	if (Index >= m_NumArgs)
+		return;
+	m_apArgs[Index] = pArg;
+}
+#endif
+
 const IConsole::CCommandInfo *CConsole::CCommand::NextCommandInfo(int AccessLevel, int FlagMask) const
 {
 	const CCommand *pInfo = m_pNext;

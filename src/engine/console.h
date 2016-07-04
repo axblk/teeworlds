@@ -40,6 +40,10 @@ public:
 		virtual float GetFloat(unsigned Index) = 0;
 		virtual const char *GetString(unsigned Index) = 0;
 
+#if defined(CONF_TEERACE)
+		virtual void ChangeArgument(unsigned Index, const char *pArg) = 0;
+#endif
+
 		int NumArguments() const { return m_NumArgs; }
 	};
 

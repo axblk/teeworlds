@@ -115,6 +115,10 @@ class CConsole : public IConsole
 		virtual const char *GetString(unsigned Index);
 		virtual int GetInteger(unsigned Index);
 		virtual float GetFloat(unsigned Index);
+
+#if defined(CONF_TEERACE)
+		virtual void ChangeArgument(unsigned Index, const char *pArg);
+#endif
 	};
 
 	int ParseStart(CResult *pResult, const char *pString, int Length);

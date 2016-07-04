@@ -213,7 +213,6 @@ void CServerWebapp::OnMapList(IResponse *pResponse, bool ConnError, void *pUserD
 			sscanf(Map["crc"], "%08x", &Info.m_Crc);
 			Info.m_ID = Map["id"].u.integer;
 			Info.m_RunCount = Map["run_count"].u.integer;
-			Info.m_MapType = Map["get_map_type"].u.integer;
 			str_copy(Info.m_aURL, Map["get_download_url"], sizeof(Info.m_aURL));
 			str_copy(Info.m_aAuthor, Map["author"], sizeof(Info.m_aAuthor));
 
@@ -453,7 +452,10 @@ void CServerWebapp::Tick()
 
 void CServerWebapp::LoadMapList()
 {
-	CBufferRequest *pRequest = CreateAuthedApiRequest(IRequest::HTTP_GET, "/maps/list/");
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "/maps/list/%s/", g_Config.m_WaMapTypes);
+
+	CBufferRequest *pRequest = CreateAuthedApiRequest(IRequest::HTTP_GET, aBuf);
 	CRequestInfo *pInfo = new CRequestInfo(ITeerace::Host());
 	pInfo->SetCallback(OnMapList, this);
 	Server()->SendHttp(pInfo, pRequest);
@@ -471,7 +473,7 @@ void CServerWebapp::AddMapVotes()
 		for(int i = 0; i < m_lMapList.size(); i++)
 		{
 			CMapInfo *pMapInfo = &m_lMapList[i];
-			if(pMapInfo->m_State == CMapInfo::MAPSTATE_COMPLETE && m_CurrentMap.m_MapType == pMapInfo->m_MapType)
+			if(pMapInfo->m_State == CMapInfo::MAPSTATE_COMPLETE)
 			{
 				char aVoteDescription[128];
 				if(str_find(g_Config.m_WaVoteDescription, "%s"))

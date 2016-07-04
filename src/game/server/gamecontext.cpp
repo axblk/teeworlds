@@ -1753,23 +1753,12 @@ void CGameContext::ConUpdateMapVote(IConsole::IResult *pResult, void *pUserData)
 		}
 	}
 
-	int CurrentMapType = pSelf->m_pWebapp->CurrentMap()->m_ID != -1 ? pSelf->m_pWebapp->CurrentMap()->m_MapType : -1;
-	if(!pResult->NumArguments() && CurrentMapType == -1)
-	{
-		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "failed to get map type of current map");
-			return;
-	}
-
 	bool First = true;
 	int Argument = pResult->NumArguments() ? clamp(pResult->GetInteger(0), 0, pSelf->m_pWebapp->GetMapCount()-1) : -1;
 	for(int i = 0; i < pSelf->m_pWebapp->GetMapCount(); i++)
 	{
 		int ID = pResult->NumArguments() ? Argument : i;
 		CServerWebapp::CMapInfo *pMapInfo = pSelf->m_pWebapp->GetMap(ID);
-
-		// dont add maps with other map type
-		if(!pResult->NumArguments() && pMapInfo->m_MapType != CurrentMapType)
-			continue;
 
 		char aVoteDescription[128];
 		if(str_find(g_Config.m_WaVoteDescription, "%s"))
@@ -1835,6 +1824,57 @@ void CGameContext::ConUpdateMapVote(IConsole::IResult *pResult, void *pUserData)
 	if(File)
 		io_close(File);
 }
+
+void CGameContext::ConchainSpecialMapTypes(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	char aTypeList[128];
+	str_copy(aTypeList, pResult->GetString(0), sizeof(aTypeList));
+
+	// allways put the default for current gametype in the configuration
+	char aCurGametype[32];
+	if(str_find_nocase(g_Config.m_SvGametype, "cap"))
+	{
+		if(g_Config.m_SvNoItems)
+			str_copy(aCurGametype, "fastcap-no-weapons", sizeof(aCurGametype));
+		else
+			str_copy(aCurGametype, "fastcap", sizeof(aCurGametype));
+	}
+	else
+		str_copy(aCurGametype, "race", sizeof(aCurGametype));
+
+	bool GameTypeFound = false;
+	const char *pCurrentGametype = aCurGametype;
+	int CurrentGametypeLen = str_length(aCurGametype);
+	const char *pNextType = aTypeList;
+	while(*pNextType)
+	{
+		int WordLen = 0;
+		while(pNextType[WordLen] && pNextType[WordLen] != ' ')
+			WordLen++;
+
+		if(WordLen == CurrentGametypeLen && str_comp_num(pNextType, pCurrentGametype, CurrentGametypeLen) == 0)
+		{
+			pNextType += CurrentGametypeLen;
+			while(*pNextType && *pNextType == ' ')
+				pNextType++;
+
+			GameTypeFound = true;
+			break;
+		}
+
+		pNextType++;
+	}
+
+	if (!GameTypeFound)
+	{
+		char aBuf[32];
+		str_format(aBuf, sizeof(aBuf), " %s", aCurGametype);
+		str_append(aTypeList, aBuf, sizeof(aTypeList));
+		pResult->ChangeArgument(0, aTypeList);
+	}
+
+	pfnCallback(pResult, pCallbackUserData);
+}
 #endif
 
 void CGameContext::OnConsoleInit()
@@ -1877,6 +1917,8 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("maplist", "?i", CFGFLAG_SERVER, ConMaplist, this, "Shows the current map list with map ID's");
 	Console()->Register("reload_maplist", "", CFGFLAG_SERVER, ConReloadMaplist, this, "Reloads the map list");
 	Console()->Register("update_map_votes", "?i", CFGFLAG_SERVER, ConUpdateMapVote, this, "Updates the map votes and stores it into the config");
+
+	Console()->Chain("wa_map_types", ConchainSpecialMapTypes, this);
 #endif
 }
 

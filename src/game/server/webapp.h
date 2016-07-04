@@ -24,7 +24,6 @@ public:
 		int m_RunCount;
 		int m_ID;
 		char m_aName[128];
-		int m_MapType;
 		unsigned m_Crc;
 		char m_aURL[128];
 		char m_aAuthor[32];
