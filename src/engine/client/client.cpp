@@ -1823,6 +1823,8 @@ void CClient::Run()
 
 	while (1)
 	{
+		set_new_tick();
+
 		//
 		VersionUpdate();
 

@@ -29,6 +29,7 @@
 
 	#if defined(CONF_PLATFORM_MACOSX)
 		#include <Carbon/Carbon.h>
+		#include <mach/mach_time.h>
 	#endif
 
 #elif defined(CONF_FAMILY_WINDOWS)
@@ -531,20 +532,48 @@ void lock_unlock(LOCK lock)
 
 
 /* -----  time ----- */
+
+static int new_tick = -1;
+
+void set_new_tick()
+{
+	new_tick = 1;
+}
+
 int64 time_get()
 {
-#if defined(CONF_FAMILY_UNIX)
-	struct timeval val;
-	gettimeofday(&val, NULL);
-	return (int64)val.tv_sec*(int64)1000000+(int64)val.tv_usec;
-#elif defined(CONF_FAMILY_WINDOWS)
 	static int64 last = 0;
-	int64 t;
-	QueryPerformanceCounter((PLARGE_INTEGER)&t);
-	if(t<last) /* for some reason, QPC can return values in the past */
+	if(new_tick == 0)
 		return last;
-	last = t;
-	return t;
+	if(new_tick != -1)
+		new_tick = 0;
+
+#if defined(CONF_PLATFORM_MACOSX)
+	static int got_timebase = 0;
+	mach_timebase_info_data_t timebase;
+	if(!got_timebase)
+	{
+		mach_timebase_info(&timebase);
+	}
+	uint64_t time = mach_absolute_time();
+	uint64_t q = time / timebase.denom;
+	uint64_t r = time % timebase.denom;
+	last = q * timebase.numer + r * timebase.numer / timebase.denom;
+	return last;
+#elif defined(CONF_FAMILY_UNIX)
+	struct timespec spec;
+	clock_gettime(CLOCK_MONOTONIC, &spec);
+	last = (int64)spec.tv_sec*(int64)1000000+(int64)spec.tv_nsec/1000;
+	return last;
+#elif defined(CONF_FAMILY_WINDOWS)
+	{
+		int64 t;
+		QueryPerformanceCounter((PLARGE_INTEGER)&t);
+		if(t<last) /* for some reason, QPC can return values in the past */
+			return last;
+		last = t;
+		return t;
+	}
 #else
 	#error not implemented
 #endif
@@ -552,7 +581,9 @@ int64 time_get()
 
 int64 time_freq()
 {
-#if defined(CONF_FAMILY_UNIX)
+#if defined(CONF_PLATFORM_MACOSX)
+	return 1000000000;
+#elif defined(CONF_FAMILY_UNIX)
 	return 1000000;
 #elif defined(CONF_FAMILY_WINDOWS)
 	int64 t;
@@ -1529,8 +1560,8 @@ int net_socket_read_wait(NETSOCKET sock, int time)
 	fd_set readfds;
 	int sockid;
 
-	tv.tv_sec = 0;
-	tv.tv_usec = 1000*time;
+	tv.tv_sec = time / 1000000;
+	tv.tv_usec = time % 1000000;
 	sockid = 0;
 
 	FD_ZERO(&readfds);
