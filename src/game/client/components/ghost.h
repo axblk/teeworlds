@@ -15,7 +15,7 @@ class CGhost : public CComponent
 private:
 	enum
 	{
-		MAX_ACTIVE_GHOSTS = 8,
+		MAX_ACTIVE_GHOSTS = 16,
 	};
 
 	class CGhostPath
