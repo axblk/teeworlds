@@ -189,15 +189,18 @@ void CDemoRecorder::Write(int Type, const void *pData, int Size)
 	mem_copy(aBuffer2, pData, Size);
 	while(Size&3)
 		aBuffer2[Size++] = 0;
-
 	Size = CVariableInt::Compress(aBuffer2, Size, aBuffer, sizeof(aBuffer)); // buffer2 -> buffer
 	if(Size < 0)
+	{
+		m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "demo_recorder", "error during intpack compression");
 		return;
-
+	}
 	Size = CNetBase::Compress(aBuffer, Size, aBuffer2, sizeof(aBuffer2)); // buffer -> buffer2
 	if(Size < 0)
+	{
+		m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "demo_recorder", "error during network compression");
 		return;
-
+	}
 
 	aChunk[0] = ((Type&0x3)<<5);
 	if(Size < 30)
@@ -677,8 +680,8 @@ int CDemoPlayer::Load(class IStorage *pStorage, class IConsole *pConsole, const 
 		// get timeline markers
 		int Num = ((m_Info.m_TimelineMarkers.m_aNumTimelineMarkers[0]<<24)&0xFF000000) | ((m_Info.m_TimelineMarkers.m_aNumTimelineMarkers[1]<<16)&0xFF0000) |
 					((m_Info.m_TimelineMarkers.m_aNumTimelineMarkers[2]<<8)&0xFF00) | (m_Info.m_TimelineMarkers.m_aNumTimelineMarkers[3]&0xFF);
-		m_Info.m_Info.m_NumTimelineMarkers = Num;
-		for(int i = 0; i < Num && i < MAX_TIMELINE_MARKERS; i++)
+		m_Info.m_Info.m_NumTimelineMarkers = min(Num, int(MAX_TIMELINE_MARKERS));
+		for(int i = 0; i < m_Info.m_Info.m_NumTimelineMarkers; i++)
 		{
 			char *pTimelineMarker = m_Info.m_TimelineMarkers.m_aTimelineMarkers[i];
 			m_Info.m_Info.m_aTimelineMarkers[i] = ((pTimelineMarker[0]<<24)&0xFF000000) | ((pTimelineMarker[1]<<16)&0xFF0000) |
