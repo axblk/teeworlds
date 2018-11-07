@@ -218,6 +218,8 @@ public:
 	int64 ConnectTime() const { return m_LastUpdateTime; }
 
 	int AckSequence() const { return m_Ack; }
+
+	int TokenType() const { return m_TokenType; }
 };
 
 class CConsoleNetConnection
@@ -330,6 +332,8 @@ public:
 
 	//
 	void SetMaxClientsPerIP(int Max);
+
+	int TokenType(int ClientID) const { return m_aSlots[ClientID].m_Connection.TokenType(); }
 };
 
 class CNetConsole

@@ -893,7 +893,9 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				net_addr_str(m_NetServer.ClientAddr(ClientID), aAddrStr, sizeof(aAddrStr), true);
 
 				char aBuf[256];
-				str_format(aBuf, sizeof(aBuf), "player is ready. ClientID=%x addr=%s", ClientID, aAddrStr);
+				int TokenType = m_NetServer.TokenType(ClientID);
+				const char *pTokenType = TokenType == TOKEN_VANILLA ? "vanilla" : TokenType == TOKEN_DDNET ? "ddnet" : "none";
+				str_format(aBuf, sizeof(aBuf), "player is ready. ClientID=%x addr=%s token=%s", ClientID, aAddrStr, pTokenType);
 				Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "server", aBuf);
 				m_aClients[ClientID].m_State = CClient::STATE_READY;
 				GameServer()->OnClientConnected(ClientID);
@@ -1483,8 +1485,10 @@ void CServer::ConStatus(IConsole::IResult *pResult, void *pUser)
 			{
 				const char *pAuthStr = pThis->m_aClients[i].m_Authed == CServer::AUTHED_ADMIN ? "(Admin)" :
 										pThis->m_aClients[i].m_Authed == CServer::AUTHED_MOD ? "(Mod)" : "";
-				str_format(aBuf, sizeof(aBuf), "id=%d addr=%s name='%s' score=%d %s", i, aAddrStr,
-					pThis->m_aClients[i].m_aName, pThis->m_aClients[i].m_Score, pAuthStr);
+				int TokenType = pThis->m_NetServer.TokenType(i);
+				const char *pTokenType = TokenType == TOKEN_VANILLA ? "vanilla" : TokenType == TOKEN_DDNET ? "ddnet" : "none";
+				str_format(aBuf, sizeof(aBuf), "id=%d addr=%s name='%s' score=%d token=%s %s", i, aAddrStr,
+					pThis->m_aClients[i].m_aName, pThis->m_aClients[i].m_Score, pTokenType, pAuthStr);
 			}
 			else
 				str_format(aBuf, sizeof(aBuf), "id=%d addr=%s connecting", i, aAddrStr);
