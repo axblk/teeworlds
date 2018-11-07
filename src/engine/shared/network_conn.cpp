@@ -21,7 +21,7 @@ void CNetConnection::Reset()
 	m_LastSendTime = 0;
 	m_LastRecvTime = 0;
 	m_LastUpdateTime = 0;
-	m_UseToken = true;
+	m_TokenType = TOKEN_VANILLA;
 	m_Token = 0;
 	mem_zero(&m_PeerAddr, sizeof(m_PeerAddr));
 
@@ -78,12 +78,12 @@ int CNetConnection::Flush()
 
 	// send of the packets
 	m_Construct.m_Ack = m_Ack;
-	if(m_UseToken)
+	if(m_TokenType != TOKEN_NONE)
 	{
 		m_Construct.m_Flags |= NET_PACKETFLAG_TOKEN;
 		m_Construct.m_Token = m_Token;
 	}
-	CNetBase::SendPacket(m_Socket, &m_PeerAddr, &m_Construct);
+	CNetBase::SendPacket(m_Socket, &m_PeerAddr, &m_Construct, m_TokenType == TOKEN_DDNET);
 
 	// update send times
 	m_LastSendTime = time_get();
@@ -153,8 +153,8 @@ void CNetConnection::SendControl(int ControlMsg, const void *pExtra, int ExtraSi
 {
 	// send the control message
 	m_LastSendTime = time_get();
-	bool UseToken = m_UseToken && ControlMsg != NET_CTRLMSG_CONNECT;
-	CNetBase::SendControlMsg(m_Socket, &m_PeerAddr, m_Ack, UseToken, m_Token, ControlMsg, pExtra, ExtraSize);
+	int TokenType = ControlMsg == NET_CTRLMSG_CONNECT ? TOKEN_NONE : m_TokenType;
+	CNetBase::SendControlMsg(m_Socket, &m_PeerAddr, m_Ack, TokenType, m_Token, ControlMsg, pExtra, ExtraSize);
 }
 
 void CNetConnection::ResendChunk(CNetChunkResend *pResend)
@@ -172,6 +172,7 @@ void CNetConnection::Resend()
 void CNetConnection::SendConnect()
 {
 	unsigned char aConnect[512] = {0};
+	mem_copy(&aConnect[0], SECURITY_DDNET_TOKEN_MAGIC, sizeof(SECURITY_DDNET_TOKEN_MAGIC));
 	uint32_to_be(&aConnect[4], m_Token);
 	SendControl(NET_CTRLMSG_CONNECT, aConnect, sizeof(aConnect));
 }
@@ -191,7 +192,7 @@ int CNetConnection::Connect(NETADDR *pAddr)
 	return 0;
 }
 
-int CNetConnection::Accept(NETADDR *pAddr, unsigned Token)
+int CNetConnection::Accept(NETADDR *pAddr, unsigned Token, int TokenType)
 {
 	if(State() != NET_CONNSTATE_OFFLINE)
 		return -1;
@@ -202,6 +203,7 @@ int CNetConnection::Accept(NETADDR *pAddr, unsigned Token)
 	mem_zero(m_ErrorString, sizeof(m_ErrorString));
 	m_State = NET_CONNSTATE_ONLINE;
 	m_LastRecvTime = time_get();
+	m_TokenType = TokenType;
 	m_Token = Token;
 	if(g_Config.m_Debug)
 	{
@@ -223,7 +225,7 @@ int CNetConnection::AcceptLegacy(NETADDR *pAddr)
 	m_LastRecvTime = time_get();
 
 	m_Token = 0;
-	m_UseToken = false;
+	m_TokenType = TOKEN_NONE;
 	m_UnknownAck = true;
 	m_Sequence = NET_COMPATIBILITY_SEQ;
 
@@ -262,8 +264,15 @@ int CNetConnection::Feed(CNetPacketConstruct *pPacket, NETADDR *pAddr)
 {
 	int64 Now = time_get();
 
-	if(m_UseToken)
+	if(m_TokenType != TOKEN_NONE)
 	{
+		if(m_TokenType == TOKEN_DDNET && pPacket->m_DataSize >= (int)sizeof(m_Token))
+		{
+			pPacket->m_DataSize -= sizeof(m_Token);
+			pPacket->m_Flags |= NET_PACKETFLAG_TOKEN;
+			pPacket->m_Token = uint32_from_be(&pPacket->m_aChunkData[pPacket->m_DataSize]);
+		}
+
 		if(!(pPacket->m_Flags&NET_PACKETFLAG_TOKEN))
 		{
 			if(!(pPacket->m_Flags&NET_PACKETFLAG_CONTROL) || pPacket->m_DataSize < 1)
@@ -276,7 +285,7 @@ int CNetConnection::Feed(CNetPacketConstruct *pPacket, NETADDR *pAddr)
 			}
 			if(pPacket->m_aChunkData[0] == NET_CTRLMSG_CONNECTACCEPT)
 			{
-				if(!g_Config.m_ClAllowOldServers)
+				if(!g_Config.m_ClAllowOldServers && !CheckDDNetTokenMagic(pPacket))
 				{
 					if(g_Config.m_Debug)
 					{
@@ -377,9 +386,15 @@ int CNetConnection::Feed(CNetPacketConstruct *pPacket, NETADDR *pAddr)
 						}
 						m_Token = uint32_from_be(&pPacket->m_aChunkData[1]);
 					}
+					else if(CheckDDNetTokenMagic(pPacket))
+					{
+						m_Token = uint32_from_be(&pPacket->m_aChunkData[1 + sizeof(SECURITY_DDNET_TOKEN_MAGIC)]);
+						m_TokenType = TOKEN_DDNET;
+						SendControl(3 /* NET_CTRLMSG_ACCEPT */, 0, 0);
+					}
 					else
 					{
-						m_UseToken = false;
+						m_TokenType = TOKEN_NONE;
 					}
 					m_LastRecvTime = Now;
 					m_State = NET_CONNSTATE_ONLINE;

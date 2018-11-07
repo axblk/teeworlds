@@ -7,6 +7,12 @@
 #include "network.h"
 #include "huffman.h"
 
+bool CheckDDNetTokenMagic(const CNetPacketConstruct *pPacket)
+{
+	return pPacket->m_DataSize >= (int)(1 + sizeof(SECURITY_DDNET_TOKEN_MAGIC) + sizeof(unsigned)) &&
+		!mem_comp(&pPacket->m_aChunkData[1], SECURITY_DDNET_TOKEN_MAGIC, sizeof(SECURITY_DDNET_TOKEN_MAGIC));
+}
+
 void CNetRecvUnpacker::Clear()
 {
 	m_Valid = false;
@@ -107,7 +113,7 @@ void CNetBase::SendPacketConnless(NETSOCKET Socket, NETADDR *pAddr, const void *
 	net_udp_send(Socket, pAddr, aBuffer, 6+DataSize);
 }
 
-void CNetBase::SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket)
+void CNetBase::SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket, bool DDNetToken)
 {
 	unsigned char aBuffer[NET_MAX_PACKETSIZE];
 	int CompressedSize = -1;
@@ -126,8 +132,17 @@ void CNetBase::SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct 
 	int HeaderSize = NET_PACKETHEADERSIZE_WITHOUT_TOKEN;
 	if(pPacket->m_Flags&NET_PACKETFLAG_TOKEN)
 	{
-		HeaderSize = NET_PACKETHEADERSIZE;
-		uint32_to_be(&aBuffer[3], pPacket->m_Token);
+		if(DDNetToken)
+		{
+			uint32_to_be(&pPacket->m_aChunkData[pPacket->m_DataSize], pPacket->m_Token);
+			pPacket->m_DataSize += sizeof(pPacket->m_Token);
+			pPacket->m_Flags &= ~NET_PACKETFLAG_TOKEN;
+		}
+		else
+		{
+			HeaderSize = NET_PACKETHEADERSIZE;
+			uint32_to_be(&aBuffer[3], pPacket->m_Token);
+		}
 	}
 
 	if(!(pPacket->m_Flags&NET_PACKETFLAG_CONTROL))
@@ -264,10 +279,10 @@ int CNetBase::UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct
 }
 
 
-void CNetBase::SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool UseToken, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize)
+void CNetBase::SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, int TokenType, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize)
 {
 	CNetPacketConstruct Construct;
-	Construct.m_Flags = NET_PACKETFLAG_CONTROL|(UseToken?NET_PACKETFLAG_TOKEN:0);
+	Construct.m_Flags = NET_PACKETFLAG_CONTROL|(TokenType != TOKEN_NONE ? NET_PACKETFLAG_TOKEN : 0);
 	Construct.m_Ack = Ack;
 	Construct.m_NumChunks = 0;
 	Construct.m_Token = Token;
@@ -276,7 +291,7 @@ void CNetBase::SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool Us
 	mem_copy(&Construct.m_aChunkData[1], pExtra, ExtraSize);
 
 	// send the control message
-	CNetBase::SendPacket(Socket, pAddr, &Construct);
+	CNetBase::SendPacket(Socket, pAddr, &Construct, TokenType == TOKEN_DDNET);
 }
 
 

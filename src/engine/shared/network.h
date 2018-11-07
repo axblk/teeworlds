@@ -86,6 +86,17 @@ enum
 	NET_ENUM_TERMINATOR
 };
 
+enum
+{
+	TOKEN_NONE,
+	TOKEN_VANILLA,
+	TOKEN_DDNET
+};
+
+static const unsigned char SECURITY_DDNET_TOKEN_MAGIC[] = {'T', 'K', 'E', 'N'};
+
+bool CheckDDNetTokenMagic(const class CNetPacketConstruct *pPacket);
+
 
 typedef int (*NETFUNC_DELCLIENT)(int ClientID, const char* pReason, void *pUser);
 typedef int (*NETFUNC_NEWCLIENT)(int ClientID, bool Legacy, void *pUser);
@@ -150,7 +161,7 @@ private:
 	unsigned short m_PeerAck;
 	unsigned m_State;
 
-	bool m_UseToken;
+	int m_TokenType;
 	unsigned m_Token;
 	int m_RemoteClosed;
 	bool m_BlockCloseMsg;
@@ -184,7 +195,7 @@ private:
 public:
 	void Init(NETSOCKET Socket, bool BlockCloseMsg);
 	int Connect(NETADDR *pAddr);
-	int Accept(NETADDR *pAddr, unsigned Token);
+	int Accept(NETADDR *pAddr, unsigned Token, int TokenType);
 	int AcceptLegacy(NETADDR *pAddr);
 	void Disconnect(const char *pReason);
 
@@ -285,9 +296,9 @@ class CNetServer
 
 	CNetRecvUnpacker m_RecvUnpacker;
 
-	unsigned GetToken(const NETADDR &Addr) const;
-	unsigned GetToken(const NETADDR &Addr, int SaltIndex) const;
-	bool IsCorrectToken(const NETADDR &Addr, unsigned Token) const;
+	unsigned GetToken(const NETADDR &Addr, bool DDNetToken) const;
+	unsigned GetToken(const NETADDR &Addr, int SaltIndex, bool DDNetToken) const;
+	bool IsCorrectToken(const NETADDR &Addr, unsigned Token, bool DDNetToken) const;
 
 	unsigned GetLegacyToken(const NETADDR &Addr) const;
 	unsigned GetLegacyToken(const NETADDR &Addr, int SaltIndex) const;
@@ -414,9 +425,9 @@ public:
 	static int Compress(const void *pData, int DataSize, void *pOutput, int OutputSize);
 	static int Decompress(const void *pData, int DataSize, void *pOutput, int OutputSize);
 
-	static void SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, bool UseToken, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize);
+	static void SendControlMsg(NETSOCKET Socket, NETADDR *pAddr, int Ack, int TokenType, unsigned Token, int ControlMsg, const void *pExtra, int ExtraSize);
 	static void SendPacketConnless(NETSOCKET Socket, NETADDR *pAddr, const void *pData, int DataSize);
-	static void SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket);
+	static void SendPacket(NETSOCKET Socket, NETADDR *pAddr, CNetPacketConstruct *pPacket, bool DDNetToken);
 	static int UnpackPacket(unsigned char *pBuffer, int Size, CNetPacketConstruct *pPacket);
 
 	// The backroom is ack-NET_MAX_SEQUENCE/2. Used for knowing if we acked a packet or not
