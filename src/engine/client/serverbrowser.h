@@ -67,7 +67,7 @@ public:
 	void Set(const NETADDR &Addr, int Type, int Token, const CServerInfo *pInfo);
 	void Request(const NETADDR &Addr) const;
 
-	void SetBaseInfo(class CNetClient *pClient, const char *pNetVersion);
+	void SetBaseInfo(class CNetClient *pClient, const char *pNetVersion, const char *pGameVersion);
 
 private:
 	CNetClient *m_pNetClient;
@@ -76,6 +76,7 @@ private:
 	class IEngine *m_pEngine;
 	class IFriends *m_pFriends;
 	char m_aNetVersion[128];
+	char m_aGameVersion[128];
 
 	CHeap m_ServerlistHeap;
 	CServerEntry **m_ppServerlist;

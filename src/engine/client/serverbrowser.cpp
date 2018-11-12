@@ -69,10 +69,11 @@ CServerBrowser::~CServerBrowser()
 	mem_free(m_pSortedServerlist);
 }
 
-void CServerBrowser::SetBaseInfo(class CNetClient *pClient, const char *pNetVersion)
+void CServerBrowser::SetBaseInfo(class CNetClient *pClient, const char *pNetVersion, const char *pGameVersion)
 {
 	m_pNetClient = pClient;
 	str_copy(m_aNetVersion, pNetVersion, sizeof(m_aNetVersion));
+	str_copy(m_aGameVersion, pGameVersion, sizeof(m_aGameVersion));
 	m_pMasterServer = Kernel()->RequestInterface<IMasterServer>();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pEngine = Kernel()->RequestInterface<IEngine>();
@@ -189,6 +190,10 @@ void CServerBrowser::Filter()
 			Filtered = 1;
 		else if(g_Config.m_BrFilterCompatversion && str_comp_num(m_ppServerlist[i]->m_Info.m_aVersion, m_aNetVersion, 3) != 0)
 			Filtered = 1;
+		else if((g_Config.m_BrFilterUptodate && str_comp_num(m_ppServerlist[i]->m_Info.m_aVersion, m_aGameVersion, 5) != 0)
+			&& !(str_comp_num(m_ppServerlist[i]->m_Info.m_aVersion, m_aGameVersion, 4) == 0 
+			&& m_ppServerlist[i]->m_Info.m_aVersion[4] >= m_aGameVersion[4] && m_ppServerlist[i]->m_Info.m_aVersion[4] <= '9'))
+			Filtered = 1;
 		else if(g_Config.m_BrFilterServerAddress[0] && !str_find_nocase(m_ppServerlist[i]->m_Info.m_aAddress, g_Config.m_BrFilterServerAddress))
 			Filtered = 1;
 		else if(g_Config.m_BrFilterGametypeStrict && g_Config.m_BrFilterGametype[0] && str_comp_nocase(m_ppServerlist[i]->m_Info.m_aGameType, g_Config.m_BrFilterGametype))
@@ -280,9 +285,10 @@ int CServerBrowser::SortHash() const
 	i |= g_Config.m_BrFilterPure<<11;
 	i |= g_Config.m_BrFilterPureMap<<12;
 	i |= g_Config.m_BrFilterGametypeStrict<<13;
-	i |= g_Config.m_BrFilterTeerace<<14;
-	i |= g_Config.m_BrFilterCountry<<15;
-	i |= g_Config.m_BrFilterPing<<16;
+	i |= g_Config.m_BrFilterCountry<<14;
+	i |= g_Config.m_BrFilterPing<<15;
+	i |= g_Config.m_BrFilterUptodate<<16;
+	i |= g_Config.m_BrFilterTeerace<<17;
 	return i;
 }
 
