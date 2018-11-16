@@ -27,9 +27,6 @@ FreeType = {
 		end
 		
 		local apply = function(option, settings)
-			-- include path
-			settings.cc.includes:Add(FreeType.basepath .. "/include")
-			
 			if option.use_ftconfig == true then
 				settings.cc.flags:Add("`freetype-config --cflags`")
 				settings.link.flags:Add("`freetype-config --libs`")
@@ -38,6 +35,7 @@ FreeType = {
 				settings.link.flags:Add("`pkg-config freetype2 --libs`")
 				
 			elseif option.use_winlib > 0 then
+				settings.cc.includes:Add(FreeType.basepath .. "/include")
 				if option.use_winlib == 32 then
 					settings.link.libpath:Add(FreeType.basepath .. "/windows/lib32")
 				else
