@@ -23,6 +23,8 @@ tileset_border*
 versionsrv*
 
 # CMake
+client-pack
+!/client-pack
 data
 !/data
 src

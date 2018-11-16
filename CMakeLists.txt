@@ -345,16 +345,25 @@ endif()
 # DEPENDENCY COMPILATION
 ########################################################################
 
+set_glob(DEP_JSON_SRC GLOB src/engine/external/json-parser json.c json.h)
+add_library(json EXCLUDE_FROM_ALL OBJECT ${DEP_JSON_SRC})
+
+set_glob(DEP_HTTP_SRC GLOB src/engine/external/http-parser http_parser.c http_parser.h)
+add_library(http EXCLUDE_FROM_ALL OBJECT ${DEP_HTTP_SRC})
+
 set_glob(DEP_MD5_SRC GLOB src/engine/external/md5 md5.c md5.h)
 add_library(md5 EXCLUDE_FROM_ALL OBJECT ${DEP_MD5_SRC})
 
-list(APPEND TARGETS_DEP md5)
+list(APPEND TARGETS_DEP json http md5)
+set(DEP_JSON $<TARGET_OBJECTS:json>)
+set(DEP_HTTP $<TARGET_OBJECTS:http>)
 set(DEP_MD5 $<TARGET_OBJECTS:md5>)
 
 ########################################################################
 # COPY DATA AND DLLS
 ########################################################################
 
+file(COPY client-pack DESTINATION .)
 file(COPY data DESTINATION .)
 set(COPY_FILES
   ${FREETYPE_COPY_FILES}
@@ -454,6 +463,7 @@ set_glob(ENGINE_INTERFACE GLOB src/engine
   editor.h
   engine.h
   friends.h
+  ghost.h
   graphics.h
   input.h
   kernel.h
@@ -484,6 +494,13 @@ set_glob(ENGINE_SHARED GLOB src/engine/shared
   engine.cpp
   filecollection.cpp
   filecollection.h
+  ghost.cpp
+  ghost.h
+  http.cpp
+  http.h
+  http_conn.cpp
+  http_request.cpp
+  http_response.cpp
   huffman.cpp
   huffman.h
   jobs.cpp
@@ -523,11 +540,15 @@ set_glob(GAME_SHARED GLOB src/game
   collision.h
   gamecore.cpp
   gamecore.h
+  ghost.h
   layers.cpp
   layers.h
   localization.cpp
   localization.h
   mapitems.h
+  teecomp_vars.h
+  teerace.cpp
+  teerace.h
   tuning.h
   variables.h
   version.h
@@ -539,7 +560,7 @@ set(GAME_GENERATED_SHARED
   src/game/generated/protocol.h
 )
 
-set(DEPS ${DEP_MD5} ${ZLIB_DEP})
+set(DEPS ${DEP_MD5} ${ZLIB_DEP} ${DEP_HTTP})
 
 # Libraries
 set(LIBS ${CMAKE_THREAD_LIBS_INIT} ${ZLIB_LIBRARIES} ${PLATFORM_LIBS})
@@ -604,6 +625,8 @@ if(CLIENT)
     components/emoticon.h
     components/flow.cpp
     components/flow.h
+    components/ghost.cpp
+    components/ghost.h
     components/hud.cpp
     components/hud.h
     components/items.cpp
@@ -620,6 +643,7 @@ if(CLIENT)
     components/menus_demo.cpp
     components/menus_ingame.cpp
     components/menus_settings.cpp
+    components/menus_teecomp.cpp
     components/motd.cpp
     components/motd.h
     components/nameplates.cpp
@@ -628,6 +652,8 @@ if(CLIENT)
     components/particles.h
     components/players.cpp
     components/players.h
+    components/race_demo.cpp
+    components/race_demo.h
     components/scoreboard.cpp
     components/scoreboard.h
     components/skins.cpp
@@ -636,6 +662,10 @@ if(CLIENT)
     components/sounds.h
     components/spectator.cpp
     components/spectator.h
+    components/teecomp_stats.cpp
+    components/teecomp_stats.h
+    components/timemessages.cpp
+    components/timemessages.h
     components/voting.cpp
     components/voting.h
     gameclient.cpp
@@ -645,6 +675,8 @@ if(CLIENT)
     render.cpp
     render.h
     render_map.cpp
+    teecomp.cpp
+    teecomp.h
     ui.cpp
     ui.h
   )
@@ -665,7 +697,7 @@ if(CLIENT)
   )
   set(CLIENT_SRC ${ENGINE_CLIENT} ${PLATFORM_CLIENT} ${GAME_CLIENT} ${GAME_EDITOR} ${GAME_GENERATED_CLIENT})
 
-  set(DEPS_CLIENT ${DEPS} ${PNGLITE_DEP} ${WAVPACK_DEP})
+  set(DEPS_CLIENT ${DEPS} ${DEP_JSON} ${PNGLITE_DEP} ${WAVPACK_DEP})
 
   # Libraries
   set(LIBS_CLIENT
@@ -968,6 +1000,7 @@ set(CPACK_SOURCE_PACKAGE_FILE_NAME ${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION
 set(CPACK_SOURCE_FILES
   CMakeLists.txt
   bam.lua
+  client-pack
   cmake/
   configure.lua
   data/
@@ -1000,9 +1033,8 @@ set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME ${PROJECT_NAME})
 
 set(CPACK_TARGETS
   ${TARGET_CLIENT}
-  ${TARGET_SERVER}
 )
-set(CPACK_DIRS data)
+set(CPACK_DIRS client-pack data)
 set(CPACK_FILES
   license.txt
   storage.cfg
@@ -1013,6 +1045,7 @@ if(TARGET_OS STREQUAL "windows")
 endif()
 
 if(NOT DEV)
+  install(DIRECTORY client-pack DESTINATION share/${PROJECT_NAME} COMPONENT client-pack)
   install(DIRECTORY data DESTINATION share/${PROJECT_NAME} COMPONENT data)
   install(TARGETS ${TARGET_CLIENT} DESTINATION bin COMPONENT client)
   install(TARGETS ${TARGET_SERVER} DESTINATION bin COMPONENT server)
@@ -1053,6 +1086,7 @@ if(CLIENT AND (DMGTOOLS_FOUND OR HDIUTIL))
     ${TARGET_SERVER}.app/Contents
     ${TARGET_SERVER}.app/Contents/MacOS
     ${TARGET_SERVER}.app/Contents/Resources
+    ${TARGET_SERVER}.app/Contents/Resources/client-pack
     ${TARGET_SERVER}.app/Contents/Resources/data
     ${TARGET_SERVER}.app/Contents/Resources/data/mapres
   )
@@ -1065,6 +1099,7 @@ if(CLIENT AND (DMGTOOLS_FOUND OR HDIUTIL))
     ${DMG_MKDIR_COMMANDS}
 
     # CLIENT
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/client-pack ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Resources/client-pack
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/data ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Resources/data
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/other/icons/${TARGET_CLIENT}.icns ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Resources/
     COMMAND ${CMAKE_COMMAND} -E copy bundle/client/Info.plist ${PROJECT_SOURCE_DIR}/other/bundle/client/PkgInfo ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/
@@ -1089,6 +1124,7 @@ if(CLIENT AND (DMGTOOLS_FOUND OR HDIUTIL))
       ${TARGET_SERVER}
       ${PROJECT_BINARY_DIR}/bundle/client/Info.plist
       ${PROJECT_BINARY_DIR}/bundle/server/Info.plist
+	  client-pack
       data
       other/bundle/client/PkgInfo
       other/bundle/server/PkgInfo
