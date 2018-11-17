@@ -253,6 +253,7 @@ if(NOT CMAKE_CROSSCOMPILING)
   find_package(PkgConfig)
 endif()
 find_package(ZLIB)
+find_package(Curl)
 find_package(Freetype)
 find_package(Git)
 find_package(Pnglite)
@@ -293,6 +294,7 @@ function(show_dependency_status OUTPUT_NAME NAME)
   endif()
 endfunction()
 
+show_dependency_status("Curl" CURL)
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
   show_dependency_status("Dmg tools" DMGTOOLS)
 endif()
@@ -308,6 +310,9 @@ show_dependency_status("Zlib" ZLIB)
 
 if(NOT(PYTHONINTERP_FOUND))
   message(SEND_ERROR "You must install Python to compile Teeworlds")
+endif()
+if(NOT(CURL_FOUND))
+  message(SEND_ERROR "You must install libcurl to compile Teeworlds")
 endif()
 
 if(CLIENT AND NOT(FREETYPE_FOUND))
@@ -362,6 +367,7 @@ set(DEP_MD5 $<TARGET_OBJECTS:md5>)
 file(COPY client-pack DESTINATION .)
 file(COPY data DESTINATION .)
 set(COPY_FILES
+  ${CURL_COPY_FILES}
   ${FREETYPE_COPY_FILES}
   ${SDL_COPY_FILES}
 )
@@ -559,7 +565,7 @@ set(GAME_GENERATED_SHARED
 set(DEPS ${DEP_MD5} ${ZLIB_DEP})
 
 # Libraries
-set(LIBS ${CMAKE_THREAD_LIBS_INIT} ${ZLIB_LIBRARIES} ${PLATFORM_LIBS})
+set(LIBS ${CMAKE_THREAD_LIBS_INIT} ${ZLIB_LIBRARIES} ${PLATFORM_LIBS} ${CURL_LIBRARIES})
 
 # Targets
 add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_INTERFACE} ${ENGINE_SHARED} ${ENGINE_GENERATED_SHARED} ${BASE})
@@ -1263,6 +1269,7 @@ foreach(target ${TARGETS_OWN})
   target_include_directories(${target} PRIVATE src)
   target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:CONF_DEBUG>)
   target_include_directories(${target} PRIVATE ${ZLIB_INCLUDE_DIRS})
+  target_include_directories(${target} PRIVATE ${CURL_INCLUDE_DIRS})
 endforeach()
 
 foreach(target ${TARGETS_DEP})

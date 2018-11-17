@@ -7,6 +7,7 @@ end
 Import("configure.lua")
 Import("other/sdl/sdl.lua")
 Import("other/freetype/freetype.lua")
+Import("other/curl/curl.lua")
 
 --- Setup Config -------
 config = NewConfig()
@@ -17,6 +18,7 @@ config:Add(OptTestCompileC("macosxppc", "int main(){return 0;}", "-arch ppc"))
 config:Add(OptLibrary("zlib", "zlib.h", false))
 config:Add(SDL.OptFind("sdl", true))
 config:Add(FreeType.OptFind("freetype", true))
+config:Add(Curl.OptFind("curl", true))
 config:Finalize("config.lua")
 
 -- data compiler
@@ -116,15 +118,18 @@ nethash = CHash("src/game/generated/nethash.cpp", "src/engine/shared/protocol.h"
 
 client_link_other = {}
 client_depends = {}
+shared_depends = {}
 server_link_other = {}
 
 if family == "windows" then
 	if platform == "win32" then
 		table.insert(client_depends, CopyToDirectory(".", "other\\freetype\\windows\\lib32\\freetype.dll"))
 		table.insert(client_depends, CopyToDirectory(".", "other\\sdl\\windows\\lib32\\SDL.dll"))
+		table.insert(shared_depends, CopyToDirectory(".", "other\\curl\\windows\\lib32\\libcurl.dll"))
 	else
 		table.insert(client_depends, CopyToDirectory(".", "other\\freetype\\windows\\lib64\\freetype.dll"))
 		table.insert(client_depends, CopyToDirectory(".", "other\\sdl\\windows\\lib64\\SDL.dll"))
+		table.insert(shared_depends, CopyToDirectory(".", "other\\curl\\windows\\lib64\\libcurl.dll"))
 	end
 
 	if config.compiler.driver == "cl" then
@@ -239,6 +244,8 @@ function build(settings)
 	config.sdl:Apply(client_settings)
 	-- apply freetype settings
 	config.freetype:Apply(client_settings)
+	-- apply curl settings
+	config.curl:Apply(engine_settings)
 
 	engine = Compile(engine_settings, Collect("src/engine/shared/*.cpp", "src/base/*.c"))
 	client = Compile(client_settings, Collect("src/engine/client/*.cpp"))
@@ -285,8 +292,8 @@ function build(settings)
 		engine, md5, zlib)
 
 	-- make targets
-	c = PseudoTarget("client".."_"..settings.config_name, client_exe, client_depends)
-	s = PseudoTarget("server".."_"..settings.config_name, server_exe, serverlaunch)
+	c = PseudoTarget("client".."_"..settings.config_name, client_exe, client_depends, shared_depends)
+	s = PseudoTarget("server".."_"..settings.config_name, server_exe, serverlaunch, shared_depends)
 	g = PseudoTarget("game".."_"..settings.config_name, client_exe, server_exe)
 
 	v = PseudoTarget("versionserver".."_"..settings.config_name, versionserver_exe)
