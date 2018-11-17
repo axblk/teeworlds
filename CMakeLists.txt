@@ -348,15 +348,11 @@ endif()
 set_glob(DEP_JSON_SRC GLOB src/engine/external/json-parser json.c json.h)
 add_library(json EXCLUDE_FROM_ALL OBJECT ${DEP_JSON_SRC})
 
-set_glob(DEP_HTTP_SRC GLOB src/engine/external/http-parser http_parser.c http_parser.h)
-add_library(http EXCLUDE_FROM_ALL OBJECT ${DEP_HTTP_SRC})
-
 set_glob(DEP_MD5_SRC GLOB src/engine/external/md5 md5.c md5.h)
 add_library(md5 EXCLUDE_FROM_ALL OBJECT ${DEP_MD5_SRC})
 
-list(APPEND TARGETS_DEP json http md5)
+list(APPEND TARGETS_DEP json md5)
 set(DEP_JSON $<TARGET_OBJECTS:json>)
-set(DEP_HTTP $<TARGET_OBJECTS:http>)
 set(DEP_MD5 $<TARGET_OBJECTS:md5>)
 
 ########################################################################
@@ -560,7 +556,7 @@ set(GAME_GENERATED_SHARED
   src/game/generated/protocol.h
 )
 
-set(DEPS ${DEP_MD5} ${ZLIB_DEP} ${DEP_HTTP})
+set(DEPS ${DEP_MD5} ${ZLIB_DEP})
 
 # Libraries
 set(LIBS ${CMAKE_THREAD_LIBS_INIT} ${ZLIB_LIBRARIES} ${PLATFORM_LIBS})

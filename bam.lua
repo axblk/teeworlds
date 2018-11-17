@@ -209,7 +209,6 @@ function build(settings)
 	pnglite = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
 	jsonparser = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
-	httpparser = Compile(settings, Collect("src/engine/external/http-parser/*.c"))
 
 	-- build game components
 	engine_settings = settings:Copy()
@@ -263,16 +262,16 @@ function build(settings)
 	tools = {}
 	for i,v in ipairs(tools_src) do
 		toolname = PathFilename(PathBase(v))
-		tools[i] = Link(settings, toolname, Compile(settings, v), engine, md5, zlib, pnglite, httpparser)
+		tools[i] = Link(settings, toolname, Compile(settings, v), engine, md5, zlib, pnglite)
 	end
 
 	-- build client, server, version server and master server
 	client_exe = Link(client_settings, "teeworlds-pack", game_shared, game_client,
 		engine, client, game_editor, md5, zlib, pnglite, wavpack,
-		client_link_other, jsonparser, httpparser)
+		client_link_other, jsonparser)
 
 	server_exe = Link(server_settings, "teeworlds_srv", engine, server,
-		game_shared, game_server, md5, zlib, server_link_other, httpparser)
+		game_shared, game_server, md5, zlib, server_link_other)
 
 	serverlaunch = {}
 	if platform == "macosx" then
