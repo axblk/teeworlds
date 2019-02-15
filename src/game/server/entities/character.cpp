@@ -712,7 +712,8 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 	if(GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From))
 		return false;
 
-	if(From == m_pPlayer->GetCID() && !g_Config.m_SvRocketJumpDamage){
+	if(From == m_pPlayer->GetCID() && !g_Config.m_SvRocketJumpDamage)
+	{
 		m_EmoteType = EMOTE_PAIN;
 		m_EmoteStop = Server()->Tick() + 500 * Server()->TickSpeed() / 1000;
 		return false;
@@ -721,7 +722,7 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 	// m_pPlayer only inflicts half damage on self
 	if(From == m_pPlayer->GetCID())
 		Dmg = max(1, Dmg/2);
-		
+
 	int OldHealth = m_Health, OldArmor = m_Armor;
 	if(Dmg)
 	{
