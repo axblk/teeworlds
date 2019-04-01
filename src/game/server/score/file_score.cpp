@@ -304,7 +304,8 @@ void CFileScore::ShowTop5(int ClientID, int Debut)
 		GameServer()->SendChat(-1, CHAT_ALL, ClientID, aBuf);
 	}
 	GameServer()->SendChat(-1, CHAT_ALL, ClientID, "------------------------------");
-	if(m_lTop.size() > 5){
+	if(m_lTop.size() > 5)
+	{
 		str_format(aBuf, sizeof(aBuf), "Total records : %d", m_lTop.size());
 		GameServer()->SendChat(-1, CHAT_ALL, ClientID, aBuf);
 	}
