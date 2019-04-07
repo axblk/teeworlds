@@ -33,6 +33,9 @@ public:
 	float GetZoom() const { return m_Zoom; };
 
 	static void ConSetPosition(IConsole::IResult *pResult, void *pUserData);
+	static void ConKeyZoomin(IConsole::IResult *pResult, void *pUserData);
+	static void ConKeyZoomout(IConsole::IResult *pResult, void *pUserData);
+	static void ConZoomReset(IConsole::IResult *pResult, void *pUserData);
 
 	virtual void OnConsoleInit();
 	virtual void OnStateChange(int NewState, int OldState);

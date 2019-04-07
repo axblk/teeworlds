@@ -13,6 +13,7 @@ const int CBinds::s_aDefaultBindKeys[] = { // only simple binds
 	't', 'y', 'x',
 	KEY_F3, KEY_F4,
 	'r',
+	KEY_PAGEUP, KEY_PAGEDOWN,
 };
 const char CBinds::s_aaDefaultBindValues[][32] = {
 	"toggle_local_console", "toggle_remote_console", "+scoreboard", "+show_chat", "screenshot",
@@ -23,6 +24,7 @@ const char CBinds::s_aaDefaultBindValues[][32] = {
 	"chat all", "chat team", "chat whisper",
 	"vote yes", "vote no",
 	"ready_change",
+	"zoomin", "zoomout",
 };
 
 CBinds::CBinds()
