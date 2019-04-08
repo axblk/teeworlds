@@ -150,6 +150,12 @@ static CGameMsg gs_GameMsgList[NUM_GAMEMSGS] = {
 	{/*GAMEMSG_CTF_CAPTURE*/ DO_SPECIAL, PARA_III, ""},	// special - play ctf capture sound + capture chat message
 };
 
+bool IsRace(const CServerInfo *pInfo)
+{
+	return str_find_nocase(pInfo->m_aGameType, "race")
+		|| str_find_nocase(pInfo->m_aGameType, "fastcap");
+}
+
 void CGameClient::OnConsoleInit()
 {
 	m_pEngine = Kernel()->RequestInterface<IEngine>();

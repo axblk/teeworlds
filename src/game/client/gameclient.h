@@ -10,6 +10,9 @@
 #include <game/gamecore.h>
 #include "render.h"
 
+// TODO: find a better place for this
+bool IsRace(const CServerInfo *pInfo);
+
 class CGameClient : public IGameClient
 {
 	class CStack
