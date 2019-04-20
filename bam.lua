@@ -9,6 +9,7 @@ config = NewConfig()
 config:Add(OptCCompiler("compiler"))
 config:Add(OptTestCompileC("stackprotector", "int main(){return 0;}", "-fstack-protector -fstack-protector-all"))
 config:Add(OptTestCompileC("minmacosxsdk", "int main(){return 0;}", "-mmacosx-version-min=10.7 -isysroot /Developer/SDKs/MacOSX10.7.sdk"))
+config:Add(OptTestCompileC("buildwithoutsseflag", "#include <immintrin.h>\nint main(){_mm_pause();return 0;}", ""))
 config:Add(OptLibrary("zlib", "zlib.h", false))
 config:Add(SDL.OptFind("sdl", true))
 config:Add(FreeType.OptFind("freetype", true))
@@ -169,7 +170,9 @@ end
 
 function GenerateLinuxSettings(settings, conf, arch, compiler)
 	if arch == "x86" then
-		settings.cc.flags:Add("-msse2") -- for the _mm_pause call
+		if config.buildwithoutsseflag.value == false then
+			settings.cc.flags:Add("-msse2") -- for the _mm_pause call
+		end
 		settings.cc.flags:Add("-m32")
 		settings.link.flags:Add("-m32")
 	elseif arch == "x86_64" then
@@ -380,7 +383,6 @@ function BuildContent(settings, arch, conf)
 		end
 		-- dependencies
 		dl = Python("scripts/download.py")
-		dl = dl .. " --arch " .. arch .. " --conf " .. conf
 		AddJob("other/sdl/include/SDL.h", "Downloading SDL2", dl .. " sdl")
 		AddJob("other/freetype/include/ft2build.h", "Downloading freetype", dl .. " freetype")
 		table.insert(content, CopyFile(settings.link.Output(settings, "") .. "/SDL2.dll", "other/sdl/windows/lib" .. _arch .. "/SDL2.dll"))

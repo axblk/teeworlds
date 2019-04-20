@@ -14,6 +14,12 @@
 extern "C" {
 #endif
 
+#ifdef __GNUC__
+#define GNUC_ATTRIBUTE(x) __attribute__(x)
+#else
+#define GNUC_ATTRIBUTE(x)
+#endif
+
 /* Group: Debug */
 /*
 
@@ -68,7 +74,8 @@ void dbg_break();
 	See Also:
 		<dbg_assert>
 */
-void dbg_msg(const char *sys, const char *fmt, ...);
+void dbg_msg(const char *sys, const char *fmt, ...)
+GNUC_ATTRIBUTE((format(printf, 2, 3)));
 
 /* Group: Memory */
 
@@ -498,6 +505,16 @@ int time_houroftheday();
 */
 int time_isxmasday();
 
+/*
+	Function: time_iseasterday
+		Checks if today is in between Good Friday and Easter Monday (Gregorian calendar)
+
+	Returns:
+		1 - if it's egg time
+		0 - if not
+*/
+int time_iseasterday();
+
 /* Group: Network General */
 typedef struct
 {
@@ -825,7 +842,8 @@ int str_length(const char *str);
 		- The strings are treated as zero-terminated strings.
 		- Garantees that dst string will contain zero-termination.
 */
-void str_format(char *buffer, int buffer_size, const char *format, ...);
+void str_format(char *buffer, int buffer_size, const char *format, ...)
+GNUC_ATTRIBUTE((format(printf, 3, 4)));
 
 /*
 	Function: str_sanitize_strong
@@ -905,6 +923,18 @@ int str_check_pathname(const char* str);
 void str_clean_whitespaces(char *str);
 
 /*
+	Function: str_clean_whitespaces_simple
+		Removes leading and trailing spaces
+
+	Parameters:
+		str - String to clean up
+
+	Remarks:
+		- The strings are treated as zero-terminated strings.
+*/
+void str_clean_whitespaces_simple(char *str);
+
+/*
 	Function: str_skip_to_whitespace
 		Skips leading non-whitespace characters(all but ' ', '\t', '\n', '\r').
 
@@ -919,6 +949,12 @@ void str_clean_whitespaces(char *str);
 		- The strings are treated as zero-terminated strings.
 */
 char *str_skip_to_whitespace(char *str);
+
+/*
+	Function: str_skip_to_whitespace_const
+		See str_skip_to_whitespace.
+*/
+const char *str_skip_to_whitespace_const(const char *str);
 
 /*
 	Function: str_skip_whitespaces
@@ -1138,12 +1174,9 @@ void str_timestamp(char *buffer, int buffer_size);
 		cb - Callback function to call for each entry
 		type - Type of the directory
 		user - Pointer to give to the callback
-
-	Returns:
-		Always returns 0.
 */
 typedef int (*FS_LISTDIR_CALLBACK)(const char *name, int is_dir, int dir_type, void *user);
-int fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user);
+void fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user);
 
 /*
 	Function: fs_makedir
@@ -1160,6 +1193,19 @@ int fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user);
 		in a failure if b or a does not exist.
 */
 int fs_makedir(const char *path);
+
+/*
+	Function: fs_makedir_recursive
+		Recursively create directories
+
+	Parameters:
+		path - Path to create
+
+	Returns:
+		Returns 0 on success. Negative value on failure.
+*/
+int fs_makedir_recursive(const char *path);
+
 
 /*
 	Function: fs_storage_path
@@ -1422,6 +1468,15 @@ int secure_random_init();
 		length - Length of the buffer.
 */
 void secure_random_fill(void *bytes, unsigned length);
+
+/*
+	Function: pid
+		Gets the process ID of the current process
+
+	Returns:
+		The process ID of the current process.
+*/
+int pid();
 
 #ifdef __cplusplus
 }

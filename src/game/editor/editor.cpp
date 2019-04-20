@@ -19,6 +19,7 @@
 #include <game/client/localization.h>
 #include <game/client/render.h>
 #include <game/client/ui.h>
+#include <game/client/components/menus.h>
 #include <generated/client_data.h>
 
 #include "auto_map.h"
@@ -160,7 +161,7 @@ int CLayerGroup::SwapLayers(int Index0, int Index1)
 	if(Index1 < 0 || Index1 >= m_lLayers.size()) return Index0;
 	if(Index0 == Index1) return Index0;
 	m_pMap->m_Modified = true;
-	swap(m_lLayers[Index0], m_lLayers[Index1]);
+	tl_swap(m_lLayers[Index0], m_lLayers[Index1]);
 	return Index1;
 }
 
@@ -289,8 +290,6 @@ int CEditor::DoEditBox(void *pID, const CUIRect *pRect, char *pStr, unsigned Str
 	static int s_AtIndex = 0;
 	static bool s_DoScroll = false;
 	static float s_ScrollStart = 0.0f;
-
-	FontSize *= UI()->Scale();
 
 	if(UI()->LastActiveItem() == pID)
 	{
@@ -566,6 +565,8 @@ int CEditor::DoButton_File(const void *pID, const char *pText, int Checked, cons
 {
 	if(Checked)
 		RenderTools()->DrawUIRect(pRect, GetButtonColor(pID, Checked), CUI::CORNER_ALL, 3.0f);
+	else if(UI()->HotItem() == pID)
+		RenderTools()->DrawUIRect(pRect, vec4(1,1,1,0.33f), CUI::CORNER_ALL, 3.0f);
 
 	CUIRect t = *pRect;
 	t.VMargin(5.0f, &t);
@@ -2087,7 +2088,7 @@ void CEditor::DoMapEditor(CUIRect View, CUIRect ToolBar)
 									// move up
 									if(m_SelectedQuad < pQuadLayer->m_lQuads.size()-1)
 									{
-										swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad+1]);
+										tl_swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad+1]);
 										m_SelectedQuad++;
 									}
 								}
@@ -2096,7 +2097,7 @@ void CEditor::DoMapEditor(CUIRect View, CUIRect ToolBar)
 									// move down
 									if(m_SelectedQuad > 0)
 									{
-										swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad-1]);
+										tl_swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad-1]);
 										m_SelectedQuad--;
 									}
 								}
@@ -2106,7 +2107,7 @@ void CEditor::DoMapEditor(CUIRect View, CUIRect ToolBar)
 									int NumQuads = pQuadLayer->m_lQuads.size();
 									while(m_SelectedQuad < NumQuads-1)
 									{
-										swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad+1]);
+										tl_swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad+1]);
 										m_SelectedQuad++;
 									}
 								}
@@ -2115,7 +2116,7 @@ void CEditor::DoMapEditor(CUIRect View, CUIRect ToolBar)
 									// move to back
 									while(m_SelectedQuad > 0)
 									{
-										swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad-1]);
+										tl_swap(pQuadLayer->m_lQuads[m_SelectedQuad], pQuadLayer->m_lQuads[m_SelectedQuad-1]);
 										m_SelectedQuad--;
 									}
 								}
@@ -2708,6 +2709,23 @@ void CEditor::ReplaceImage(const char *pFileName, int StorageType, void *pUser)
 	{
 		delete pImg->m_pAutoMapper;
 		pImg->m_pAutoMapper = 0;
+		for (int g = 0; g < pEditor->m_Map.m_lGroups.size(); g++)
+		{
+			CLayerGroup *pGroup = pEditor->m_Map.m_lGroups[g];
+			for (int l = 0; l < pGroup->m_lLayers.size(); l++)
+			{
+				if (pGroup->m_lLayers[l]->m_Type == LAYERTYPE_TILES)
+				{
+					CLayerTiles *pLayer = static_cast<CLayerTiles *>(pGroup->m_lLayers[l]);
+					//resets live auto map of affected layers
+					if (pLayer->m_Image == pEditor->m_SelectedImage)
+					{
+						pLayer->m_SelectedRuleSet = 0;
+						pLayer->m_LiveAutoMap = false;
+					}
+				}
+			}
+		}
 	}
 	*pImg = ImgInfo;
 	pImg->m_External = External;
@@ -2821,14 +2839,6 @@ int CEditor::PopupImage(CEditor *pEditor, CUIRect View)
 	return 0;
 }
 
-static int CompareImageName(const void *pObject1, const void *pObject2)
-{
-	CEditorImage *pImage1 = *(CEditorImage**)pObject1;
-	CEditorImage *pImage2 = *(CEditorImage**)pObject2;
-
-	return str_comp(pImage1->m_aName, pImage2->m_aName);
-}
-
 static int *gs_pSortedIndex = 0;
 static void ModifySortedIndex(int *pIndex)
 {
@@ -2851,7 +2861,7 @@ void CEditor::SortImages()
 		array<CEditorImage*> lTemp = array<CEditorImage*>(m_Map.m_lImages);
 		gs_pSortedIndex = new int[lTemp.size()];
 
-		qsort(m_Map.m_lImages.base_ptr(), m_Map.m_lImages.size(), sizeof(CEditorImage*), CompareImageName);
+		std::stable_sort(&m_Map.m_lImages[0], &m_Map.m_lImages[m_Map.m_lImages.size()]);
 
 		for(int OldIndex = 0; OldIndex < lTemp.size(); OldIndex++)
 			for(int NewIndex = 0; NewIndex < m_Map.m_lImages.size(); NewIndex++)
@@ -3514,7 +3524,6 @@ void CEditor::RenderEnvelopeEditor(CUIRect View)
 		static int sEnvelopeEditorID = 0;
 		static int s_ActiveChannels = 0xf;
 
-		if(pEnvelope)
 		{
 			CUIRect Button;
 
@@ -3575,23 +3584,20 @@ void CEditor::RenderEnvelopeEditor(CUIRect View)
 		if(UI()->HotItem() == &sEnvelopeEditorID)
 		{
 			// do stuff
-			if(pEnvelope)
+			if(UI()->MouseButtonClicked(1))
 			{
-				if(UI()->MouseButtonClicked(1))
-				{
-					// add point
-					int Time = (int)(((UI()->MouseX()-View.x)*TimeScale)*1000.0f);
-					float aChannels[4];
-					pEnvelope->Eval(Time/1000.0f, aChannels);
-					pEnvelope->AddPoint(Time,
-						f2fx(aChannels[0]), f2fx(aChannels[1]),
-						f2fx(aChannels[2]), f2fx(aChannels[3]));
-					m_Map.m_Modified = true;
-				}
-
-				m_ShowEnvelopePreview = SHOWENV_SELECTED;
-				m_pTooltip = "Press right mouse button to create a new point";
+				// add point
+				int Time = (int)(((UI()->MouseX()-View.x)*TimeScale)*1000.0f);
+				float aChannels[4];
+				pEnvelope->Eval(Time/1000.0f, aChannels);
+				pEnvelope->AddPoint(Time,
+					f2fx(aChannels[0]), f2fx(aChannels[1]),
+					f2fx(aChannels[2]), f2fx(aChannels[3]));
+				m_Map.m_Modified = true;
 			}
+
+			m_ShowEnvelopePreview = SHOWENV_SELECTED;
+			m_pTooltip = "Press right mouse button to create a new point";
 		}
 
 		vec3 aColors[] = {vec3(1,0.2f,0.2f), vec3(0.2f,1,0.2f), vec3(0.2f,0.2f,1), vec3(1,1,0.2f)};
@@ -3908,7 +3914,6 @@ void CEditor::RenderEnvelopeEditor(CUIRect View)
 									pEnvelope->m_lPoints[i].m_aOutTangentdx[c] = clamp(pEnvelope->m_lPoints[i].m_aOutTangentdx[c], 0,
 																						(int)(EndTime*1000.f - pEnvelope->m_lPoints[i].m_Time));
 
-									//
 									m_SelectedQuadEnvelope = m_SelectedEnvelope;
 									m_ShowEnvelopePreview = SHOWENV_SELECTED;
 									m_SelectedEnvelopePoint = i;
@@ -3992,7 +3997,6 @@ void CEditor::RenderEnvelopeEditor(CUIRect View)
 									// clamp time value
 									pEnvelope->m_lPoints[i].m_aInTangentdx[c] = clamp(pEnvelope->m_lPoints[i].m_aInTangentdx[c], -pEnvelope->m_lPoints[i].m_Time, 0);
 
-									//
 									m_SelectedQuadEnvelope = m_SelectedEnvelope;
 									m_ShowEnvelopePreview = SHOWENV_SELECTED;
 									m_SelectedEnvelopePoint = i;
@@ -4049,6 +4053,7 @@ int CEditor::PopupMenuFile(CEditor *pEditor, CUIRect View)
 	static int s_SaveButton = 0;
 	static int s_SaveAsButton = 0;
 	static int s_OpenButton = 0;
+	static int s_OpenCurrentButton = 0;
 	static int s_AppendButton = 0;
 	static int s_ExitButton = 0;
 
@@ -4082,6 +4087,23 @@ int CEditor::PopupMenuFile(CEditor *pEditor, CUIRect View)
 		else
 			pEditor->InvokeFileDialog(IStorage::TYPE_ALL, FILETYPE_MAP, "Load map", "Load", "maps", "", pEditor->CallbackOpenMap, pEditor);
 		return 1;
+	}
+
+	if(pEditor->Client()->State() == IClient::STATE_ONLINE)
+	{
+		View.HSplitTop(2.0f, &Slot, &View);
+		View.HSplitTop(12.0f, &Slot, &View);
+		if(pEditor->DoButton_MenuItem(&s_OpenCurrentButton, "Load Current Map", 0, &Slot, 0, "Opens the current in game map for editing"))
+		{
+			if(pEditor->HasUnsavedData())
+			{
+				pEditor->m_PopupEventType = POPEVENT_LOAD_CURRENT;
+				pEditor->m_PopupEventActivated = true;
+			}
+			else
+				pEditor->LoadCurrentMap();
+			return 1;
+		}
 	}
 
 	View.HSplitTop(10.0f, &Slot, &View);
@@ -4134,6 +4156,7 @@ int CEditor::PopupMenuFile(CEditor *pEditor, CUIRect View)
 
 void CEditor::RenderMenubar(CUIRect MenuBar)
 {
+	CUIRect ExitButton;
 	static CUIRect s_File /*, view, help*/;
 
 	MenuBar.VSplitLeft(60.0f, &s_File, &MenuBar);
@@ -4141,14 +4164,26 @@ void CEditor::RenderMenubar(CUIRect MenuBar)
 		UiInvokePopupMenu(&s_File, 1, s_File.x, s_File.y+s_File.h-1.0f, 120, 150, PopupMenuFile, this);
 
 	CUIRect Info;
+	MenuBar.VSplitRight(20.f, &MenuBar, &ExitButton);
 	MenuBar.VSplitLeft(40.0f, 0, &MenuBar);
 	MenuBar.VSplitLeft(MenuBar.w*0.75f, &MenuBar, &Info);
+	
+
 	char aBuf[128];
 	str_format(aBuf, sizeof(aBuf), "File: %s", m_aFileName);
 	UI()->DoLabel(&MenuBar, aBuf, 10.0f, CUI::ALIGN_LEFT);
 
 	str_format(aBuf, sizeof(aBuf), "Z: %i, A: %.1f, G: %i", m_ZoomLevel, m_AnimateSpeed, m_GridFactor);
 	UI()->DoLabel(&Info, aBuf, 10.0f, CUI::ALIGN_RIGHT);
+
+	// Exit editor button
+	static int s_ExitButton;
+	ExitButton.VSplitRight(13.f, 0, &ExitButton);
+	if(DoButton_Editor(&s_ExitButton, "\xE2\x9C\x95", 1, &ExitButton, 0, "[ctrl+shift+e] Exit"))
+	{
+		g_Config.m_ClEditor ^= 1;
+		Input()->MouseModeRelative();
+	}
 }
 
 void CEditor::Render()

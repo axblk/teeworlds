@@ -292,7 +292,7 @@ void CHud::RenderScoreHud()
 					int ID = aPlayerInfo[t].m_ClientID;
 					char aName[64];
 					str_format(aName, sizeof(aName), "%s", g_Config.m_ClShowsocial ? m_pClient->m_aClients[ID].m_aName : "");
-					float w = TextRender()->TextWidth(0, 8.0f, aName, -1);
+					float w = TextRender()->TextWidth(0, 8.0f, aName, -1) + RenderTools()->GetClientIdRectSize(8.0f);
 
 					CTextCursor Cursor;
 					float x = min(Whole-w-1.0f, Whole-ScoreWidthMax-ImageSize-2*Split-PosSize);
@@ -674,10 +674,19 @@ void CHud::RenderSpectatorNotification()
 	if(m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team == TEAM_SPECTATORS &&
 		m_pClient->m_TeamChangeTime + 5.0f >= Client()->LocalTime())
 	{
-		const char *pText = Localize("Click on a player or a flag to follow it");
-		float FontSize = 16.0f;
-		float w = TextRender()->TextWidth(0, FontSize, pText, -1);
-		TextRender()->Text(0, 150 * Graphics()->ScreenAspect() + -w / 2, 30, FontSize, pText, -1);
+		// count non spectators
+		int NumPlayers = 0;
+		for(int i = 0; i < MAX_CLIENTS; i++)
+			if(m_pClient->m_aClients[i].m_Active && m_pClient->m_aClients[i].m_Team != TEAM_SPECTATORS)
+				NumPlayers++;
+
+		if(NumPlayers > 0)
+		{
+			const char *pText = Localize("Click on a player or a flag to follow it");
+			float FontSize = 16.0f;
+			float w = TextRender()->TextWidth(0, FontSize, pText, -1);
+			TextRender()->Text(0, 150 * Graphics()->ScreenAspect() + -w / 2, 30, FontSize, pText, -1);
+		}
 	}
 }
 

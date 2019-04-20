@@ -39,6 +39,7 @@
 	#include <fcntl.h>
 	#include <direct.h>
 	#include <errno.h>
+	#include <process.h>
 	#include <wincrypt.h>
 #else
 	#error NOT IMPLEMENTED
@@ -98,8 +99,8 @@ void dbg_msg(const char *sys, const char *fmt, ...)
 	msg = (char *)str + len;
 
 	va_start(args, fmt);
-#if defined(CONF_FAMILY_WINDOWS)
-	_vsnprintf(msg, sizeof(str)-len, fmt, args);
+#if defined(CONF_FAMILY_WINDOWS) && !defined(__GNUC__)
+	_vsprintf_p(msg, sizeof(str)-len, fmt, args);
 #else
 	vsnprintf(msg, sizeof(str)-len, fmt, args);
 #endif
@@ -421,7 +422,7 @@ unsigned io_write_newline(IOHANDLE io)
 int io_close(IOHANDLE io)
 {
 	fclose((FILE*)io);
-	return 1;
+	return 0;
 }
 
 int io_flush(IOHANDLE io)
@@ -1153,7 +1154,7 @@ int net_udp_recv(NETSOCKET sock, NETADDR *addr, void *data, int maxsize)
 	socklen_t fromlen;// = sizeof(sockaddrbuf);
 	int bytes = 0;
 
-	if(bytes == 0 && sock.ipv4sock >= 0)
+	if(sock.ipv4sock >= 0)
 	{
 		fromlen = sizeof(struct sockaddr_in);
 		bytes = recvfrom(sock.ipv4sock, (char*)data, maxsize, 0, (struct sockaddr *)&sockaddrbuf, &fromlen);
@@ -1412,7 +1413,7 @@ int net_init()
 	return 0;
 }
 
-int fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user)
+void fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user)
 {
 #if defined(CONF_FAMILY_WINDOWS)
 	WIN32_FIND_DATA finddata;
@@ -1424,7 +1425,7 @@ int fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user)
 	handle = FindFirstFileA(buffer, &finddata);
 
 	if (handle == INVALID_HANDLE_VALUE)
-		return 0;
+		return;
 
 	str_format(buffer, sizeof(buffer), "%s/", dir);
 	length = str_length(buffer);
@@ -1439,7 +1440,7 @@ int fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user)
 	while (FindNextFileA(handle, &finddata));
 
 	FindClose(handle);
-	return 0;
+	return;
 #else
 	struct dirent *entry;
 	char buffer[1024*2];
@@ -1447,7 +1448,7 @@ int fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user)
 	DIR *d = opendir(dir);
 
 	if(!d)
-		return 0;
+		return;
 
 	str_format(buffer, sizeof(buffer), "%s/", dir);
 	length = str_length(buffer);
@@ -1461,7 +1462,7 @@ int fs_listdir(const char *dir, FS_LISTDIR_CALLBACK cb, int type, void *user)
 
 	/* close the directory and return */
 	closedir(d);
-	return 0;
+	return;
 #endif
 }
 
@@ -1471,7 +1472,7 @@ int fs_storage_path(const char *appname, char *path, int max)
 	char *home = getenv("APPDATA");
 	if(!home)
 		return -1;
-	_snprintf(path, max, "%s/%s", home, appname);
+	str_format(path, max, "%s/%s", home, appname);
 	return 0;
 #else
 	char *home = getenv("HOME");
@@ -1483,25 +1484,25 @@ int fs_storage_path(const char *appname, char *path, int max)
 		return -1;
 	
 #if defined(CONF_PLATFORM_MACOSX)
-	snprintf(path, max, "%s/Library/Application Support/%s", home, appname);
+	str_format(path, max, "%s/Library/Application Support/%s", home, appname);
 	return 0;
 #endif
 
 	/* old folder location */
-	snprintf(path, max, "%s/.%s", home, appname);
+	str_format(path, max, "%s/.%s", home, appname);
 	for(i = strlen(home)+2; path[i]; i++)
 		path[i] = tolower(path[i]);
 
 	if(!xdgdatahome)
 	{
 		/* use default location */
-		snprintf(xdgpath, max, "%s/.local/share/%s", home, appname);
+		str_format(xdgpath, max, "%s/.local/share/%s", home, appname);
 		for(i = strlen(home)+14; xdgpath[i]; i++)
 			xdgpath[i] = tolower(xdgpath[i]);
 	}
 	else
 	{
-		snprintf(xdgpath, max, "%s/%s", xdgdatahome, appname);
+		str_format(xdgpath, max, "%s/%s", xdgdatahome, appname);
 		for(i = strlen(xdgdatahome)+1; xdgpath[i]; i++)
 			xdgpath[i] = tolower(xdgpath[i]);
 	}
@@ -1514,7 +1515,7 @@ int fs_storage_path(const char *appname, char *path, int max)
 		return 0;
 	}
 	
-	snprintf(path, max, "%s", xdgpath);
+	str_format(path, max, "%s", xdgpath);
 
 	return 0;
 #endif
@@ -1535,6 +1536,31 @@ int fs_makedir(const char *path)
 		return 0;
 	return -1;
 #endif
+}
+
+int fs_makedir_recursive(const char *path)
+{
+	char buffer[2048];
+	int len;
+	int i;
+	str_copy(buffer, path, sizeof(buffer));
+	len = str_length(buffer);
+	// ignore a leading slash
+	for(i = 1; i < len; i++)
+	{
+		char b = buffer[i];
+		if(b == '/' || (b == '\\' && buffer[i-1] != ':'))
+		{
+			buffer[i] = 0;
+			if(fs_makedir(buffer) < 0)
+			{
+				return -1;
+			}
+			buffer[i] = b;
+
+		}
+	}
+	return fs_makedir(path);
 }
 
 int fs_is_dir(const char *path)
@@ -1706,6 +1732,44 @@ int time_isxmasday()
 	return 0;
 }
 
+int time_iseasterday()
+{
+	time_t time_data_now, time_data;
+	struct tm *time_info;
+	int Y, a, b, c, d, e, f, g, h, i, k, L, m, month, day, day_offset;
+
+	time(&time_data_now);
+	time_info = localtime(&time_data_now);
+
+	// compute Easter day (Sunday) using https://en.wikipedia.org/w/index.php?title=Computus&oldid=890710285#Anonymous_Gregorian_algorithm
+	Y = time_info->tm_year + 1900;
+	a = Y % 19;
+	b = Y / 100;
+	c = Y % 100;
+	d = b / 4;
+	e = b % 4;
+	f = (b + 8) / 25;
+	g = (b - f + 1) / 3;
+	h = (19 * a + b - d - g + 15) % 30;
+	i = c / 4;
+	k = c % 4;
+	L = (32 + 2 * e + 2 * i - h - k) % 7;
+	m = (a + 11 * h + 22 * L) / 451;
+	month = (h + L - 7 * m + 114) / 31;
+	day = ((h + L - 7 * m + 114) % 31) + 1;
+
+	// (now-1d ≤ easter ≤ now+2d) <=> (easter-2d ≤ now ≤ easter+1d) <=> (Good Friday ≤ now ≤ Easter Monday)
+	for(day_offset = -1; day_offset <= 2; day_offset++)
+	{
+		time_data = time_data_now + day_offset*(60*60*24);
+		time_info = localtime(&time_data);
+
+		if(time_info->tm_mon == month-1 && time_info->tm_mday == day)
+			return 1;
+	}
+	return 0;
+}
+
 void str_append(char *dst, const char *src, int dst_size)
 {
 	int s = strlen(dst);
@@ -1745,10 +1809,10 @@ int str_length(const char *str)
 
 void str_format(char *buffer, int buffer_size, const char *format, ...)
 {
-#if defined(CONF_FAMILY_WINDOWS)
+#if defined(CONF_FAMILY_WINDOWS) && !defined(__GNUC__)
 	va_list ap;
 	va_start(ap, format);
-	_vsnprintf(buffer, buffer_size, format, ap);
+	_vsprintf_p(buffer, buffer_size, format, ap);
 	va_end(ap);
 #else
 	va_list ap;
@@ -1887,7 +1951,46 @@ void str_clean_whitespaces(char *str_in)
 	}
 }
 
+/* removes leading and trailing spaces */
+void str_clean_whitespaces_simple(char *str_in)
+{
+	char *read = str_in;
+	char *write = str_in;
+
+	/* skip initial whitespace */
+	while(*read == ' ')
+		read++;
+
+	/* end of read string is detected in the loop */
+	while(1)
+	{
+		/* skip whitespace */
+		int found_whitespace = 0;
+		for(; *read == ' ' && !found_whitespace; read++)
+			found_whitespace = 1;
+		/* if not at the end of the string, put a found whitespace here */
+		if(*read)
+		{
+			if(found_whitespace)
+				*write++ = ' ';
+			*write++ = *read++;
+		}
+		else
+		{
+			*write = 0;
+			break;
+		}
+	}
+}
+
 char *str_skip_to_whitespace(char *str)
+{
+	while(*str && (*str != ' ' && *str != '\t' && *str != '\n'))
+		str++;
+	return str;
+}
+
+const char *str_skip_to_whitespace_const(const char *str)
 {
 	while(*str && (*str != ' ' && *str != '\t' && *str != '\n'))
 		str++;
@@ -2314,7 +2417,7 @@ void secure_random_fill(void *bytes, unsigned length)
 #if defined(CONF_FAMILY_WINDOWS)
 	if(!CryptGenRandom(secure_random_data.provider, length, bytes))
 	{
-		dbg_msg("secure", "CryptGenRandom failed, last_error=%d", GetLastError());
+		dbg_msg("secure", "CryptGenRandom failed, last_error=%lu", GetLastError());
 		dbg_break();
 	}
 #else
@@ -2323,6 +2426,15 @@ void secure_random_fill(void *bytes, unsigned length)
 		dbg_msg("secure", "io_read returned with a short read");
 		dbg_break();
 	}
+#endif
+}
+
+int pid()
+{
+#if defined(CONF_FAMILY_WINDOWS)
+	return _getpid();
+#else
+	return getpid();
 #endif
 }
 

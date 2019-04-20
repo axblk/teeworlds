@@ -7,8 +7,12 @@ class CInput : public IEngineInput
 {
 	IEngineGraphics *m_pGraphics;
 	IConsole *m_pConsole;
+	SDL_Joystick *m_pJoystick;
 
 	int m_InputGrabbed;
+	char *m_pClipboardText;
+
+	int m_PreviousHat;
 
 	bool m_MouseDoubleClick;
 
@@ -28,6 +32,7 @@ class CInput : public IEngineInput
 
 public:
 	CInput();
+	~CInput();
 
 	virtual void Init();
 
@@ -38,6 +43,8 @@ public:
 	virtual void MouseModeAbsolute();
 	virtual void MouseModeRelative();
 	virtual int MouseDoubleClick();
+	virtual const char *GetClipboardText();
+	virtual void SetClipboardText(const char *pText);
 
 	virtual int Update();
 };
