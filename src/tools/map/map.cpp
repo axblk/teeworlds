@@ -253,7 +253,7 @@ int CLayerGroup::SwapLayers(int Index0, int Index1)
 	if(Index0 < 0 || Index0 >= m_lLayers.size()) return Index0;
 	if(Index1 < 0 || Index1 >= m_lLayers.size()) return Index0;
 	if(Index0 == Index1) return Index0;
-	swap(m_lLayers[Index0], m_lLayers[Index1]);
+	tl_swap(m_lLayers[Index0], m_lLayers[Index1]);
 	return Index1;
 }
 
@@ -491,6 +491,22 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 		df.AddItem(MAPITEMTYPE_GROUP, GroupCount++, sizeof(GItem), &GItem);
 	}
 
+	// check for bezier curve envelopes, otherwise use older, smaller envelope points
+	int Version = CMapItemEnvelope_v2::CURRENT_VERSION;
+	int Size = sizeof(CEnvPoint_v1);	
+	for(int e = 0; e < m_lEnvelopes.size(); e++)
+	{
+		for(int p = 0; p < m_lEnvelopes[e]->m_lPoints.size(); p++)
+		{
+			if(m_lEnvelopes[e]->m_lPoints[p].m_Curvetype == CURVETYPE_BEZIER)
+			{
+				Version = CMapItemEnvelope::CURRENT_VERSION;
+				Size = sizeof(CEnvPoint);
+				break;
+			}
+		}
+	}
+
 	// save envelopes
 	int PointCount = 0;
 	for(int e = 0; e < m_lEnvelopes.size(); e++)
@@ -498,7 +514,7 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 		m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "editor", "saving envelope");
 
 		CMapItemEnvelope Item;
-		Item.m_Version = CMapItemEnvelope::CURRENT_VERSION;
+		Item.m_Version = Version;
 		Item.m_Channels = m_lEnvelopes[e]->m_Channels;
 		Item.m_StartPoint = PointCount;
 		Item.m_NumPoints = m_lEnvelopes[e]->m_lPoints.size();
@@ -512,15 +528,16 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 	m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "editor", "saving env points");
 
 	// save points
-	int TotalSize = sizeof(CEnvPoint) * PointCount;
-	CEnvPoint *pPoints = (CEnvPoint *)mem_alloc(TotalSize, 1);
-	PointCount = 0;
-
+	int TotalSize = Size * PointCount;
+	unsigned char *pPoints = (unsigned char *)mem_alloc(TotalSize, 1);
+	int Offset = 0;
 	for(int e = 0; e < m_lEnvelopes.size(); e++)
 	{
-		int Count = m_lEnvelopes[e]->m_lPoints.size();
-		mem_copy(&pPoints[PointCount], m_lEnvelopes[e]->m_lPoints.base_ptr(), sizeof(CEnvPoint)*Count);
-		PointCount += Count;
+		for(int p = 0; p < m_lEnvelopes[e]->m_lPoints.size(); p++)
+		{
+			mem_copy(pPoints + Offset, &(m_lEnvelopes[e]->m_lPoints[p]), Size);
+			Offset += Size;
+		}
 	}
 
 	df.AddItem(MAPITEMTYPE_ENVPOINTS, 0, TotalSize, pPoints);

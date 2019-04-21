@@ -1551,6 +1551,16 @@ target_link_libraries(${TARGET_VERSIONSRV} ${LIBS})
 list(APPEND TARGETS_OWN ${TARGET_MASTERSRV} ${TARGET_VERSIONSRV})
 list(APPEND TARGETS_LINK ${TARGET_MASTERSRV} ${TARGET_VERSIONSRV})
 
+set_src(MAPLIB_SRC GLOB src/tools/map
+  layer_quads.cpp
+  layer_tiles.cpp
+  map.cpp
+  map.h
+  mapitems_race.h
+)
+
+list(APPEND EXTRA_TOOL_SRC ${MAPLIB_SRC})
+
 set(TARGETS_TOOLS)
 set_src(TOOLS GLOB src/tools
   crapnet.cpp
@@ -1565,13 +1575,21 @@ foreach(ABS_T ${TOOLS})
   file(RELATIVE_PATH T "${PROJECT_SOURCE_DIR}/src/tools/" ${ABS_T})
   if(T MATCHES "\\.cpp$")
     string(REGEX REPLACE "\\.cpp$" "" TOOL "${T}")
+    set(TOOL_DEPS ${DEPS})
+    set(TOOL_LIBS ${LIBS})
+    if(TOOL MATCHES "map_update")
+      list(APPEND TOOL_DEPS ${PNGLITE_DEP})
+      list(APPEND TOOL_LIBS ${PNGLITE_LIBRARIES})
+      list(APPEND TOOL_INCLUDE_DIRS ${PNGLITE_INCLUDE_DIRS})
+    endif()
     add_executable(${TOOL} EXCLUDE_FROM_ALL
-      ${DEPS}
+      ${TOOL_DEPS}
       src/tools/${TOOL}.cpp
       ${EXTRA_TOOL_SRC}
       $<TARGET_OBJECTS:engine-shared>
     )
-    target_link_libraries(${TOOL} ${LIBS})
+    target_include_directories(${TOOL} PRIVATE ${TOOL_INCLUDE_DIRS})
+    target_link_libraries(${TOOL} ${TOOL_LIBS})
     list(APPEND TARGETS_TOOLS ${TOOL})
   endif()
 endforeach()
