@@ -904,6 +904,10 @@ set_glob(DATA GLOB_RECURSE "json;map;png;rules;ttf;txt;wv" datasrc
   languages/traditional_chinese.json
   languages/turkish.json
   languages/ukrainian.json
+  mapres/_angle.png
+  mapres/_entities_race.png
+  mapres/_letters.png
+  mapres/_numbers.png
   mapres/bg_cloud1.png
   mapres/bg_cloud2.png
   mapres/bg_cloud3.png
@@ -1226,6 +1230,8 @@ set_src(GAME_SHARED GLOB src/game
   layers.cpp
   layers.h
   mapitems.h
+  race.cpp
+  race.h
   tuning.h
   variables.h
   version.h
@@ -1468,18 +1474,26 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamemodes/ctf.h
   gamemodes/dm.cpp
   gamemodes/dm.h
+  gamemodes/fastcap.cpp
+  gamemodes/fastcap.h
   gamemodes/lms.cpp
   gamemodes/lms.h
   gamemodes/lts.cpp
   gamemodes/lts.h
   gamemodes/mod.cpp
   gamemodes/mod.h
+  gamemodes/race.cpp
+  gamemodes/race.h
   gamemodes/tdm.cpp
   gamemodes/tdm.h
   gameworld.cpp
   gameworld.h
   player.cpp
   player.h
+  race.cpp
+  score.h
+  score/file_score.cpp
+  score/file_score.h
 )
 set(GAME_GENERATED_SERVER
   src/generated/server_data.cpp
@@ -1542,6 +1556,8 @@ set_src(TOOLS GLOB src/tools
   crapnet.cpp
   fake_server.cpp
   map_resave.cpp
+  map_update.cpp
+  map_update.h
   map_version.cpp
   packetgen.cpp
 )
