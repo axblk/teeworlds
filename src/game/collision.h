@@ -67,7 +67,7 @@ public:
 
 	// race
 	vec2 GetPos(int TilePos) const;
-	int GetTilePosLayer(const class CMapItemLayerTilemap *pLayer, vec2 Pos) const;
+	int GetTilePosLayer(const struct CMapItemLayerTilemap *pLayer, vec2 Pos) const;
 
 	bool CheckIndexEx(vec2 Pos, int Index) const;
 	int CheckIndexExRange(vec2 Pos, int MinIndex, int MaxIndex) const;
