@@ -5,7 +5,7 @@ file(STRINGS src/game/version.h VERSION_LINE
   REGEX GAME_RELEASE_VERSION
 )
 
-if(VERSION_LINE MATCHES "\"([0-9]+)\\.([0-9]+)\\.([0-9]+)\"")
+if(VERSION_LINE MATCHES "\"([0-9]+)\\.([0-9]+)\\.([0-9]+|[0-9]+\\.[0-9]+)\"")
   set(VERSION_MAJOR ${CMAKE_MATCH_1})
   set(VERSION_MINOR ${CMAKE_MATCH_2})
   set(VERSION_PATCH ${CMAKE_MATCH_3})
@@ -389,7 +389,10 @@ elseif(TARGET_OS STREQUAL "mac")
   set(PLATFORM_LIBS ${CARBON})
 else()
   set(PLATFORM_CLIENT)
-  set(PLATFORM_CLIENT_LIBS GL GLU X11)
+  find_package(OpenGL)
+  find_package(X11)
+  set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${X11_X11_LIB})
+  set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR} ${X11_X11_INCLUDE_PATH})
   if(TARGET_OS STREQUAL "linux")
     set(PLATFORM_LIBS rt) # clock_gettime for glibc < 2.17
   else()
