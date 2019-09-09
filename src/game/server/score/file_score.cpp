@@ -4,8 +4,6 @@
 #include <engine/shared/linereader.h>
 #include <engine/storage.h>
 
-#include <game/race.h>
-
 #include "../gamecontext.h"
 #include "file_score.h"
 
@@ -18,9 +16,11 @@ CFileScore::CPlayerScore::CPlayerScore(const char *pName, int Time, int *pCpTime
 	str_copy(m_aName, pName, sizeof(m_aName));
 }
 
-CFileScore::CFileScore(CGameContext *pGameServer) : IScore(pGameServer), m_pGameServer(pGameServer), m_pServer(pGameServer->Server())
+CFileScore::CFileScore(CGameContext *pGameServer) : IScoreBackend(), m_pGameServer(pGameServer)
 {
+	m_MapID = 0;
 	m_aMap[0] = 0;
+	m_PlayerCounter = 0;
 
 	if(gs_ScoreLock == 0)
 		gs_ScoreLock = lock_create();
@@ -42,17 +42,14 @@ void CFileScore::WriteEntry(IOHANDLE File, const CPlayerScore *pEntry) const
 #endif
 
 	char aBuf[1024] = { 0 };
-	char aBuf2[128];
+	char aBuf2[1024];
 	str_append(aBuf, pEntry->m_aName, sizeof(aBuf));
 	str_append(aBuf, pNewLine, sizeof(aBuf));
 	str_format(aBuf2, sizeof(aBuf2), "%d", pEntry->m_Time);
 	str_append(aBuf, aBuf2, sizeof(aBuf));
 	str_append(aBuf, pNewLine, sizeof(aBuf));
-	for(int c = 0; c < NUM_CHECKPOINTS; c++)
-	{
-		str_format(aBuf2, sizeof(aBuf2), "%d ", pEntry->m_aCpTime[c]);
-		str_append(aBuf, aBuf2, sizeof(aBuf));
-	}
+	IScoreBackend::CheckpointsToString(aBuf2, sizeof(aBuf2), pEntry->m_aCpTime, " ");
+	str_append(aBuf, aBuf2, sizeof(aBuf));
 	str_append(aBuf, pNewLine, sizeof(aBuf));
 	io_write(File, aBuf, str_length(aBuf));
 }
@@ -98,15 +95,17 @@ void CFileScore::ProcessJobs(bool Block)
 	{
 		CScoreJob *pJob = &m_lJobQueue[i];
 		if(pJob->m_Type == JOBTYPE_ADD_NEW)
-			m_lTop.add(pJob->m_NewData);
+		{
+			m_lTop.add_unsorted(pJob->m_NewData);
+		}
 		else if(pJob->m_Type == JOBTYPE_UPDATE_SCORE)
 		{
 			pJob->m_pEntry->m_Time = pJob->m_NewData.m_Time;
 			mem_copy(pJob->m_pEntry->m_aCpTime, pJob->m_NewData.m_aCpTime, sizeof(pJob->m_pEntry->m_aCpTime));
-			str_copy(pJob->m_pEntry->m_aName, pJob->m_NewData.m_aName, sizeof(pJob->m_pEntry->m_aName));
-			m_lTop.sort_range();
 		}
 	}
+
+	m_lTop.sort_range();
 
 	m_lJobQueue.clear();
 	lock_unlock(gs_ScoreLock);
@@ -120,16 +119,64 @@ void CFileScore::ProcessJobs(bool Block)
 	}
 }
 
-void CFileScore::OnMapLoad()
+CFileScore::CPlayerScore *CFileScore::SearchScoreByPlayerID(int PlayerID, int *pPosition)
 {
-	IScore::OnMapLoad();
+	int Pos = 1;
+	for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Pos++)
+	{
+		if(r.front().m_ID == PlayerID)
+		{
+			if(pPosition)
+				*pPosition = Pos;
+			return &r.front();
+		}
+	}
+	return 0;
+}
 
-	// process pending jobs before loading new map
+CFileScore::CPlayerScore *CFileScore::SearchScoreByName(const char *pName, int *pPosition)
+{
+	int Pos = 1;
+	for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Pos++)
+	{
+		if(str_comp(r.front().m_aName, pName) == 0)
+		{
+			if(pPosition)
+				*pPosition = Pos;
+			return &r.front();
+		}
+	}
+	return 0;
+}
+
+void CFileScore::AddRequest(int Type, CRequestData *pRequestData)
+{
+	int Result = -1;
+	if(Type == REQTYPE_LOAD_MAP)
+		Result = LoadMapHandler((CLoadMapData*)pRequestData);
+	else if(Type == REQTYPE_LOAD_PLAYER)
+		Result = LoadPlayerHandler((CLoadPlayerData*)pRequestData);
+	else if(Type == REQTYPE_SAVE_SCORE)
+		Result = SaveScoreHandler((CSaveScoreData*)pRequestData);
+	else if(Type == REQTYPE_SHOW_RANK)
+		Result = ShowRankHandler((CShowRankData*)pRequestData);
+	else if(Type == REQTYPE_SHOW_TOP5)
+		Result = ShowTop5Handler((CShowTop5Data*)pRequestData);
+
+	bool Error = Result != 0;
+	ExecCallback(Type, pRequestData, Error);
+}
+
+int CFileScore::LoadMapHandler(CLoadMapData *pData)
+{
 	ProcessJobs(true);
 
 	lock_wait(gs_ScoreLock);
 
-	str_copy(m_aMap, m_pServer->GetMapName(), sizeof(m_aMap));
+	m_MapID++;
+	pData->m_MapID = m_MapID;
+	str_copy(m_aMap, pData->m_aMapName, sizeof(m_aMap));
+	m_PlayerCounter = 0;
 	m_lTop.clear();
 
 	IOHANDLE File = OpenFile(IOFLAG_READ);
@@ -154,14 +201,8 @@ void CFileScore::OnMapLoad()
 			}
 			else if(Type == 2)
 			{
-				const char *pTime = pLine;
-				for(int i = 0; pTime && i < NUM_CHECKPOINTS; i++)
-				{
-					Tmp.m_aCpTime[i] = str_toint(pTime);
-					pTime = str_find(pTime, " ");
-					if(pTime)
-						pTime++;
-				}
+				IScoreBackend::CheckpointsFromString(Tmp.m_aCpTime, pLine, " ");
+				Tmp.m_ID = ++m_PlayerCounter;
 				m_lTop.add(Tmp);
 			}
 		}
@@ -169,167 +210,96 @@ void CFileScore::OnMapLoad()
 	}
 	lock_unlock(gs_ScoreLock);
 
-	// save the current best score
 	if(m_lTop.size())
-		UpdateRecord(m_lTop[0].m_Time);
+		pData->m_BestTime = m_lTop[0].m_Time;
+
+	return 0;
 }
 
-CFileScore::CPlayerScore *CFileScore::SearchScoreByID(int ID, int *pPosition)
+int CFileScore::LoadPlayerHandler(CLoadPlayerData *pData)
 {
-	return SearchScoreByName(Server()->ClientName(ID), pPosition, true);
-}
+	const CPlayerScore *pPlayer = (pData->m_PlayerID != -1)
+		? SearchScoreByPlayerID(pData->m_PlayerID)
+		: SearchScoreByName(pData->m_aPlayerName);
 
-CFileScore::CPlayerScore *CFileScore::SearchScoreByName(const char *pName, int *pPosition, bool ExactMatch)
-{
-	CPlayerScore *pPlayer = 0;
-	int Pos = 1;
-	int Found = 0;
-	for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front())
-	{
-		if(str_comp(r.front().m_aName, pName) == 0)
-		{
-			if(pPosition)
-				*pPosition = Pos;
-			return &r.front();
-		}
-		if(!ExactMatch && str_find_nocase(r.front().m_aName, pName))
-		{
-			if(pPosition)
-				*pPosition = Pos;
-			Found++;
-			pPlayer = &r.front();
-		}
-		Pos++;
-	}
-	if(Found > 1)
-	{
-		if(pPosition)
-			*pPosition = -1;
-		return 0;
-	}
-	return pPlayer;
-}
-
-void CFileScore::OnPlayerInit(int ClientID)
-{
-	m_aPlayerData[ClientID].Reset();
-	CPlayerScore *pPlayer = SearchScoreByID(ClientID);
-
-	// set score
 	if(pPlayer)
 	{
-		m_aPlayerData[ClientID].SetTime(pPlayer->m_Time, pPlayer->m_aCpTime);
-		if(g_Config.m_SvLoadBest)
-			m_aPlayerData[ClientID].UpdateCurTime(pPlayer->m_Time);
+		if(pData->m_PlayerID == -1)
+			pData->m_PlayerID = pPlayer->m_ID;
+		pData->m_Time = pPlayer->m_Time;
+		mem_copy(pData->m_aCpTime, pPlayer->m_aCpTime, sizeof(pData->m_aCpTime));
 	}
+	return 0;
 }
 
-void CFileScore::OnPlayerFinish(int ClientID, int Time, int *pCpTime)
+int CFileScore::SaveScoreHandler(CSaveScoreData *pData)
 {
-	bool NewPlayerRecord = m_aPlayerData[ClientID].UpdateTime(Time, pCpTime);
-	UpdateRecord(Time);
-
-	/*if(NewRecord && g_Config.m_SvShowTimes)
-		GameServer()->SendRecord(-1);*/
-
-	if(!NewPlayerRecord)
-		return;
-
 	CScoreJob Job;
-	Job.m_NewData = CPlayerScore(Server()->ClientName(ClientID), Time, pCpTime);
-
-	Job.m_pEntry = SearchScoreByID(ClientID);
+	Job.m_NewData = CPlayerScore(pData->m_aPlayerName, pData->m_Time, pData->m_aCpTime);
+	Job.m_pEntry = pData->m_PlayerID == -1 ? 0 : SearchScoreByPlayerID(pData->m_PlayerID);
 	if(Job.m_pEntry)
-		Job.m_Type = JOBTYPE_UPDATE_SCORE;
+	{
+		if(Job.m_pEntry->m_Time <= Job.m_NewData.m_Time)
+			return 0;
+	}
 	else
-		Job.m_Type = JOBTYPE_ADD_NEW;
+	{
+		pData->m_PlayerID = ++m_PlayerCounter;
+		Job.m_NewData.m_ID = pData->m_PlayerID;
+	}
 
+	Job.m_Type = Job.m_pEntry ? JOBTYPE_UPDATE_SCORE : JOBTYPE_ADD_NEW;
 	m_lJobQueue.add(Job);
 	ProcessJobs(false);
+	return 0;
 }
 
-void CFileScore::ShowTop5(int RequestingClientID, int Debut)
+int CFileScore::ShowRankHandler(CShowRankData *pData)
 {
-	if(IsThrottled(RequestingClientID))
-		return;
+	int Pos;
+	const CPlayerScore *pPlayer = (pData->m_PlayerID != -1)
+		? SearchScoreByPlayerID(pData->m_PlayerID, &Pos)
+		: SearchScoreByName(pData->m_aName, &Pos);
 
-	char aBuf[128];
-	char aTime[32];
-	GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, "----------- Top 5 -----------");
-	for(int i = 0; i < 5 && i + Debut - 1 < m_lTop.size(); i++)
+	if(pPlayer)
 	{
-		const CPlayerScore *r = &m_lTop[i+Debut-1];
-		IRace::FormatTimeLong(aTime, sizeof(aTime), r->m_Time);
-		str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", i + Debut, r->m_aName, aTime);
-		GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
+		CRecordData *pRecord = &pData->m_aRecords[pData->m_Num++];
+		str_copy(pRecord->m_aPlayerName, pPlayer->m_aName, sizeof(pRecord->m_aPlayerName));
+		pRecord->m_Time = pPlayer->m_Time;
+		pRecord->m_Rank = Pos;
 	}
-	GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, "------------------------------");
-	if(m_lTop.size() > 5)
+	
+	if(!pPlayer && pData->m_PlayerID == -1)
 	{
-		str_format(aBuf, sizeof(aBuf), "Total records : %d", m_lTop.size());
-		GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
+		Pos = 1;
+		for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Pos++)
+		{
+			if(str_find_nocase(r.front().m_aName, pData->m_aName))
+			{
+				if(pData->m_Num < MAX_SEARCH_RECORDS)
+				{
+					CRecordData *pRecord = &pData->m_aRecords[pData->m_Num];
+					str_copy(pRecord->m_aPlayerName, r.front().m_aName, sizeof(pRecord->m_aPlayerName));
+					pRecord->m_Time = r.front().m_Time;
+					pRecord->m_Rank = Pos;
+				}
+				pData->m_Num++;
+			}
+		}
 	}
-	UpdateThrottling(RequestingClientID);
+	return 0;
 }
 
-void CFileScore::ShowRank(int RequestingClientID, const char *pName)
+int CFileScore::ShowTop5Handler(CShowTop5Data *pData)
 {
-	if(IsThrottled(RequestingClientID))
-		return;
-
-	int Pos = 0;
-	char aBuf[128];
-
-	CPlayerScore *pScore = SearchScoreByName(pName, &Pos, false);
-
-	int To = RequestingClientID;
-
-	if(pScore && Pos > -1)
+	pData->m_TotalRecords = m_lTop.size();
+	for(; pData->m_Num < MAX_TOP_RECORDS && pData->m_Start + pData->m_Num < pData->m_TotalRecords; pData->m_Num++)
 	{
-		if(g_Config.m_SvShowTimes)
-			To = -1;
-		char aTime[32];
-		IRace::FormatTimeLong(aTime, sizeof(aTime), pScore->m_Time);
-		if(To != -1)
-			str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", Pos, pScore->m_aName, aTime);
-		else
-			str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s (%s)", Pos, pScore->m_aName, aTime, Server()->ClientName(RequestingClientID));
+		const CPlayerScore *r = &m_lTop[pData->m_Start + pData->m_Num];
+		CRecordData *pRecord = &pData->m_aRecords[pData->m_Num];
+		str_copy(pRecord->m_aPlayerName, r->m_aName, sizeof(pRecord->m_aPlayerName));
+		pRecord->m_Time = r->m_Time;
+		pRecord->m_Rank = pData->m_Start + pData->m_Num + 1;
 	}
-	else if(Pos == -1)
-	{
-		str_copy(aBuf, "Several players were found.", sizeof(aBuf));
-	}
-	else
-	{
-		str_format(aBuf, sizeof(aBuf), "%s is not ranked", pName);
-	}
-
-	GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
-	UpdateThrottling(RequestingClientID);
-}
-
-void CFileScore::ShowRank(int RequestingClientID, int ClientID)
-{
-	if(IsThrottled(RequestingClientID))
-		return;
-
-	int To = RequestingClientID;
-	int Pos = 0;
-	char aBuf[128];
-	char *pLine = "You are not ranked";
-
-	const CPlayerScore *pScore = SearchScoreByID(ClientID, &Pos);
-
-	if(pScore && Pos > -1)
-	{
-		if(g_Config.m_SvShowTimes)
-			To = -1;
-		char aTime[32];
-		IRace::FormatTimeLong(aTime, sizeof(aTime), pScore->m_Time);
-		str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", Pos, pScore->m_aName, aTime);
-		pLine = aBuf;
-	}
-
-	GameServer()->SendChat(-1, CHAT_ALL, To, pLine);
-	UpdateThrottling(RequestingClientID);
+	return 0;
 }

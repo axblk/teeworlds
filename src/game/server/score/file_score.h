@@ -6,14 +6,14 @@
 #include <base/tl/sorted_array.h>
 #include "../score.h"
 
-class CFileScore : public IScore
+class CFileScore : public IScoreBackend
 {
 	CGameContext *m_pGameServer;
-	IServer *m_pServer;
 	
 	class CPlayerScore
 	{
 	public:
+		int m_ID;
 		char m_aName[MAX_NAME_LENGTH];
 		int m_Time;
 		int m_aCpTime[NUM_CHECKPOINTS];
@@ -40,13 +40,14 @@ class CFileScore : public IScore
 	sorted_array<CPlayerScore> m_lTop;
 	array<CScoreJob> m_lJobQueue;
 
+	int m_MapID;
 	char m_aMap[64];
-	
+	int m_PlayerCounter;
+
 	CGameContext *GameServer() { return m_pGameServer; }
-	IServer *Server() { return m_pServer; }
 	
-	CPlayerScore *SearchScoreByID(int ID, int *pPosition=0);
-	CPlayerScore *SearchScoreByName(const char *pName, int *pPosition, bool ExactMatch);
+	CPlayerScore *SearchScoreByPlayerID(int PlayerID, int *pPosition = 0);
+	CPlayerScore *SearchScoreByName(const char *pName, int *pPosition = 0);
 
 	void ProcessJobs(bool Block);
 	static void SaveScoreThread(void *pUser);
@@ -54,19 +55,19 @@ class CFileScore : public IScore
 	void WriteEntry(IOHANDLE File, const CPlayerScore *pEntry) const;
 	IOHANDLE OpenFile(int Flags) const;
 
+	int LoadMapHandler(CLoadMapData *pRequestData);
+	int LoadPlayerHandler(CLoadPlayerData *pRequestData);
+	int SaveScoreHandler(CSaveScoreData *pRequestData);
+	int ShowRankHandler(CShowRankData *pRequestData);
+	int ShowTop5Handler(CShowTop5Data *pRequestData);
+
 public:
 	CFileScore(CGameContext *pGameServer);
 	~CFileScore();
 
-	void OnMapLoad();
+	bool Ready() const { return true; };
 	void Tick() { ProcessJobs(false); }
-	
-	void OnPlayerInit(int ClientID);
-	void OnPlayerFinish(int ClientID, int Time, int *pCpTime);
-	
-	void ShowTop5(int RequestingClientID, int Debut=1);
-	void ShowRank(int RequestingClientID, const char *pName);
-	void ShowRank(int RequestingClientID, int ClientID);
+	void AddRequest(int Type, CRequestData *pRequestData = 0);
 };
 
 #endif

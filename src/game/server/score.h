@@ -6,6 +6,118 @@
 
 #define NUM_CHECKPOINTS 25
 
+class CScore;
+
+class IScoreBackend
+{
+public:
+	enum
+	{
+		MAX_SEARCH_RECORDS=5,
+		MAX_TOP_RECORDS=5,
+
+		REQTYPE_LOAD_MAP=0,
+		REQTYPE_LOAD_PLAYER,
+		REQTYPE_SAVE_SCORE,
+		REQTYPE_SHOW_RANK,
+		REQTYPE_SHOW_TOP5
+	};
+
+	struct CRecordData
+	{
+		char m_aPlayerName[MAX_NAME_LENGTH];
+		int m_Time;
+		int m_Rank;
+	};
+
+	struct CRequestData
+	{
+		// in/out
+		int m_MapID;
+	};
+
+	struct CLoadMapData : CRequestData
+	{
+		// in
+		char m_aMapName[128];
+		// out
+		int m_BestTime;
+	};
+
+	struct CLoadPlayerData : CRequestData
+	{
+		// in
+		int m_ClientID;
+		char m_aPlayerName[MAX_NAME_LENGTH];
+		// out
+		int m_PlayerID;
+		int m_Time;
+		int m_aCpTime[NUM_CHECKPOINTS];
+	};
+
+	struct CSaveScoreData : CRequestData
+	{
+		// in
+		int m_PlayerID; // +out
+		int m_ClientID;
+		char m_aPlayerName[MAX_NAME_LENGTH];
+		int m_Time;
+		int m_aCpTime[NUM_CHECKPOINTS];
+	};
+
+	struct CShowRankData : CRequestData
+	{
+		// in
+		int m_RequestingClientID;
+		// search param
+		int m_PlayerID;
+		char m_aName[MAX_NAME_LENGTH];
+		// out
+		int m_Num;
+		CRecordData m_aRecords[MAX_SEARCH_RECORDS];
+	};
+
+	struct CShowTop5Data : CRequestData
+	{
+		// in
+		int m_RequestingClientID;
+		int m_Start;
+		// out
+		int m_Num;
+		CRecordData m_aRecords[MAX_TOP_RECORDS];
+		int m_TotalRecords;
+	};
+
+private:
+	typedef void(*FRequestCallbackFunc)(int Type, IScoreBackend::CRequestData *pRequestData, bool Error, void *pUserData);
+
+	FRequestCallbackFunc m_pfnRequestCallback;
+	void *m_pUserData;
+
+public:
+	static void CheckpointsFromString(int *pCpTime, const char *pStr, const char *pDelim = ";");
+	static void CheckpointsToString(char *pBuf, int BufSize, const int *pCpTime, const char *pDelim = ";");
+
+	IScoreBackend() : m_pfnRequestCallback(0), m_pUserData(0) { }
+	virtual ~IScoreBackend() { }
+
+	void SetRequestCallback(FRequestCallbackFunc pfnCallback, void *pUserData)
+	{
+		m_pfnRequestCallback = pfnCallback;
+		m_pUserData = pUserData;
+	}
+
+	void ExecCallback(int Type, CRequestData *pRequestData, bool Error)
+	{
+		if(m_pfnRequestCallback)
+			m_pfnRequestCallback(Type, pRequestData, Error, m_pUserData);
+	}
+
+	virtual bool Ready() const = 0;
+	virtual void Tick() = 0;
+	virtual void AddRequest(int Type, CRequestData *pRequestData = 0) = 0;
+};
+
 class CPlayerData
 {
 public:
@@ -21,7 +133,7 @@ public:
 		mem_zero(m_aCpTime, sizeof(m_aCpTime));
 	}
 	
-	void SetTime(int Time, int *pCpTime)
+	void SetTime(int Time, const int *pCpTime)
 	{
 		m_Time = Time;
 		mem_copy(m_aCpTime, pCpTime, sizeof(m_aCpTime));
@@ -38,7 +150,7 @@ public:
 		return !m_Time || Time < m_Time;
 	}
 
-	bool UpdateTime(int Time, int *pCpTime)
+	bool UpdateTime(int Time, const int *pCpTime)
 	{
 		UpdateCurTime(Time);
 		bool Check = CheckTime(Time);
@@ -52,57 +164,52 @@ public:
 	int m_aCpTime[NUM_CHECKPOINTS];
 };
 
-class IScore
+class CScore
 {
 	class CGameContext *m_pGameServer;
 	class IServer *m_pServer;
 
-	CGameContext *GameServer() { return m_pGameServer; }
-	IServer *Server() { return m_pServer; }
+	IScoreBackend *m_pBackend;
+
+	int m_MapID;
+	int m_aPlayerID[MAX_CLIENTS];
 
 	int m_LastRequest[MAX_CLIENTS];
 
-protected:
-	CPlayerData m_aPlayerData[MAX_CLIENTS];
+	CPlayerData m_aPlayerCache[MAX_CLIENTS];
 	int m_CurrentRecord;
+
+	CGameContext *GameServer() { return m_pGameServer; }
+	IServer *Server() { return m_pServer; }
 
 	void UpdateThrottling(int ClientID);
 	bool IsThrottled(int ClientID);
+
+	bool UpdateRecord(int Time);
+
+	static void RequestFinishedCallback(int Type, IScoreBackend::CRequestData *pRequestData, bool Error, void *pUserData)
+	{
+		((CScore*)pUserData)->OnRequestFinished(Type, pRequestData, Error);
+	}
+	void OnRequestFinished(int Type, IScoreBackend::CRequestData *pRequestData, bool Error);
 	
 public:
-	IScore(CGameContext *pGameServer) : m_pGameServer(pGameServer), m_CurrentRecord(0) { }
-	virtual ~IScore() { }
+	CScore(CGameContext *pGameServer);
+	virtual ~CScore() { }
 	
-	const CPlayerData *PlayerData(int ID) const { return &m_aPlayerData[ID]; }
+	const CPlayerData *PlayerData(int ID) const { return &m_aPlayerCache[ID]; }
 	int GetRecord() const { return m_CurrentRecord; }
 
-	bool UpdateRecord(int Time)
-	{
-		bool Check = !m_CurrentRecord || Time < m_CurrentRecord;
-		if(Check)
-			m_CurrentRecord = Time;
-		return Check;
-	}
+	void Tick() { m_pBackend->Tick(); }
 
-	virtual void OnMapLoad()
-	{
-		m_CurrentRecord = 0;
-		for(int i = 0; i < MAX_CLIENTS; i++)
-		{
-			m_aPlayerData[i].Reset();
-			m_LastRequest[i] = -1;
-		}
-	}
-
-	virtual void Tick() { }
+	void OnMapLoad();
+	void OnPlayerInit(int ClientID);
+	void OnPlayerLeave(int ClientID);
+	void OnPlayerFinish(int ClientID, int Time, int *pCpTime);
 	
-	virtual void OnPlayerInit(int ClientID) = 0;
-	virtual void OnPlayerLeave(int ClientID) { };
-	virtual void OnPlayerFinish(int ClientID, int Time, int *pCpTime) = 0;
-	
-	virtual void ShowTop5(int RequestingClientID, int Debut = 1) = 0;
-	virtual void ShowRank(int RequestingClientID, const char *pName) = 0;
-	virtual void ShowRank(int RequestingClientID, int ClientID) = 0;
+	void ShowRank(int RequestingClientID, const char *pName);
+	void ShowRank(int RequestingClientID, int ClientID);
+	void ShowTop5(int RequestingClientID, int Debut = 1);
 };
 
 #endif

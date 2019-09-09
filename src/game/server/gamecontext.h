@@ -46,7 +46,7 @@ class CGameContext : public IGameServer
 	CTuningParams m_Tuning;
 
 	// race
-	class IScore *m_pScore;
+	class CScore *m_pScore;
 
 	static void ConTuneParam(IConsole::IResult *pResult, void *pUserData);
 	static void ConTuneReset(IConsole::IResult *pResult, void *pUserData);
@@ -97,7 +97,7 @@ public:
 	CTuningParams *Tuning() { return &m_Tuning; }
 
 	// race
-	class IScore *Score() { return m_pScore; }
+	class CScore *Score() { return m_pScore; }
 	class CGameControllerRACE *RaceController() { return (class CGameControllerRACE*)m_pController; }
 
 	void LoadMapSettings();

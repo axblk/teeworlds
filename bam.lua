@@ -192,6 +192,8 @@ function GenerateLinuxSettings(settings, conf, arch, compiler)
 	end
 	settings.link.libs:Add("pthread")
 
+	settings.link.flags:Add("-ldl")
+
 	GenerateCommonSettings(settings, conf, arch, compiler)
 
 	-- Master server, version server and tools

@@ -30,8 +30,6 @@
 #include "player.h"
 
 #include "score.h"
-#include "score/file_score.h"
-#include "score/sqlite_score.h"
 
 enum
 {
@@ -91,7 +89,7 @@ void CGameContext::Clear()
 	CVoteOptionServer *pVoteOptionLast = m_pVoteOptionLast;
 	int NumVoteOptions = m_NumVoteOptions;
 	CTuningParams Tuning = m_Tuning;
-	IScore *pScore = m_pScore;
+	CScore *pScore = m_pScore;
 	IConsole *pChatConsole = m_pChatConsole;
 
 	m_Resetting = true;
@@ -1607,12 +1605,7 @@ void CGameContext::OnInit()
 
 	// create score object
 	if(!m_pScore)
-	{
-		if(str_comp(g_Config.m_SvScore, "file") == 0)
-			m_pScore = new CFileScore(this);
-		else
-			m_pScore = new CSQLiteScore(this);
-	}
+		m_pScore = new CScore(this);
 
 	m_pScore->OnMapLoad();
 
