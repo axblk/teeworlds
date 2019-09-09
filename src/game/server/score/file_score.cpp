@@ -18,7 +18,7 @@ CFileScore::CPlayerScore::CPlayerScore(const char *pName, int Time, int *pCpTime
 	str_copy(m_aName, pName, sizeof(m_aName));
 }
 
-CFileScore::CFileScore(CGameContext *pGameServer) : m_pGameServer(pGameServer), m_pServer(pGameServer->Server())
+CFileScore::CFileScore(CGameContext *pGameServer) : IScore(pGameServer), m_pGameServer(pGameServer), m_pServer(pGameServer->Server())
 {
 	m_aMap[0] = 0;
 
@@ -210,7 +210,7 @@ CFileScore::CPlayerScore *CFileScore::SearchScoreByName(const char *pName, int *
 	return pPlayer;
 }
 
-void CFileScore::OnPlayerInit(int ClientID, bool PrintRank)
+void CFileScore::OnPlayerInit(int ClientID)
 {
 	m_aPlayerData[ClientID].Reset();
 	CPlayerScore *pPlayer = SearchScoreByID(ClientID);
@@ -248,33 +248,33 @@ void CFileScore::OnPlayerFinish(int ClientID, int Time, int *pCpTime)
 	ProcessJobs(false);
 }
 
-void CFileScore::ShowTop5(int ClientID, int Debut)
+void CFileScore::ShowTop5(int RequestingClientID, int Debut)
 {
-	if(CheckSpamProtection(ClientID))
+	if(IsThrottled(RequestingClientID))
 		return;
 
 	char aBuf[128];
 	char aTime[32];
-	GameServer()->SendChat(-1, CHAT_ALL, ClientID, "----------- Top 5 -----------");
+	GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, "----------- Top 5 -----------");
 	for(int i = 0; i < 5 && i + Debut - 1 < m_lTop.size(); i++)
 	{
 		const CPlayerScore *r = &m_lTop[i+Debut-1];
 		IRace::FormatTimeLong(aTime, sizeof(aTime), r->m_Time);
 		str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", i + Debut, r->m_aName, aTime);
-		GameServer()->SendChat(-1, CHAT_ALL, ClientID, aBuf);
+		GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
 	}
-	GameServer()->SendChat(-1, CHAT_ALL, ClientID, "------------------------------");
+	GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, "------------------------------");
 	if(m_lTop.size() > 5)
 	{
 		str_format(aBuf, sizeof(aBuf), "Total records : %d", m_lTop.size());
-		GameServer()->SendChat(-1, CHAT_ALL, ClientID, aBuf);
+		GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
 	}
-	m_LastPrintInChat[ClientID] = Server()->Tick();
+	UpdateThrottling(RequestingClientID);
 }
 
-void CFileScore::ShowRank(int ClientID, const char *pName)
+void CFileScore::ShowRank(int RequestingClientID, const char *pName)
 {
-	if(CheckSpamProtection(ClientID))
+	if(IsThrottled(RequestingClientID))
 		return;
 
 	int Pos = 0;
@@ -282,7 +282,7 @@ void CFileScore::ShowRank(int ClientID, const char *pName)
 
 	CPlayerScore *pScore = SearchScoreByName(pName, &Pos, false);
 
-	int To = ClientID;
+	int To = RequestingClientID;
 
 	if(pScore && Pos > -1)
 	{
@@ -293,7 +293,7 @@ void CFileScore::ShowRank(int ClientID, const char *pName)
 		if(To != -1)
 			str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", Pos, pScore->m_aName, aTime);
 		else
-			str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s (%s)", Pos, pScore->m_aName, aTime, Server()->ClientName(ClientID));
+			str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s (%s)", Pos, pScore->m_aName, aTime, Server()->ClientName(RequestingClientID));
 	}
 	else if(Pos == -1)
 	{
@@ -305,15 +305,15 @@ void CFileScore::ShowRank(int ClientID, const char *pName)
 	}
 
 	GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
-	m_LastPrintInChat[ClientID] = Server()->Tick();
+	UpdateThrottling(RequestingClientID);
 }
 
-void CFileScore::ShowRank(int ClientID)
+void CFileScore::ShowRank(int RequestingClientID, int ClientID)
 {
-	if(CheckSpamProtection(ClientID))
+	if(IsThrottled(RequestingClientID))
 		return;
 
-	int To = ClientID;
+	int To = RequestingClientID;
 	int Pos = 0;
 	char aBuf[128];
 	char *pLine = "You are not ranked";
@@ -331,11 +331,5 @@ void CFileScore::ShowRank(int ClientID)
 	}
 
 	GameServer()->SendChat(-1, CHAT_ALL, To, pLine);
-	m_LastPrintInChat[ClientID] = Server()->Tick();
-}
-
-bool CFileScore::CheckSpamProtection(int ClientID)
-{
-	return g_Config.m_SvSpamprotection && m_LastPrintInChat[ClientID] &&
-		m_LastPrintInChat[ClientID]+Server()->TickSpeed()*3 > Server()->Tick();
+	UpdateThrottling(RequestingClientID);
 }

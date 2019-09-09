@@ -53,8 +53,6 @@ class CFileScore : public IScore
 
 	void WriteEntry(IOHANDLE File, const CPlayerScore *pEntry) const;
 	IOHANDLE OpenFile(int Flags) const;
-	
-	bool CheckSpamProtection(int ClientID);
 
 public:
 	CFileScore(CGameContext *pGameServer);
@@ -63,12 +61,12 @@ public:
 	void OnMapLoad();
 	void Tick() { ProcessJobs(false); }
 	
-	void OnPlayerInit(int ClientID, bool PrintRank);
+	void OnPlayerInit(int ClientID);
 	void OnPlayerFinish(int ClientID, int Time, int *pCpTime);
 	
-	void ShowTop5(int ClientID, int Debut=1);
-	void ShowRank(int ClientID, const char *pName);
-	void ShowRank(int ClientID);
+	void ShowTop5(int RequestingClientID, int Debut=1);
+	void ShowRank(int RequestingClientID, const char *pName);
+	void ShowRank(int RequestingClientID, int ClientID);
 };
 
 #endif

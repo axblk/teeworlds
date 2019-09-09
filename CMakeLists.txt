@@ -1636,6 +1636,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   player.cpp
   player.h
   race.cpp
+  score.cpp
   score.h
   score/file_score.cpp
   score/file_score.h

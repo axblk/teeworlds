@@ -157,7 +157,9 @@ MACRO_CONFIG_INT(SvLoadBest, sv_load_best, 1, 0, 1, CFGFLAG_SERVER, "Loads the b
 MACRO_CONFIG_INT(SvShowTimes, sv_show_times, 1, 0, 1, CFGFLAG_SERVER, "Shows the times of other players")
 MACRO_CONFIG_INT(SvShowOthers, sv_show_others, 1, 0, 1, CFGFLAG_SERVER, "Shows the other players")
 
-MACRO_CONFIG_STR(SvScore, sv_score, 32, "sqlite", CFGFLAG_SERVER, "Scoring (file)")
+MACRO_CONFIG_STR(SvScore, sv_score, 32, "sqlite", CFGFLAG_SERVER, "Scoring backend (sqlite, file)")
+
+MACRO_CONFIG_STR(SvSQLiteDatabase, sv_sqlite_database, 128, "race.db", CFGFLAG_SERVER, "SQLite database file")
 
 // debug
 #ifdef CONF_DEBUG // this one can crash the server if not used correctly

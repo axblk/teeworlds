@@ -54,13 +54,23 @@ public:
 
 class IScore
 {
+	class CGameContext *m_pGameServer;
+	class IServer *m_pServer;
+
+	CGameContext *GameServer() { return m_pGameServer; }
+	IServer *Server() { return m_pServer; }
+
+	int m_LastRequest[MAX_CLIENTS];
+
 protected:
 	CPlayerData m_aPlayerData[MAX_CLIENTS];
 	int m_CurrentRecord;
-	int m_LastPrintInChat[MAX_CLIENTS];
+
+	void UpdateThrottling(int ClientID);
+	bool IsThrottled(int ClientID);
 	
 public:
-	IScore() { m_CurrentRecord = 0; }
+	IScore(CGameContext *pGameServer) : m_pGameServer(pGameServer), m_CurrentRecord(0) { }
 	virtual ~IScore() { }
 	
 	const CPlayerData *PlayerData(int ID) const { return &m_aPlayerData[ID]; }
@@ -78,19 +88,21 @@ public:
 	{
 		m_CurrentRecord = 0;
 		for(int i = 0; i < MAX_CLIENTS; i++)
+		{
 			m_aPlayerData[i].Reset();
-		mem_zero(m_LastPrintInChat, sizeof(m_LastPrintInChat));
+			m_LastRequest[i] = -1;
+		}
 	}
 
 	virtual void Tick() { }
 	
-	virtual void OnPlayerInit(int ClientID, bool PrintRank=false) = 0;
+	virtual void OnPlayerInit(int ClientID) = 0;
 	virtual void OnPlayerLeave(int ClientID) { };
 	virtual void OnPlayerFinish(int ClientID, int Time, int *pCpTime) = 0;
 	
-	virtual void ShowTop5(int ClientID, int Debut=1) = 0;
-	virtual void ShowRank(int ClientID, const char *pName) = 0;
-	virtual void ShowRank(int ClientID) = 0;
+	virtual void ShowTop5(int RequestingClientID, int Debut = 1) = 0;
+	virtual void ShowRank(int RequestingClientID, const char *pName) = 0;
+	virtual void ShowRank(int RequestingClientID, int ClientID) = 0;
 };
 
 #endif
