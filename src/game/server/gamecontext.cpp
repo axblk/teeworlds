@@ -5,6 +5,7 @@
 #include <engine/config.h>
 #include <engine/shared/config.h>
 #include <engine/shared/memheap.h>
+#include <engine/engine.h>
 #include <engine/storage.h>
 #include <engine/map.h>
 
@@ -30,6 +31,7 @@
 
 #include "score.h"
 #include "score/file_score.h"
+#include "score/sqlite_score.h"
 
 enum
 {
@@ -741,6 +743,8 @@ void CGameContext::OnClientTeamChange(int ClientID)
 
 void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 {
+	Score()->OnPlayerLeave(ClientID);
+
 	AbortVoteOnDisconnect(ClientID);
 	m_pController->OnPlayerDisconnect(m_apPlayers[ClientID]);
 
@@ -1522,6 +1526,7 @@ void CGameContext::OnConsoleInit()
 	m_pServer = Kernel()->RequestInterface<IServer>();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
+	m_pEngine = Kernel()->RequestInterface<IEngine>();
 
 	Console()->Register("tune", "si", CFGFLAG_SERVER, ConTuneParam, this, "Tune variable to value");
 	Console()->Register("tune_reset", "", CFGFLAG_SERVER, ConTuneReset, this, "Reset tuning");
@@ -1556,6 +1561,7 @@ void CGameContext::OnInit()
 	m_pServer = Kernel()->RequestInterface<IServer>();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
+	m_pEngine = Kernel()->RequestInterface<IEngine>();
 	m_World.SetGameServer(this);
 	m_Events.SetGameServer(this);
 
@@ -1602,7 +1608,10 @@ void CGameContext::OnInit()
 	// create score object
 	if(!m_pScore)
 	{
-		m_pScore = new CFileScore(this);
+		if(str_comp(g_Config.m_SvScore, "file") == 0)
+			m_pScore = new CFileScore(this);
+		else
+			m_pScore = new CSQLiteScore(this);
 	}
 
 	m_pScore->OnMapLoad();

@@ -9,8 +9,6 @@
 #include "../gamecontext.h"
 #include "file_score.h"
 
-// TODO: remove score ip or use ip hash
-
 static LOCK gs_ScoreLock = 0;
 
 CFileScore::CPlayerScore::CPlayerScore(const char *pName, int Time, int *pCpTime)
@@ -18,7 +16,6 @@ CFileScore::CPlayerScore::CPlayerScore(const char *pName, int Time, int *pCpTime
 	m_Time = Time;
 	mem_copy(m_aCpTime, pCpTime, sizeof(m_aCpTime));
 	str_copy(m_aName, pName, sizeof(m_aName));
-	//str_copy(m_aIP, pIP, sizeof(m_aIP));
 }
 
 CFileScore::CFileScore(CGameContext *pGameServer) : m_pGameServer(pGameServer), m_pServer(pGameServer->Server())
@@ -51,8 +48,6 @@ void CFileScore::WriteEntry(IOHANDLE File, const CPlayerScore *pEntry) const
 	str_format(aBuf2, sizeof(aBuf2), "%d", pEntry->m_Time);
 	str_append(aBuf, aBuf2, sizeof(aBuf));
 	str_append(aBuf, pNewLine, sizeof(aBuf));
-	//str_append(aBuf, pEntry->m_aIP, sizeof(aBuf));
-	//str_append(aBuf, pNewLine, sizeof(aBuf));
 	for(int c = 0; c < NUM_CHECKPOINTS; c++)
 	{
 		str_format(aBuf2, sizeof(aBuf2), "%d ", pEntry->m_aCpTime[c]);
@@ -111,8 +106,6 @@ void CFileScore::ProcessJobs(bool Block)
 			str_copy(pJob->m_pEntry->m_aName, pJob->m_NewData.m_aName, sizeof(pJob->m_pEntry->m_aName));
 			m_lTop.sort_range();
 		}
-		/*else if(pJob->m_Type == JOBTYPE_UPDATE_IP)
-			str_copy(pJob->m_pEntry->m_aIP, pJob->m_NewData.m_aIP, sizeof(pJob->m_pEntry->m_aIP));*/
 	}
 
 	m_lJobQueue.clear();
@@ -159,10 +152,6 @@ void CFileScore::OnMapLoad()
 			{
 				Tmp.m_Time = str_toint(pLine);
 			}
-			/*else if(Type == 2)
-			{
-				str_copy(Tmp.m_aIP, pLine, sizeof(Tmp.m_aIP));
-			}*/
 			else if(Type == 2)
 			{
 				const char *pTime = pLine;
@@ -187,24 +176,6 @@ void CFileScore::OnMapLoad()
 
 CFileScore::CPlayerScore *CFileScore::SearchScoreByID(int ID, int *pPosition)
 {
-	/*if(g_Config.m_SvScoreIP)
-	{
-		char aIP[16];
-		Server()->GetClientAddr(ID, aIP, sizeof(aIP));
-
-		int Pos = 1;
-		for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front())
-		{
-			if(str_comp(r.front().m_aIP, aIP) == 0)
-			{
-				if(pPosition)
-					*pPosition = Pos;
-				return &r.front();
-			}
-			Pos++;
-		}
-	}*/
-
 	return SearchScoreByName(Server()->ClientName(ID), pPosition, true);
 }
 
@@ -244,16 +215,6 @@ void CFileScore::OnPlayerInit(int ClientID, bool PrintRank)
 	m_aPlayerData[ClientID].Reset();
 	CPlayerScore *pPlayer = SearchScoreByID(ClientID);
 
-	/*CScoreJob Job;
-	Job.m_Type = JOBTYPE_UPDATE_IP;
-	Server()->GetClientAddr(ClientID, Job.m_NewData.m_aIP, sizeof(Job.m_NewData.m_aIP));
-	if(pPlayer && str_comp(pPlayer->m_aIP, Job.m_NewData.m_aIP) != 0)
-	{
-		Job.m_pEntry = pPlayer;
-		m_lJobQueue.add(Job);
-		ProcessJobs(false);
-	}*/
-
 	// set score
 	if(pPlayer)
 	{
@@ -276,7 +237,6 @@ void CFileScore::OnPlayerFinish(int ClientID, int Time, int *pCpTime)
 
 	CScoreJob Job;
 	Job.m_NewData = CPlayerScore(Server()->ClientName(ClientID), Time, pCpTime);
-	//Server()->GetClientAddr(ClientID, Job.m_NewData.m_aIP, sizeof(Job.m_NewData.m_aIP));
 
 	Job.m_pEntry = SearchScoreByID(ClientID);
 	if(Job.m_pEntry)
@@ -293,8 +253,8 @@ void CFileScore::ShowTop5(int ClientID, int Debut)
 	if(CheckSpamProtection(ClientID))
 		return;
 
-	char aBuf[512];
-	char aTime[64];
+	char aBuf[128];
+	char aTime[32];
 	GameServer()->SendChat(-1, CHAT_ALL, ClientID, "----------- Top 5 -----------");
 	for(int i = 0; i < 5 && i + Debut - 1 < m_lTop.size(); i++)
 	{
@@ -318,7 +278,7 @@ void CFileScore::ShowRank(int ClientID, const char *pName)
 		return;
 
 	int Pos = 0;
-	char aBuf[512];
+	char aBuf[128];
 
 	CPlayerScore *pScore = SearchScoreByName(pName, &Pos, false);
 
@@ -328,7 +288,7 @@ void CFileScore::ShowRank(int ClientID, const char *pName)
 	{
 		if(g_Config.m_SvShowTimes)
 			To = -1;
-		char aTime[64];
+		char aTime[32];
 		IRace::FormatTimeLong(aTime, sizeof(aTime), pScore->m_Time);
 		if(To != -1)
 			str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", Pos, pScore->m_aName, aTime);
@@ -336,9 +296,13 @@ void CFileScore::ShowRank(int ClientID, const char *pName)
 			str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s (%s)", Pos, pScore->m_aName, aTime, Server()->ClientName(ClientID));
 	}
 	else if(Pos == -1)
-		str_format(aBuf, sizeof(aBuf), "Several players were found.");
+	{
+		str_copy(aBuf, "Several players were found.", sizeof(aBuf));
+	}
 	else
+	{
 		str_format(aBuf, sizeof(aBuf), "%s is not ranked", pName);
+	}
 
 	GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
 	m_LastPrintInChat[ClientID] = Server()->Tick();
@@ -351,7 +315,8 @@ void CFileScore::ShowRank(int ClientID)
 
 	int To = ClientID;
 	int Pos = 0;
-	char aBuf[512];
+	char aBuf[128];
+	char *pLine = "You are not ranked";
 
 	const CPlayerScore *pScore = SearchScoreByID(ClientID, &Pos);
 
@@ -359,16 +324,13 @@ void CFileScore::ShowRank(int ClientID)
 	{
 		if(g_Config.m_SvShowTimes)
 			To = -1;
-		char aTime[64];
+		char aTime[32];
 		IRace::FormatTimeLong(aTime, sizeof(aTime), pScore->m_Time);
 		str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", Pos, pScore->m_aName, aTime);
+		pLine = aBuf;
 	}
-	else if(Pos == -1)
-		str_format(aBuf, sizeof(aBuf), "Several players were found.");
-	else
-		str_format(aBuf, sizeof(aBuf), "You are not ranked");
 
-	GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
+	GameServer()->SendChat(-1, CHAT_ALL, To, pLine);
 	m_LastPrintInChat[ClientID] = Server()->Tick();
 }
 

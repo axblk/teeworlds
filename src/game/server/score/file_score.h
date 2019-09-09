@@ -1,7 +1,7 @@
 /* copyright (c) 2008 rajh and gregwar. Score stuff */
 
-#ifndef GAME_SERVER_FILESCORE_H
-#define GAME_SERVER_FILESCORE_H
+#ifndef GAME_SERVER_SCORE_FILESCORE_H
+#define GAME_SERVER_SCORE_FILESCORE_H
 
 #include <base/tl/sorted_array.h>
 #include "../score.h"
@@ -16,7 +16,6 @@ class CFileScore : public IScore
 	public:
 		char m_aName[MAX_NAME_LENGTH];
 		int m_Time;
-		//char m_aIP[16];
 		int m_aCpTime[NUM_CHECKPOINTS];
 		
 		CPlayerScore() {};
@@ -28,8 +27,7 @@ class CFileScore : public IScore
 	enum MyEnum
 	{
 		JOBTYPE_ADD_NEW=0,
-		JOBTYPE_UPDATE_SCORE,
-		//JOBTYPE_UPDATE_IP
+		JOBTYPE_UPDATE_SCORE
 	};
 
 	struct CScoreJob

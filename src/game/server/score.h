@@ -1,5 +1,5 @@
-#ifndef GAME_SERVER_INTERFACE_SCORE_H
-#define GAME_SERVER_INTERFACE_SCORE_H
+#ifndef GAME_SERVER_SCORE_H
+#define GAME_SERVER_SCORE_H
 
 #include <base/system.h>
 #include <engine/shared/protocol.h>
@@ -85,6 +85,7 @@ public:
 	virtual void Tick() { }
 	
 	virtual void OnPlayerInit(int ClientID, bool PrintRank=false) = 0;
+	virtual void OnPlayerLeave(int ClientID) { };
 	virtual void OnPlayerFinish(int ClientID, int Time, int *pCpTime) = 0;
 	
 	virtual void ShowTop5(int ClientID, int Debut=1) = 0;
