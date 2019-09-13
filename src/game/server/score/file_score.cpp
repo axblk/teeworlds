@@ -4,7 +4,6 @@
 #include <engine/shared/linereader.h>
 #include <engine/storage.h>
 
-#include "../gamecontext.h"
 #include "file_score.h"
 
 static LOCK gs_ScoreLock = 0;
@@ -16,7 +15,7 @@ CFileScore::CPlayerScore::CPlayerScore(const char *pName, int Time, int *pCpTime
 	str_copy(m_aName, pName, sizeof(m_aName));
 }
 
-CFileScore::CFileScore(CGameContext *pGameServer) : IScoreBackend(), m_pGameServer(pGameServer)
+CFileScore::CFileScore(IScoreResponseListener *pListener, IStorage *pStorage) : IScoreBackend(pListener), m_pStorage(pStorage)
 {
 	m_MapID = 0;
 	m_aMap[0] = 0;
@@ -58,7 +57,7 @@ IOHANDLE CFileScore::OpenFile(int Flags) const
 {
 	char aFilename[256];
 	str_format(aFilename, sizeof(aFilename), "records/%s_record.dtb", m_aMap);
-	return m_pGameServer->Storage()->OpenFile(aFilename, Flags, IStorage::TYPE_SAVE);
+	return m_pStorage->OpenFile(aFilename, Flags, IStorage::TYPE_SAVE);
 }
 
 void CFileScore::SaveScoreThread(void *pUser)
@@ -164,7 +163,7 @@ void CFileScore::AddRequest(int Type, CRequestData *pRequestData)
 		Result = ShowTop5Handler((CShowTop5Data*)pRequestData);
 
 	bool Error = Result != 0;
-	ExecCallback(Type, pRequestData, Error);
+	Listener()->OnRequestFinished(Type, pRequestData, Error);
 }
 
 int CFileScore::LoadMapHandler(CLoadMapData *pData)

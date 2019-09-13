@@ -4,7 +4,6 @@
 #include <engine/engine.h>
 #include <engine/storage.h>
 
-#include "../gamecontext.h"
 #include "sqlite_score.h"
 
 // TODO:
@@ -17,24 +16,16 @@
 
 char CSQLiteScore::m_aDBFilename[512];
 
-bool ExecuteStatement(sqlite3 *pDB, const char *pSQL)
+bool ExecuteSQL(sqlite3 *pDB, const char *pSQL)
 {
-	sqlite3_stmt *pStmt;
-	int rc = sqlite3_prepare_v2(pDB, pSQL, -1, &pStmt, NULL);
-	bool Error = rc != SQLITE_OK;
-	if(Error)
+	char *pErrorMsg = 0;
+	bool Success = sqlite3_exec(pDB, pSQL, NULL, 0, &pErrorMsg) == SQLITE_OK;
+	if(!Success)
 	{
-		dbg_msg("sqlite", "error preparing statement: %s", sqlite3_errmsg(pDB));
+		dbg_msg("sqlite", "error running statements: %s", pErrorMsg);
+		sqlite3_free(pErrorMsg);
 	}
-	else
-	{
-		rc = sqlite3_step(pStmt);
-		Error = rc != SQLITE_DONE;
-		if(Error)
-			dbg_msg("sqlite", "error executing statement: %s", sqlite3_errmsg(pDB));
-	}
-	sqlite3_finalize(pStmt);
-	return Error;
+    return Success;
 }
 
 void RecordFromRow(IScoreBackend::CRecordData *pRecord, sqlite3_stmt *pStmt)
@@ -44,11 +35,12 @@ void RecordFromRow(IScoreBackend::CRecordData *pRecord, sqlite3_stmt *pStmt)
 	pRecord->m_Rank = sqlite3_column_int(pStmt, 2);
 }
 
-CSQLiteScore::CSQLiteScore(CGameContext *pGameServer) : IScoreBackend(), m_pGameServer(pGameServer), m_DBValid(false)
+CSQLiteScore::CSQLiteScore(IScoreResponseListener *pListener, IEngine *pEngine, IStorage *pStorage)
+	: IScoreBackend(pListener), m_pEngine(pEngine), m_pStorage(pStorage), m_DBValid(false)
 {
 	char m_aFile[512];
 	str_format(m_aFile, sizeof(m_aFile), "records/%s", g_Config.m_SvSQLiteDatabase);
-	GameServer()->Storage()->GetCompletePath(IStorage::TYPE_SAVE, m_aFile, m_aDBFilename, sizeof(m_aDBFilename));
+	m_pStorage->GetCompletePath(IStorage::TYPE_SAVE, m_aFile, m_aDBFilename, sizeof(m_aDBFilename));
 
 	sqlite3_config(SQLITE_CONFIG_MULTITHREAD);
 
@@ -71,7 +63,7 @@ void CSQLiteScore::Tick()
 		{
 			m_lPendingRequests.remove_index(i--);
 			bool Error = pRequest->m_Job.Result() != SQLITE_OK || pRequest->m_HandlerResult != 0;
-			ExecCallback(pRequest->m_Type, pRequest->m_pRequestData, Error);
+			Listener()->OnRequestFinished(pRequest->m_Type, pRequest->m_pRequestData, Error);
 			delete pRequest;
 		}
 	}
@@ -81,38 +73,34 @@ void CSQLiteScore::AddRequest(int Type, CRequestData *pRequestData)
 {
 	CSqlExecData::FRequestFunc pfnFunc = 0;
 	int Flags = 0;
-	if(Type == REQTYPE_LOAD_MAP)
+	switch(Type)
 	{
+	case REQTYPE_LOAD_MAP:
 		pfnFunc = LoadMapHandler;
 		Flags = SQLITE_OPEN_READWRITE;
-	}
-	else if(Type == REQTYPE_LOAD_PLAYER)
-	{
+		break;
+	case REQTYPE_LOAD_PLAYER:
 		pfnFunc = LoadPlayerHandler;
 		Flags = SQLITE_OPEN_READONLY;
-	}
-	else if(Type == REQTYPE_SAVE_SCORE)
-	{
+		break;
+	case REQTYPE_SAVE_SCORE:
 		pfnFunc = SaveScoreHandler;
 		Flags = SQLITE_OPEN_READWRITE;
-	}
-	else if(Type == REQTYPE_SHOW_RANK)
-	{
+		break;
+	case REQTYPE_SHOW_RANK:
 		pfnFunc = ShowRankHandler;
 		Flags = SQLITE_OPEN_READONLY;
-	}
-	else if(Type == REQTYPE_SHOW_TOP5)
-	{
+		break;
+	case REQTYPE_SHOW_TOP5:
 		pfnFunc = ShowTop5Handler;
 		Flags = SQLITE_OPEN_READONLY;
-	}
-	else
-	{
-		return;
+		break;
+	default:
+		Listener()->OnRequestFinished(Type, pRequestData, true);
 	}
 	CSqlExecData *pRequest = new CSqlExecData(Type, pfnFunc, Flags, pRequestData);
 	m_lPendingRequests.add(pRequest);
-	GameServer()->Engine()->AddJob(&pRequest->m_Job, ExecSqlFunc, pRequest);
+	m_pEngine->AddJob(&pRequest->m_Job, ExecSqlFunc, pRequest);
 }
 
 int CSQLiteScore::ExecSqlFunc(void *pUser)
@@ -132,14 +120,13 @@ int CSQLiteScore::ExecSqlFunc(void *pUser)
 
 int CSQLiteScore::CreateTablesHandler(sqlite3 *pDB, CRequestData *pRequestData)
 {
-	bool Error = false;
-	Error = Error || ExecuteStatement(pDB, "PRAGMA foreign_keys = ON;");
-	Error = Error || ExecuteStatement(pDB, "CREATE TABLE IF NOT EXISTS maps (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, gametype TEXT);");
-	Error = Error || ExecuteStatement(pDB, "CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);");
-	Error = Error || ExecuteStatement(pDB, "CREATE TABLE IF NOT EXISTS races (player INTEGER REFERENCES players, map INTEGER REFERENCES maps, time INTEGER, checkpoints TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);");
-	Error = Error || ExecuteStatement(pDB, "CREATE INDEX IF NOT EXISTS raceindex ON races (map, player);");
+	const char *pInitSQL = "PRAGMA foreign_keys = ON;"
+		"CREATE TABLE IF NOT EXISTS maps (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, gametype TEXT);"
+		"CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);"
+		"CREATE TABLE IF NOT EXISTS races (player INTEGER REFERENCES players, map INTEGER REFERENCES maps, time INTEGER, checkpoints TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);"
+		"CREATE INDEX IF NOT EXISTS raceindex ON races (map, player);";
 
-	return Error ? -1 : 0;
+	return ExecuteSQL(pDB, pInitSQL) ? 0 : -1;
 }
 
 int CSQLiteScore::LoadMapHandler(sqlite3 *pDB, CRequestData *pRequestData)
@@ -279,7 +266,7 @@ int CSQLiteScore::ShowRankHandler(sqlite3 *pDB, CRequestData *pRequestData)
 		}
 	}
 
-	ExecuteStatement(pDB, "DROP TABLE _ranking;");
+	ExecuteSQL(pDB, "DROP TABLE _ranking;");
 
 	return 0;
 }

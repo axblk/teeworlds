@@ -41,11 +41,9 @@ CScore::CScore(CGameContext *pGameServer) :
 	m_CurrentRecord(0)
 {
 	if(str_comp(g_Config.m_SvScore, "file") == 0)
-		m_pBackend = new CFileScore(pGameServer);
+		m_pBackend = new CFileScore(this, GameServer()->Storage());
 	else
-		m_pBackend = new CSQLiteScore(pGameServer);
-
-	m_pBackend->SetRequestCallback(RequestFinishedCallback, this);
+		m_pBackend = new CSQLiteScore(this, GameServer()->Engine(), GameServer()->Storage());
 }
 
 void CScore::UpdateThrottling(int ClientID)
@@ -85,7 +83,6 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 					OnPlayerInit(i);
 			}
 		}
-		delete pData;
 	}
 	else if(Type == IScoreBackend::REQTYPE_LOAD_PLAYER)
 	{
@@ -102,7 +99,6 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 					m_aPlayerCache[pData->m_ClientID].UpdateCurTime(pData->m_Time);
 			}
 		}
-		delete pData;
 	}
 	else if(Type == IScoreBackend::REQTYPE_SAVE_SCORE)
 	{
@@ -117,7 +113,6 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 				m_aPlayerID[pData->m_ClientID] = pData->m_PlayerID;
 			}
 		}
-		delete pData;
 	}
 	else if(Type == IScoreBackend::REQTYPE_SHOW_RANK)
 	{
@@ -174,7 +169,6 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 				GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
 			}
 		}
-		delete pData;
 	}
 	else if(Type == IScoreBackend::REQTYPE_SHOW_TOP5)
 	{
@@ -199,8 +193,9 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 				GameServer()->SendChat(-1, CHAT_ALL, pData->m_RequestingClientID, aBuf);
 			}
 		}
-		delete pData;
 	}
+
+	delete pUserData;
 }
 
 void CScore::OnMapLoad()

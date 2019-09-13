@@ -26,13 +26,12 @@ class CSQLiteScore : public IScoreBackend
 		int m_HandlerResult;
 	};
 
-	class CGameContext *m_pGameServer;
+	class IEngine *m_pEngine;
+	class IStorage *m_pStorage;
 
 	bool m_DBValid;
 	static char m_aDBFilename[512];
 	array<CSqlExecData*> m_lPendingRequests;
-	
-	CGameContext *GameServer() { return m_pGameServer; }
 
 	static int ExecSqlFunc(void *pUser);
 
@@ -42,9 +41,9 @@ class CSQLiteScore : public IScoreBackend
 	static int SaveScoreHandler(sqlite3 *pDB, CRequestData *pRequestData);
 	static int ShowRankHandler(sqlite3 *pDB, CRequestData *pRequestData);
 	static int ShowTop5Handler(sqlite3 *pDB, CRequestData *pRequestData);
-	
+
 public:
-	CSQLiteScore(CGameContext *pGameServer);
+	CSQLiteScore(IScoreResponseListener *pListener, IEngine *pEngine, IStorage *pStorage);
 	~CSQLiteScore();
 
 	bool Ready() const { return m_DBValid; };

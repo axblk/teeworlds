@@ -4,11 +4,12 @@
 #define GAME_SERVER_SCORE_FILESCORE_H
 
 #include <base/tl/sorted_array.h>
+
 #include "../score.h"
 
 class CFileScore : public IScoreBackend
 {
-	CGameContext *m_pGameServer;
+	class IStorage *m_pStorage;
 	
 	class CPlayerScore
 	{
@@ -43,8 +44,6 @@ class CFileScore : public IScoreBackend
 	int m_MapID;
 	char m_aMap[64];
 	int m_PlayerCounter;
-
-	CGameContext *GameServer() { return m_pGameServer; }
 	
 	CPlayerScore *SearchScoreByPlayerID(int PlayerID, int *pPosition = 0);
 	CPlayerScore *SearchScoreByName(const char *pName, int *pPosition = 0);
@@ -62,7 +61,7 @@ class CFileScore : public IScoreBackend
 	int ShowTop5Handler(CShowTop5Data *pRequestData);
 
 public:
-	CFileScore(CGameContext *pGameServer);
+	CFileScore(IScoreResponseListener *pListener, IStorage *pStorage);
 	~CFileScore();
 
 	bool Ready() const { return true; };

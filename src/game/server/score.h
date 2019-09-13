@@ -6,10 +6,12 @@
 
 #define NUM_CHECKPOINTS 25
 
-class CScore;
+class IScoreResponseListener;
 
 class IScoreBackend
 {
+	IScoreResponseListener *m_pListener;
+
 public:
 	enum
 	{
@@ -34,6 +36,7 @@ public:
 	{
 		// in/out
 		int m_MapID;
+		virtual ~CRequestData() { }
 	};
 
 	struct CLoadMapData : CRequestData
@@ -88,34 +91,23 @@ public:
 		int m_TotalRecords;
 	};
 
-private:
-	typedef void(*FRequestCallbackFunc)(int Type, IScoreBackend::CRequestData *pRequestData, bool Error, void *pUserData);
-
-	FRequestCallbackFunc m_pfnRequestCallback;
-	void *m_pUserData;
-
-public:
 	static void CheckpointsFromString(int *pCpTime, const char *pStr, const char *pDelim = ";");
 	static void CheckpointsToString(char *pBuf, int BufSize, const int *pCpTime, const char *pDelim = ";");
 
-	IScoreBackend() : m_pfnRequestCallback(0), m_pUserData(0) { }
+	IScoreResponseListener *Listener() { return m_pListener; }
+
+	IScoreBackend(IScoreResponseListener *pListener) : m_pListener(pListener) { }
 	virtual ~IScoreBackend() { }
-
-	void SetRequestCallback(FRequestCallbackFunc pfnCallback, void *pUserData)
-	{
-		m_pfnRequestCallback = pfnCallback;
-		m_pUserData = pUserData;
-	}
-
-	void ExecCallback(int Type, CRequestData *pRequestData, bool Error)
-	{
-		if(m_pfnRequestCallback)
-			m_pfnRequestCallback(Type, pRequestData, Error, m_pUserData);
-	}
 
 	virtual bool Ready() const = 0;
 	virtual void Tick() = 0;
 	virtual void AddRequest(int Type, CRequestData *pRequestData = 0) = 0;
+};
+
+class IScoreResponseListener
+{
+public:
+	virtual void OnRequestFinished(int Type, IScoreBackend::CRequestData *pRequestData, bool Error) = 0;
 };
 
 class CPlayerData
@@ -164,7 +156,7 @@ public:
 	int m_aCpTime[NUM_CHECKPOINTS];
 };
 
-class CScore
+class CScore : public IScoreResponseListener
 {
 	class CGameContext *m_pGameServer;
 	class IServer *m_pServer;
@@ -186,12 +178,6 @@ class CScore
 	bool IsThrottled(int ClientID);
 
 	bool UpdateRecord(int Time);
-
-	static void RequestFinishedCallback(int Type, IScoreBackend::CRequestData *pRequestData, bool Error, void *pUserData)
-	{
-		((CScore*)pUserData)->OnRequestFinished(Type, pRequestData, Error);
-	}
-	void OnRequestFinished(int Type, IScoreBackend::CRequestData *pRequestData, bool Error);
 	
 public:
 	CScore(CGameContext *pGameServer);
@@ -201,6 +187,8 @@ public:
 	int GetRecord() const { return m_CurrentRecord; }
 
 	void Tick() { m_pBackend->Tick(); }
+
+	void OnRequestFinished(int Type, IScoreBackend::CRequestData *pRequestData, bool Error);
 
 	void OnMapLoad();
 	void OnPlayerInit(int ClientID);
