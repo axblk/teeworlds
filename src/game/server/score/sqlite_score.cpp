@@ -131,7 +131,7 @@ int CSQLiteScore::CreateTablesHandler(sqlite3 *pDB, CRequestData *pRequestData)
 
 int CSQLiteScore::LoadMapHandler(sqlite3 *pDB, CRequestData *pRequestData)
 {
-	CLoadMapData *pData = (CLoadMapData *)pRequestData;
+	CMapData *pData = (CMapData*)pRequestData;
 	sqlite3_stmt *pStmt;
 
 	sqlite3_prepare_v2(pDB, "SELECT * FROM maps WHERE name = ?1;", -1, &pStmt, NULL);
@@ -164,7 +164,7 @@ int CSQLiteScore::LoadMapHandler(sqlite3 *pDB, CRequestData *pRequestData)
 
 int CSQLiteScore::LoadPlayerHandler(sqlite3 *pDB, CRequestData *pRequestData)
 {
-	CLoadPlayerData *pData = (CLoadPlayerData *)pRequestData;
+	CScoreData *pData = (CScoreData*)pRequestData;
 	sqlite3_stmt *pStmt;
 
 	if(pData->m_PlayerID == -1)
@@ -195,7 +195,7 @@ int CSQLiteScore::LoadPlayerHandler(sqlite3 *pDB, CRequestData *pRequestData)
 
 int CSQLiteScore::SaveScoreHandler(sqlite3 *pDB, CRequestData *pRequestData)
 {
-	CSaveScoreData *pData = (CSaveScoreData *)pRequestData;
+	CScoreData *pData = (CScoreData*)pRequestData;
 	sqlite3_stmt *pStmt;
 
 	if(pData->m_PlayerID == -1)
@@ -228,7 +228,7 @@ int CSQLiteScore::SaveScoreHandler(sqlite3 *pDB, CRequestData *pRequestData)
 
 int CSQLiteScore::ShowRankHandler(sqlite3 *pDB, CRequestData *pRequestData)
 {
-	CShowRankData *pData = (CShowRankData *)pRequestData;
+	CRankData *pData = (CRankData*)pRequestData;
 	sqlite3_stmt *pStmt;
 
 	sqlite3_prepare_v2(pDB, "CREATE TEMPORARY TABLE _ranking AS SELECT player, time, RANK() OVER (ORDER BY `time` ASC) AS rank FROM (SELECT player, min(time) as time FROM races WHERE map = ?1 GROUP BY player);", -1, &pStmt, NULL);
@@ -247,7 +247,7 @@ int CSQLiteScore::ShowRankHandler(sqlite3 *pDB, CRequestData *pRequestData)
 	else
 	{
 		sqlite3_prepare_v2(pDB, "SELECT name, time, rank FROM _ranking INNER JOIN players ON player = players.id WHERE name = ?1 LIMIT 1;", -1, &pStmt, NULL);
-		sqlite3_bind_text(pStmt, 1, pData->m_aName, -1, SQLITE_STATIC);
+		sqlite3_bind_text(pStmt, 1, pData->m_aSearchName, -1, SQLITE_STATIC);
 		if(sqlite3_step(pStmt) == SQLITE_ROW)
 			RecordFromRow(&pData->m_aRecords[pData->m_Num++], pStmt);
 		sqlite3_finalize(pStmt);
@@ -255,7 +255,7 @@ int CSQLiteScore::ShowRankHandler(sqlite3 *pDB, CRequestData *pRequestData)
 		if(pData->m_Num == 0)
 		{
 			sqlite3_prepare_v2(pDB, "SELECT name, time, rank FROM _ranking INNER JOIN players ON player = players.id WHERE name LIKE '%' || ?1 || '%';", -1, &pStmt, NULL);
-			sqlite3_bind_text(pStmt, 1, pData->m_aName, -1, SQLITE_STATIC);
+			sqlite3_bind_text(pStmt, 1, pData->m_aSearchName, -1, SQLITE_STATIC);
 			while(sqlite3_step(pStmt) == SQLITE_ROW)
 			{
 				if(pData->m_Num < MAX_SEARCH_RECORDS)
@@ -273,7 +273,7 @@ int CSQLiteScore::ShowRankHandler(sqlite3 *pDB, CRequestData *pRequestData)
 
 int CSQLiteScore::ShowTop5Handler(sqlite3 *pDB, CRequestData *pRequestData)
 {
-	CShowTop5Data *pData = (CShowTop5Data *)pRequestData;
+	CRankData *pData = (CRankData*)pRequestData;
 	sqlite3_stmt *pStmt;
 
 	sqlite3_prepare_v2(pDB, "SELECT name, time, RANK() OVER (ORDER BY `time` ASC) AS rank FROM (SELECT player, min(time) as time FROM races WHERE map = ?1 GROUP BY player) INNER JOIN players ON player = players.id LIMIT ?2, ?3;", -1, &pStmt, NULL);

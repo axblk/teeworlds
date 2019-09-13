@@ -34,61 +34,40 @@ public:
 
 	struct CRequestData
 	{
-		// in/out
 		int m_MapID;
+		CRequestData() : m_MapID(-1) { }
 		virtual ~CRequestData() { }
 	};
 
-	struct CLoadMapData : CRequestData
+	struct CMapData : CRequestData
 	{
-		// in
+		CMapData() : m_BestTime(0) { }
 		char m_aMapName[128];
-		// out
 		int m_BestTime;
 	};
 
-	struct CLoadPlayerData : CRequestData
+	struct CScoreData : CRequestData
 	{
-		// in
-		int m_ClientID;
+		CScoreData() : m_ConnID(0), m_PlayerID(-1), m_Time(0) { mem_zero((void*)m_aCpTime, sizeof(m_aCpTime)); }
+		int m_ConnID;
 		char m_aPlayerName[MAX_NAME_LENGTH];
-		// out
 		int m_PlayerID;
 		int m_Time;
 		int m_aCpTime[NUM_CHECKPOINTS];
 	};
 
-	struct CSaveScoreData : CRequestData
+	struct CRankData : CRequestData
 	{
+		CRankData() : m_RequestingConnID(0), m_Start(0), m_PlayerID(-1), m_Num(0), m_TotalEntries(0) { }
 		// in
-		int m_PlayerID; // +out
-		int m_ClientID;
-		char m_aPlayerName[MAX_NAME_LENGTH];
-		int m_Time;
-		int m_aCpTime[NUM_CHECKPOINTS];
-	};
-
-	struct CShowRankData : CRequestData
-	{
-		// in
-		int m_RequestingClientID;
-		// search param
-		int m_PlayerID;
-		char m_aName[MAX_NAME_LENGTH];
-		// out
-		int m_Num;
-		CRecordData m_aRecords[MAX_SEARCH_RECORDS];
-	};
-
-	struct CShowTop5Data : CRequestData
-	{
-		// in
-		int m_RequestingClientID;
+		int m_RequestingConnID;
 		int m_Start;
+		char m_aSearchName[MAX_NAME_LENGTH];
+		int m_PlayerID;
 		// out
 		int m_Num;
 		CRecordData m_aRecords[MAX_TOP_RECORDS];
-		int m_TotalRecords;
+		int m_TotalEntries;
 	};
 
 	static void CheckpointsFromString(int *pCpTime, const char *pStr, const char *pDelim = ";");
@@ -164,8 +143,6 @@ class CScore : public IScoreResponseListener
 	IScoreBackend *m_pBackend;
 
 	int m_MapID;
-	int m_aPlayerID[MAX_CLIENTS];
-
 	int m_LastRequest[MAX_CLIENTS];
 
 	CPlayerData m_aPlayerCache[MAX_CLIENTS];
@@ -192,7 +169,6 @@ public:
 
 	void OnMapLoad();
 	void OnPlayerInit(int ClientID);
-	void OnPlayerLeave(int ClientID);
 	void OnPlayerFinish(int ClientID, int Time, int *pCpTime);
 	
 	void ShowRank(int RequestingClientID, const char *pName);

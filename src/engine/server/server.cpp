@@ -292,6 +292,8 @@ CServer::CServer() : m_DemoRecorder(&m_SnapshotDelta)
 	m_RconPasswordSet = 0;
 	m_GeneratedRconPassword = 0;
 
+	m_ConnectionCounter = 0;
+
 	Init();
 }
 
@@ -457,6 +459,21 @@ int CServer::ClientCountry(int ClientID) const
 bool CServer::ClientIngame(int ClientID) const
 {
 	return ClientID >= 0 && ClientID < MAX_CLIENTS && m_aClients[ClientID].m_State == CServer::CClient::STATE_INGAME;
+}
+
+int CServer::GetConnID(int ClientID) const
+{
+	if(m_aClients[ClientID].m_ConnectionNum > 0)
+		return (m_aClients[ClientID].m_ConnectionNum << 8) | (ClientID & 0xFF);
+	return -1;
+}
+
+int CServer::GetClientIDFromConnID(int ConnID) const
+{
+	int ClientID = ConnID & 0xFF;
+	if(ConnID != -1 && m_aClients[ClientID].m_ConnectionNum == ConnID >> 8)
+		return ClientID;
+	return -1;
 }
 
 int CServer::MaxClients() const
@@ -679,6 +696,8 @@ int CServer::NewClientCallback(int ClientID, void *pUser)
 	pThis->m_aClients[ClientID].m_pMapListEntryToSend = 0;
 	pThis->m_aClients[ClientID].m_NoRconNote = false;
 	pThis->m_aClients[ClientID].m_Quitting = false;
+	pThis->m_aClients[ClientID].m_PlayerID = -1;
+	pThis->m_aClients[ClientID].m_ConnectionNum = ++pThis->m_ConnectionCounter;
 	pThis->m_aClients[ClientID].Reset();
 	return 0;
 }
@@ -710,6 +729,8 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	pThis->m_aClients[ClientID].m_pMapListEntryToSend = 0;
 	pThis->m_aClients[ClientID].m_NoRconNote = false;
 	pThis->m_aClients[ClientID].m_Quitting = false;
+	pThis->m_aClients[ClientID].m_PlayerID = -1;
+	pThis->m_aClients[ClientID].m_ConnectionNum = 0;
 	pThis->m_aClients[ClientID].m_Snapshots.PurgeAll();
 	return 0;
 }

@@ -19,7 +19,6 @@ CFileScore::CFileScore(IScoreResponseListener *pListener, IStorage *pStorage) : 
 {
 	m_MapID = 0;
 	m_aMap[0] = 0;
-	m_PlayerCounter = 0;
 
 	if(gs_ScoreLock == 0)
 		gs_ScoreLock = lock_create();
@@ -118,21 +117,6 @@ void CFileScore::ProcessJobs(bool Block)
 	}
 }
 
-CFileScore::CPlayerScore *CFileScore::SearchScoreByPlayerID(int PlayerID, int *pPosition)
-{
-	int Pos = 1;
-	for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Pos++)
-	{
-		if(r.front().m_ID == PlayerID)
-		{
-			if(pPosition)
-				*pPosition = Pos;
-			return &r.front();
-		}
-	}
-	return 0;
-}
-
 CFileScore::CPlayerScore *CFileScore::SearchScoreByName(const char *pName, int *pPosition)
 {
 	int Pos = 1;
@@ -152,30 +136,28 @@ void CFileScore::AddRequest(int Type, CRequestData *pRequestData)
 {
 	int Result = -1;
 	if(Type == REQTYPE_LOAD_MAP)
-		Result = LoadMapHandler((CLoadMapData*)pRequestData);
+		Result = LoadMapHandler((CMapData*)pRequestData);
 	else if(Type == REQTYPE_LOAD_PLAYER)
-		Result = LoadPlayerHandler((CLoadPlayerData*)pRequestData);
+		Result = LoadPlayerHandler((CScoreData*)pRequestData);
 	else if(Type == REQTYPE_SAVE_SCORE)
-		Result = SaveScoreHandler((CSaveScoreData*)pRequestData);
+		Result = SaveScoreHandler((CScoreData*)pRequestData);
 	else if(Type == REQTYPE_SHOW_RANK)
-		Result = ShowRankHandler((CShowRankData*)pRequestData);
+		Result = ShowRankHandler((CRankData*)pRequestData);
 	else if(Type == REQTYPE_SHOW_TOP5)
-		Result = ShowTop5Handler((CShowTop5Data*)pRequestData);
+		Result = ShowTop5Handler((CRankData*)pRequestData);
 
 	bool Error = Result != 0;
 	Listener()->OnRequestFinished(Type, pRequestData, Error);
 }
 
-int CFileScore::LoadMapHandler(CLoadMapData *pData)
+int CFileScore::LoadMapHandler(CMapData *pData)
 {
 	ProcessJobs(true);
 
 	lock_wait(gs_ScoreLock);
 
-	m_MapID++;
-	pData->m_MapID = m_MapID;
+	pData->m_MapID = ++m_MapID;
 	str_copy(m_aMap, pData->m_aMapName, sizeof(m_aMap));
-	m_PlayerCounter = 0;
 	m_lTop.clear();
 
 	IOHANDLE File = OpenFile(IOFLAG_READ);
@@ -184,11 +166,11 @@ int CFileScore::LoadMapHandler(CLoadMapData *pData)
 		CLineReader LineReader;
 		LineReader.Init(File);
 		CPlayerScore Tmp;
-		int LinesPerItem = 3;
+		static const int s_LinesPerItem = 3;
 		char *pLine;
 		for(int LineCount = 0; (pLine = LineReader.Get()); LineCount++)
 		{
-			int Type = LineCount % LinesPerItem;
+			int Type = LineCount % s_LinesPerItem;
 			if(Type == 0)
 			{
 				mem_zero(&Tmp, sizeof(Tmp));
@@ -201,7 +183,6 @@ int CFileScore::LoadMapHandler(CLoadMapData *pData)
 			else if(Type == 2)
 			{
 				IScoreBackend::CheckpointsFromString(Tmp.m_aCpTime, pLine, " ");
-				Tmp.m_ID = ++m_PlayerCounter;
 				m_lTop.add(Tmp);
 			}
 		}
@@ -215,72 +196,55 @@ int CFileScore::LoadMapHandler(CLoadMapData *pData)
 	return 0;
 }
 
-int CFileScore::LoadPlayerHandler(CLoadPlayerData *pData)
+int CFileScore::LoadPlayerHandler(CScoreData *pData)
 {
-	const CPlayerScore *pPlayer = (pData->m_PlayerID != -1)
-		? SearchScoreByPlayerID(pData->m_PlayerID)
-		: SearchScoreByName(pData->m_aPlayerName);
-
+	const CPlayerScore *pPlayer = SearchScoreByName(pData->m_aPlayerName);
 	if(pPlayer)
 	{
-		if(pData->m_PlayerID == -1)
-			pData->m_PlayerID = pPlayer->m_ID;
 		pData->m_Time = pPlayer->m_Time;
 		mem_copy(pData->m_aCpTime, pPlayer->m_aCpTime, sizeof(pData->m_aCpTime));
 	}
 	return 0;
 }
 
-int CFileScore::SaveScoreHandler(CSaveScoreData *pData)
+int CFileScore::SaveScoreHandler(CScoreData *pData)
 {
 	CScoreJob Job;
-	Job.m_NewData = CPlayerScore(pData->m_aPlayerName, pData->m_Time, pData->m_aCpTime);
-	Job.m_pEntry = pData->m_PlayerID == -1 ? 0 : SearchScoreByPlayerID(pData->m_PlayerID);
-	if(Job.m_pEntry)
+	Job.m_pEntry = SearchScoreByName(pData->m_aPlayerName);
+	if(!Job.m_pEntry || Job.m_pEntry->m_Time > pData->m_Time)
 	{
-		if(Job.m_pEntry->m_Time <= Job.m_NewData.m_Time)
-			return 0;
+		Job.m_NewData = CPlayerScore(pData->m_aPlayerName, pData->m_Time, pData->m_aCpTime);
+		Job.m_Type = Job.m_pEntry ? JOBTYPE_UPDATE_SCORE : JOBTYPE_ADD_NEW;
+		m_lJobQueue.add(Job);
+		ProcessJobs(false);
 	}
-	else
-	{
-		pData->m_PlayerID = ++m_PlayerCounter;
-		Job.m_NewData.m_ID = pData->m_PlayerID;
-	}
-
-	Job.m_Type = Job.m_pEntry ? JOBTYPE_UPDATE_SCORE : JOBTYPE_ADD_NEW;
-	m_lJobQueue.add(Job);
-	ProcessJobs(false);
 	return 0;
 }
 
-int CFileScore::ShowRankHandler(CShowRankData *pData)
+int CFileScore::ShowRankHandler(CRankData *pData)
 {
-	int Pos;
-	const CPlayerScore *pPlayer = (pData->m_PlayerID != -1)
-		? SearchScoreByPlayerID(pData->m_PlayerID, &Pos)
-		: SearchScoreByName(pData->m_aName, &Pos);
-
+	int Rank;
+	const CPlayerScore *pPlayer = SearchScoreByName(pData->m_aSearchName, &Rank);
 	if(pPlayer)
 	{
 		CRecordData *pRecord = &pData->m_aRecords[pData->m_Num++];
 		str_copy(pRecord->m_aPlayerName, pPlayer->m_aName, sizeof(pRecord->m_aPlayerName));
 		pRecord->m_Time = pPlayer->m_Time;
-		pRecord->m_Rank = Pos;
+		pRecord->m_Rank = Rank;
 	}
-	
-	if(!pPlayer && pData->m_PlayerID == -1)
+	else
 	{
-		Pos = 1;
-		for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Pos++)
+		Rank = 1;
+		for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Rank++)
 		{
-			if(str_find_nocase(r.front().m_aName, pData->m_aName))
+			if(str_find_nocase(r.front().m_aName, pData->m_aSearchName))
 			{
 				if(pData->m_Num < MAX_SEARCH_RECORDS)
 				{
 					CRecordData *pRecord = &pData->m_aRecords[pData->m_Num];
 					str_copy(pRecord->m_aPlayerName, r.front().m_aName, sizeof(pRecord->m_aPlayerName));
 					pRecord->m_Time = r.front().m_Time;
-					pRecord->m_Rank = Pos;
+					pRecord->m_Rank = Rank;
 				}
 				pData->m_Num++;
 			}
@@ -289,10 +253,10 @@ int CFileScore::ShowRankHandler(CShowRankData *pData)
 	return 0;
 }
 
-int CFileScore::ShowTop5Handler(CShowTop5Data *pData)
+int CFileScore::ShowTop5Handler(CRankData *pData)
 {
-	pData->m_TotalRecords = m_lTop.size();
-	for(; pData->m_Num < MAX_TOP_RECORDS && pData->m_Start + pData->m_Num < pData->m_TotalRecords; pData->m_Num++)
+	pData->m_TotalEntries = m_lTop.size();
+	for(; pData->m_Num < MAX_TOP_RECORDS && pData->m_Start + pData->m_Num < pData->m_TotalEntries; pData->m_Num++)
 	{
 		const CPlayerScore *r = &m_lTop[pData->m_Start + pData->m_Num];
 		CRecordData *pRecord = &pData->m_aRecords[pData->m_Num];

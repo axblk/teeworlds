@@ -67,12 +67,17 @@ bool CScore::UpdateRecord(int Time)
 void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData, bool Error)
 {
 	bool MapChanged = m_MapID != pUserData->m_MapID;
+	if(Error)
+	{
+		delete pUserData;
+		return;
+	}
 
 	if(Type == IScoreBackend::REQTYPE_LOAD_MAP)
 	{
-		IScoreBackend::CLoadMapData *pData = (IScoreBackend::CLoadMapData*)pUserData;
+		IScoreBackend::CMapData *pData = (IScoreBackend::CMapData*)pUserData;
 		MapChanged = str_comp(pData->m_aMapName, Server()->GetMapName()) != 0;
-		if(!Error && !MapChanged)
+		if(!MapChanged)
 		{
 			m_MapID = pData->m_MapID;
 			UpdateRecord(pData->m_BestTime);
@@ -86,51 +91,50 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 	}
 	else if(Type == IScoreBackend::REQTYPE_LOAD_PLAYER)
 	{
-		IScoreBackend::CLoadPlayerData *pData = (IScoreBackend::CLoadPlayerData*)pUserData;
-		bool ClientChanged = !Server()->ClientIngame(pData->m_ClientID) || str_comp(Server()->ClientName(pData->m_ClientID), pData->m_aPlayerName) != 0;
-		if(!Error && !MapChanged && !ClientChanged)
+		IScoreBackend::CScoreData *pData = (IScoreBackend::CScoreData*)pUserData;
+		int ClientID = Server()->GetClientIDFromConnID(pData->m_ConnID);
+		if(ClientID != -1 && Server()->GetPlayerID(ClientID) == -1 && pData->m_PlayerID != -1)
 		{
-			if(pData->m_PlayerID != -1)
-			{
-				dbg_msg("score", "player init: %d:%d", pData->m_ClientID, pData->m_PlayerID);
-				m_aPlayerID[pData->m_ClientID] = pData->m_PlayerID;
-				m_aPlayerCache[pData->m_ClientID].SetTime(pData->m_Time, pData->m_aCpTime);
-				if(g_Config.m_SvLoadBest)
-					m_aPlayerCache[pData->m_ClientID].UpdateCurTime(pData->m_Time);
-			}
+			dbg_msg("score", "player init: %d:%d", ClientID, pData->m_PlayerID);
+			Server()->SetPlayerID(ClientID, pData->m_PlayerID);
+		}
+
+		if(!MapChanged && ClientID != -1 && pData->m_Time > 0)
+		{
+			dbg_msg("score", "loaded player time: %d (%d)", ClientID, pData->m_Time);
+			m_aPlayerCache[ClientID].SetTime(pData->m_Time, pData->m_aCpTime);
+			if(g_Config.m_SvLoadBest)
+				m_aPlayerCache[ClientID].UpdateCurTime(pData->m_Time);
 		}
 	}
 	else if(Type == IScoreBackend::REQTYPE_SAVE_SCORE)
 	{
-		IScoreBackend::CSaveScoreData *pData = (IScoreBackend::CSaveScoreData*)pUserData;
-		bool ClientChanged = !Server()->ClientIngame(pData->m_ClientID) || str_comp(Server()->ClientName(pData->m_ClientID), pData->m_aPlayerName) != 0;
-		if(!Error)
+		IScoreBackend::CScoreData *pData = (IScoreBackend::CScoreData*)pUserData;
+		int ClientID = Server()->GetClientIDFromConnID(pData->m_ConnID);
+		if(ClientID != -1 && Server()->GetPlayerID(ClientID) == -1 && pData->m_PlayerID != -1)
 		{
-			dbg_msg("score", "saved score: %d", pData->m_PlayerID);
-			if(!MapChanged && !ClientChanged && pData->m_PlayerID != -1)
-			{
-				dbg_msg("score", "player init: %d:%d", pData->m_ClientID, pData->m_PlayerID);
-				m_aPlayerID[pData->m_ClientID] = pData->m_PlayerID;
-			}
+			dbg_msg("score", "player init: %d:%d", ClientID, pData->m_PlayerID);
+			Server()->SetPlayerID(ClientID, pData->m_PlayerID);
 		}
+		dbg_msg("score", "saved time: %d (%d)", ClientID, pData->m_Time);
 	}
 	else if(Type == IScoreBackend::REQTYPE_SHOW_RANK)
 	{
-		IScoreBackend::CShowRankData *pData = (IScoreBackend::CShowRankData*)pUserData;
-		bool ClientLeft = !Server()->ClientIngame(pData->m_RequestingClientID);
-		if(!Error && !MapChanged && !ClientLeft)
+		IScoreBackend::CRankData *pData = (IScoreBackend::CRankData*)pUserData;
+		int RequestingClientID = Server()->GetClientIDFromConnID(pData->m_RequestingConnID);
+		if(!MapChanged && RequestingClientID != -1)
 		{
 			char aBuf[128];
 			char aTime[32];
-			int To = pData->m_RequestingClientID;
-			bool Own = pData->m_PlayerID != -1 && pData->m_PlayerID == m_aPlayerID[pData->m_RequestingClientID];
+			int To = RequestingClientID;
+			bool Own = str_comp(Server()->ClientName(RequestingClientID), pData->m_aSearchName) == 0;
 
 			if(pData->m_Num > 1)
 			{
 				if(pData->m_Num > IScoreBackend::MAX_SEARCH_RECORDS)
-					str_format(aBuf, sizeof(aBuf), "----- Results for \"%s\" (%d of %d) -----", pData->m_aName, IScoreBackend::MAX_SEARCH_RECORDS, pData->m_Num);
+					str_format(aBuf, sizeof(aBuf), "----- Results for \"%s\" (%d of %d) -----", pData->m_aSearchName, IScoreBackend::MAX_SEARCH_RECORDS, pData->m_Num);
 				else
-					str_format(aBuf, sizeof(aBuf), "----- Results for \"%s\" -----", pData->m_aName);
+					str_format(aBuf, sizeof(aBuf), "----- Results for \"%s\" -----", pData->m_aSearchName);
 				GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
 
 				for(int i = 0; i < min((int)IScoreBackend::MAX_SEARCH_RECORDS, pData->m_Num); i++)
@@ -154,7 +158,7 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 					if(!Own)
 					{
 						char aBuf2[32];
-						str_format(aBuf2, sizeof(aBuf2), " (requested by %s)", Server()->ClientName(pData->m_RequestingClientID));
+						str_format(aBuf2, sizeof(aBuf2), " (requested by %s)", Server()->ClientName(RequestingClientID));
 						str_append(aBuf, aBuf2, sizeof(aBuf));
 					}
 				}
@@ -165,32 +169,32 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 				if(Own)
 					str_copy(aBuf, "You are not ranked", sizeof(aBuf));
 				else
-					str_format(aBuf, sizeof(aBuf), "%s is not ranked", pData->m_aName);
+					str_format(aBuf, sizeof(aBuf), "%s is not ranked", pData->m_aSearchName);
 				GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
 			}
 		}
 	}
 	else if(Type == IScoreBackend::REQTYPE_SHOW_TOP5)
 	{
-		IScoreBackend::CShowTop5Data *pData = (IScoreBackend::CShowTop5Data*)pUserData;
-		bool ClientLeft = !Server()->ClientIngame(pData->m_RequestingClientID);
-		if(!Error && !MapChanged && !ClientLeft)
+		IScoreBackend::CRankData *pData = (IScoreBackend::CRankData*)pUserData;
+		int RequestingClientID = Server()->GetClientIDFromConnID(pData->m_RequestingConnID);
+		if(!MapChanged && RequestingClientID != -1)
 		{
 			char aBuf[128];
 			char aTime[32];
-			GameServer()->SendChat(-1, CHAT_ALL, pData->m_RequestingClientID, "----------- Top 5 -----------");
+			GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, "----------- Top 5 -----------");
 			for(int i = 0; i < min((int)IScoreBackend::MAX_TOP_RECORDS, pData->m_Num); i++)
 			{
 				IRace::FormatTimeLong(aTime, sizeof(aTime), pData->m_aRecords[i].m_Time);
 				str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s",
 					pData->m_aRecords[i].m_Rank, pData->m_aRecords[i].m_aPlayerName, aTime);
-				GameServer()->SendChat(-1, CHAT_ALL, pData->m_RequestingClientID, aBuf);
+				GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
 			}
-			GameServer()->SendChat(-1, CHAT_ALL, pData->m_RequestingClientID, "------------------------------");
-			if(pData->m_TotalRecords > 5)
+			GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, "------------------------------");
+			if(pData->m_TotalEntries > IScoreBackend::MAX_TOP_RECORDS)
 			{
-				str_format(aBuf, sizeof(aBuf), "Total records: %d", pData->m_TotalRecords);
-				GameServer()->SendChat(-1, CHAT_ALL, pData->m_RequestingClientID, aBuf);
+				str_format(aBuf, sizeof(aBuf), "Total records: %d", pData->m_TotalEntries);
+				GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
 			}
 		}
 	}
@@ -206,16 +210,13 @@ void CScore::OnMapLoad()
 	{
 		m_aPlayerCache[i].Reset();
 		m_LastRequest[i] = -1;
-		m_aPlayerID[i] = -1;
 	}
 
 	if(!m_pBackend->Ready())
 		return;
 
-	IScoreBackend::CLoadMapData *pData = new IScoreBackend::CLoadMapData();
+	IScoreBackend::CMapData *pData = new IScoreBackend::CMapData();
 	str_copy(pData->m_aMapName, Server()->GetMapName(), sizeof(pData->m_aMapName));
-	pData->m_MapID = -1;
-	pData->m_BestTime = 0;
 
 	m_pBackend->AddRequest(IScoreBackend::REQTYPE_LOAD_MAP, pData);
 }
@@ -227,20 +228,13 @@ void CScore::OnPlayerInit(int ClientID)
 	if(!m_pBackend->Ready() || m_MapID == -1)
 		return;
 
-	IScoreBackend::CLoadPlayerData *pData = new IScoreBackend::CLoadPlayerData();
-	pData->m_ClientID = ClientID;
-	str_copy(pData->m_aPlayerName, Server()->ClientName(ClientID), sizeof(pData->m_aPlayerName));
+	IScoreBackend::CScoreData *pData = new IScoreBackend::CScoreData();
 	pData->m_MapID = m_MapID;
-	pData->m_PlayerID = m_aPlayerID[ClientID];
-	pData->m_Time = 0;
-	mem_zero((void*)pData->m_aCpTime, sizeof(pData->m_aCpTime));
+	pData->m_ConnID = Server()->GetConnID(ClientID);
+	str_copy(pData->m_aPlayerName, Server()->ClientName(ClientID), sizeof(pData->m_aPlayerName));
+	pData->m_PlayerID = Server()->GetPlayerID(ClientID);
 
 	m_pBackend->AddRequest(IScoreBackend::REQTYPE_LOAD_PLAYER, pData);
-}
-
-void CScore::OnPlayerLeave(int ClientID)
-{
-	m_aPlayerID[ClientID] = -1;
 }
 
 void CScore::OnPlayerFinish(int ClientID, int Time, int *pCpTime)
@@ -251,15 +245,11 @@ void CScore::OnPlayerFinish(int ClientID, int Time, int *pCpTime)
 	if(!m_pBackend->Ready() || m_MapID == -1)
 		return;
 
-	IScoreBackend::CSaveScoreData *pData = new IScoreBackend::CSaveScoreData();
+	IScoreBackend::CScoreData *pData = new IScoreBackend::CScoreData();
 	pData->m_MapID = m_MapID;
-	pData->m_ClientID = -1;
-	pData->m_PlayerID = m_aPlayerID[ClientID];
-	if(pData->m_PlayerID == -1)
-	{
-		pData->m_ClientID = ClientID;
-		str_copy(pData->m_aPlayerName, Server()->ClientName(ClientID), sizeof(pData->m_aPlayerName));
-	}
+	pData->m_ConnID = Server()->GetConnID(ClientID);
+	str_copy(pData->m_aPlayerName, Server()->ClientName(ClientID), sizeof(pData->m_aPlayerName));
+	pData->m_PlayerID = Server()->GetPlayerID(ClientID);
 	pData->m_Time = Time;
 	mem_copy(pData->m_aCpTime, pCpTime, sizeof(pData->m_aCpTime));
 
@@ -273,7 +263,7 @@ void CScore::ShowRank(int RequestingClientID, const char *pName)
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(m_aPlayerID[i] != 0 && str_comp(Server()->ClientName(i), pName) == 0)
+		if(str_comp(Server()->ClientName(i), pName) == 0)
 		{
 			ShowRank(RequestingClientID, i);
 			return;
@@ -282,12 +272,10 @@ void CScore::ShowRank(int RequestingClientID, const char *pName)
 
 	UpdateThrottling(RequestingClientID);
 
-	IScoreBackend::CShowRankData *pData = new IScoreBackend::CShowRankData();
+	IScoreBackend::CRankData *pData = new IScoreBackend::CRankData();
 	pData->m_MapID = m_MapID;
-	pData->m_RequestingClientID = RequestingClientID;
-	pData->m_PlayerID = -1;
-	str_copy(pData->m_aName, pName, sizeof(pData->m_aName));
-	pData->m_Num = 0;
+	pData->m_RequestingConnID = Server()->GetConnID(RequestingClientID);
+	str_copy(pData->m_aSearchName, pName, sizeof(pData->m_aSearchName));
 
 	m_pBackend->AddRequest(IScoreBackend::REQTYPE_SHOW_RANK, pData);
 }
@@ -297,24 +285,13 @@ void CScore::ShowRank(int RequestingClientID, int ClientID)
 	if(!m_pBackend->Ready() || m_MapID == -1 || IsThrottled(RequestingClientID))
 		return;
 
-	if(m_aPlayerID[ClientID] == -1)
-	{
-		char aBuf[128];
-		if(ClientID == RequestingClientID)
-			str_copy(aBuf, "You are not ranked", sizeof(aBuf));
-		else
-			str_format(aBuf, sizeof(aBuf), "%s is not ranked", Server()->ClientName(ClientID));
-		GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
-		return;
-	}
-
 	UpdateThrottling(RequestingClientID);
 
-	IScoreBackend::CShowRankData *pData = new IScoreBackend::CShowRankData();
+	IScoreBackend::CRankData *pData = new IScoreBackend::CRankData();
 	pData->m_MapID = m_MapID;
-	pData->m_RequestingClientID = ClientID;
-	pData->m_PlayerID = m_aPlayerID[ClientID];
-	pData->m_Num = 0;
+	pData->m_RequestingConnID = Server()->GetConnID(RequestingClientID);
+	str_copy(pData->m_aSearchName, Server()->ClientName(ClientID), sizeof(pData->m_aSearchName));
+	pData->m_PlayerID = Server()->GetPlayerID(ClientID);
 
 	m_pBackend->AddRequest(IScoreBackend::REQTYPE_SHOW_RANK, pData);
 }
@@ -326,12 +303,10 @@ void CScore::ShowTop5(int RequestingClientID, int Debut)
 
 	UpdateThrottling(RequestingClientID);
 
-	IScoreBackend::CShowTop5Data *pData = new IScoreBackend::CShowTop5Data();
-	pData->m_RequestingClientID = RequestingClientID;
+	IScoreBackend::CRankData *pData = new IScoreBackend::CRankData();
 	pData->m_MapID = m_MapID;
+	pData->m_RequestingConnID = Server()->GetConnID(RequestingClientID);
 	pData->m_Start = Debut - 1;
-	pData->m_Num = 0;
-	pData->m_TotalRecords = 0;
 
 	m_pBackend->AddRequest(IScoreBackend::REQTYPE_SHOW_TOP5, pData);
 }

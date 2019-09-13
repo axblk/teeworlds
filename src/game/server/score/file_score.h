@@ -10,18 +10,17 @@
 class CFileScore : public IScoreBackend
 {
 	class IStorage *m_pStorage;
-	
+
 	class CPlayerScore
 	{
 	public:
-		int m_ID;
 		char m_aName[MAX_NAME_LENGTH];
 		int m_Time;
 		int m_aCpTime[NUM_CHECKPOINTS];
-		
+
 		CPlayerScore() {};
 		CPlayerScore(const char *pName, int Time, int *apCpTime);
-		
+
 		bool operator<(const CPlayerScore& other) const { return (this->m_Time < other.m_Time); }
 	};
 
@@ -43,9 +42,7 @@ class CFileScore : public IScoreBackend
 
 	int m_MapID;
 	char m_aMap[64];
-	int m_PlayerCounter;
-	
-	CPlayerScore *SearchScoreByPlayerID(int PlayerID, int *pPosition = 0);
+
 	CPlayerScore *SearchScoreByName(const char *pName, int *pPosition = 0);
 
 	void ProcessJobs(bool Block);
@@ -54,11 +51,11 @@ class CFileScore : public IScoreBackend
 	void WriteEntry(IOHANDLE File, const CPlayerScore *pEntry) const;
 	IOHANDLE OpenFile(int Flags) const;
 
-	int LoadMapHandler(CLoadMapData *pRequestData);
-	int LoadPlayerHandler(CLoadPlayerData *pRequestData);
-	int SaveScoreHandler(CSaveScoreData *pRequestData);
-	int ShowRankHandler(CShowRankData *pRequestData);
-	int ShowTop5Handler(CShowTop5Data *pRequestData);
+	int LoadMapHandler(CMapData *pRequestData);
+	int LoadPlayerHandler(CScoreData *pRequestData);
+	int SaveScoreHandler(CScoreData *pRequestData);
+	int ShowRankHandler(CRankData *pRequestData);
+	int ShowTop5Handler(CRankData *pRequestData);
 
 public:
 	CFileScore(IScoreResponseListener *pListener, IStorage *pStorage);
