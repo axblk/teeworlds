@@ -1667,7 +1667,7 @@ add_executable(${TARGET_SERVER}
   $<TARGET_OBJECTS:engine-shared>
   $<TARGET_OBJECTS:game-shared>
 )
-target_link_libraries(${TARGET_SERVER} ${LIBS_SERVER})
+target_link_libraries(${TARGET_SERVER} ${LIBS_SERVER} ${CMAKE_DL_LIBS})
 list(APPEND TARGETS_OWN ${TARGET_SERVER})
 list(APPEND TARGETS_LINK ${TARGET_SERVER})
 
