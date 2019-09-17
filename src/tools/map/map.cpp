@@ -122,8 +122,8 @@ CLayerTiles *CreateCustomLayer(CEditorMap *pMap, int Width, int Height, const ch
 	pLayer->m_Color.a = 0;
 
 	CEditorImage *pImg = new CEditorImage(pMap->m_pConsole);
-    pImg->m_External = 1;
-    str_copy(pImg->m_aName, pImageName, sizeof(pImg->m_aName));
+	pImg->m_External = 1;
+	str_copy(pImg->m_aName, pImageName, sizeof(pImg->m_aName));
 	pLayer->m_Image = pMap->m_lImages.add(pImg);
 
 	return pLayer;
