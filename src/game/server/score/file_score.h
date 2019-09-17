@@ -24,28 +24,22 @@ class CFileScore : public IScoreBackend
 		bool operator<(const CPlayerScore& other) const { return (this->m_Time < other.m_Time); }
 	};
 
-	enum MyEnum
-	{
-		JOBTYPE_ADD_NEW=0,
-		JOBTYPE_UPDATE_SCORE
-	};
-
-	struct CScoreJob
+	struct CScoreUpdate
 	{
 		int m_Type;
-		CPlayerScore *m_pEntry;
+		int m_Index;
 		CPlayerScore m_NewData;
 	};
 	
 	sorted_array<CPlayerScore> m_lTop;
-	array<CScoreJob> m_lJobQueue;
+	array<CScoreUpdate> m_lUpdateQueue;
 
 	int m_MapID;
 	char m_aMap[64];
 
-	CPlayerScore *SearchScoreByName(const char *pName, int *pPosition = 0);
+	int SearchScoreByName(const char *pName) const;
 
-	void ProcessJobs(bool Block);
+	void ProcessUpdates(bool Block);
 	static void SaveScoreThread(void *pUser);
 
 	void WriteEntry(IOHANDLE File, const CPlayerScore *pEntry) const;
@@ -62,7 +56,7 @@ public:
 	~CFileScore();
 
 	bool Ready() const { return true; };
-	void Tick() { ProcessJobs(false); }
+	void Tick() { ProcessUpdates(false); }
 	void AddRequest(int Type, CRequestData *pRequestData = 0);
 };
 

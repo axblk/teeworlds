@@ -132,7 +132,7 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 			if(pData->m_Num > 1)
 			{
 				if(pData->m_Num > IScoreBackend::MAX_SEARCH_RECORDS)
-					str_format(aBuf, sizeof(aBuf), "----- Results for \"%s\" (%d of %d) -----", pData->m_aSearchName, IScoreBackend::MAX_SEARCH_RECORDS, pData->m_Num);
+					str_format(aBuf, sizeof(aBuf), "----- First %d results for \"%s\" -----", IScoreBackend::MAX_SEARCH_RECORDS, pData->m_aSearchName);
 				else
 					str_format(aBuf, sizeof(aBuf), "----- Results for \"%s\" -----", pData->m_aSearchName);
 				GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);

@@ -13,16 +13,16 @@ class CSQLiteScore : public IScoreBackend
 {
 	struct CSqlExecData
 	{
-		typedef int(*FRequestFunc)(sqlite3 *pDB, CSQLiteScore::CRequestData *pRequestData);
+		typedef int(*FRequestFunc)(sqlite3 *pDB, CRequestData *pRequestData);
 
-		CSqlExecData(int Type, FRequestFunc pFunc, int Flags, CSQLiteScore::CRequestData *pRequestData = 0)
+		CSqlExecData(int Type, FRequestFunc pFunc, int Flags, CRequestData *pRequestData = 0)
 			: m_Type(Type), m_pfnFunc(pFunc), m_Flags(Flags), m_pRequestData(pRequestData), m_HandlerResult(-1) { }
 
 		CJob m_Job;
 		int m_Type;
 		FRequestFunc m_pfnFunc;
 		int m_Flags;
-		CSQLiteScore::CRequestData *m_pRequestData;
+		CRequestData *m_pRequestData;
 		int m_HandlerResult;
 	};
 

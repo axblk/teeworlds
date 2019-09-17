@@ -71,34 +71,28 @@ void CSQLiteScore::Tick()
 
 void CSQLiteScore::AddRequest(int Type, CRequestData *pRequestData)
 {
-	CSqlExecData::FRequestFunc pfnFunc = 0;
-	int Flags = 0;
+	CSqlExecData *pRequest = 0;
 	switch(Type)
 	{
 	case REQTYPE_LOAD_MAP:
-		pfnFunc = LoadMapHandler;
-		Flags = SQLITE_OPEN_READWRITE;
+		pRequest = new CSqlExecData(Type, LoadMapHandler, SQLITE_OPEN_READWRITE, pRequestData);
 		break;
 	case REQTYPE_LOAD_PLAYER:
-		pfnFunc = LoadPlayerHandler;
-		Flags = SQLITE_OPEN_READONLY;
+		pRequest = new CSqlExecData(Type, LoadPlayerHandler, SQLITE_OPEN_READONLY, pRequestData);
 		break;
 	case REQTYPE_SAVE_SCORE:
-		pfnFunc = SaveScoreHandler;
-		Flags = SQLITE_OPEN_READWRITE;
+		pRequest = new CSqlExecData(Type, SaveScoreHandler, SQLITE_OPEN_READWRITE, pRequestData);
 		break;
 	case REQTYPE_SHOW_RANK:
-		pfnFunc = ShowRankHandler;
-		Flags = SQLITE_OPEN_READONLY;
+		pRequest = new CSqlExecData(Type, ShowRankHandler, SQLITE_OPEN_READONLY, pRequestData);
 		break;
 	case REQTYPE_SHOW_TOP5:
-		pfnFunc = ShowTop5Handler;
-		Flags = SQLITE_OPEN_READONLY;
+		pRequest = new CSqlExecData(Type, ShowTop5Handler, SQLITE_OPEN_READONLY, pRequestData);
 		break;
 	default:
 		Listener()->OnRequestFinished(Type, pRequestData, true);
+		return;
 	}
-	CSqlExecData *pRequest = new CSqlExecData(Type, pfnFunc, Flags, pRequestData);
 	m_lPendingRequests.add(pRequest);
 	m_pEngine->AddJob(&pRequest->m_Job, ExecSqlFunc, pRequest);
 }
@@ -254,9 +248,10 @@ int CSQLiteScore::ShowRankHandler(sqlite3 *pDB, CRequestData *pRequestData)
 
 		if(pData->m_Num == 0)
 		{
-			sqlite3_prepare_v2(pDB, "SELECT name, time, rank FROM _ranking INNER JOIN players ON player = players.id WHERE name LIKE '%' || ?1 || '%';", -1, &pStmt, NULL);
+			sqlite3_prepare_v2(pDB, "SELECT name, time, rank FROM _ranking INNER JOIN players ON player = players.id WHERE name LIKE '%' || ?1 || '%' LIMIT ?2;", -1, &pStmt, NULL);
 			sqlite3_bind_text(pStmt, 1, pData->m_aSearchName, -1, SQLITE_STATIC);
-			while(sqlite3_step(pStmt) == SQLITE_ROW)
+			sqlite3_bind_int(pStmt, 2, MAX_SEARCH_RECORDS + 1);
+			while(sqlite3_step(pStmt) == SQLITE_ROW && pData->m_Num <= MAX_SEARCH_RECORDS)
 			{
 				if(pData->m_Num < MAX_SEARCH_RECORDS)
 					RecordFromRow(&pData->m_aRecords[pData->m_Num], pStmt);

@@ -79,9 +79,9 @@ void CFileScore::SaveScoreThread(void *pUser)
 	lock_unlock(gs_ScoreLock);
 }
 
-void CFileScore::ProcessJobs(bool Block)
+void CFileScore::ProcessUpdates(bool Block)
 {
-	if(m_lJobQueue.size() == 0)
+	if(m_lUpdateQueue.size() == 0)
 		return;
 
 	if(Block)
@@ -89,23 +89,23 @@ void CFileScore::ProcessJobs(bool Block)
 	else if(lock_trylock(gs_ScoreLock))
 		return;
 
-	for(int i = 0; i < m_lJobQueue.size(); i++)
+	for(int i = 0; i < m_lUpdateQueue.size(); i++)
 	{
-		CScoreJob *pJob = &m_lJobQueue[i];
-		if(pJob->m_Type == JOBTYPE_ADD_NEW)
+		CScoreUpdate *pUpdate = &m_lUpdateQueue[i];
+		if(pUpdate->m_Index == -1)
 		{
-			m_lTop.add_unsorted(pJob->m_NewData);
+			m_lTop.add_unsorted(pUpdate->m_NewData);
 		}
-		else if(pJob->m_Type == JOBTYPE_UPDATE_SCORE)
+		else
 		{
-			pJob->m_pEntry->m_Time = pJob->m_NewData.m_Time;
-			mem_copy(pJob->m_pEntry->m_aCpTime, pJob->m_NewData.m_aCpTime, sizeof(pJob->m_pEntry->m_aCpTime));
+			m_lTop[pUpdate->m_Index].m_Time = pUpdate->m_NewData.m_Time;
+			mem_copy(m_lTop[pUpdate->m_Index].m_aCpTime, pUpdate->m_NewData.m_aCpTime, sizeof(m_lTop[pUpdate->m_Index].m_aCpTime));
 		}
 	}
 
 	m_lTop.sort_range();
 
-	m_lJobQueue.clear();
+	m_lUpdateQueue.clear();
 	lock_unlock(gs_ScoreLock);
 
 	if(Block)
@@ -117,19 +117,14 @@ void CFileScore::ProcessJobs(bool Block)
 	}
 }
 
-CFileScore::CPlayerScore *CFileScore::SearchScoreByName(const char *pName, int *pPosition)
+int CFileScore::SearchScoreByName(const char *pName) const
 {
-	int Pos = 1;
-	for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Pos++)
+	for(int i = 0; i < m_lTop.size(); i++)
 	{
-		if(str_comp(r.front().m_aName, pName) == 0)
-		{
-			if(pPosition)
-				*pPosition = Pos;
-			return &r.front();
-		}
+		if(str_comp(m_lTop[i].m_aName, pName) == 0)
+			return i;
 	}
-	return 0;
+	return -1;
 }
 
 void CFileScore::AddRequest(int Type, CRequestData *pRequestData)
@@ -152,7 +147,7 @@ void CFileScore::AddRequest(int Type, CRequestData *pRequestData)
 
 int CFileScore::LoadMapHandler(CMapData *pData)
 {
-	ProcessJobs(true);
+	ProcessUpdates(true);
 
 	lock_wait(gs_ScoreLock);
 
@@ -198,44 +193,41 @@ int CFileScore::LoadMapHandler(CMapData *pData)
 
 int CFileScore::LoadPlayerHandler(CScoreData *pData)
 {
-	const CPlayerScore *pPlayer = SearchScoreByName(pData->m_aPlayerName);
-	if(pPlayer)
+	int Index = SearchScoreByName(pData->m_aPlayerName);
+	if(Index != -1)
 	{
-		pData->m_Time = pPlayer->m_Time;
-		mem_copy(pData->m_aCpTime, pPlayer->m_aCpTime, sizeof(pData->m_aCpTime));
+		pData->m_Time = m_lTop[Index].m_Time;
+		mem_copy(pData->m_aCpTime, m_lTop[Index].m_aCpTime, sizeof(pData->m_aCpTime));
 	}
 	return 0;
 }
 
 int CFileScore::SaveScoreHandler(CScoreData *pData)
 {
-	CScoreJob Job;
-	Job.m_pEntry = SearchScoreByName(pData->m_aPlayerName);
-	if(!Job.m_pEntry || Job.m_pEntry->m_Time > pData->m_Time)
+	CScoreUpdate Job;
+	Job.m_Index = SearchScoreByName(pData->m_aPlayerName);
+	if(Job.m_Index == -1 || m_lTop[Job.m_Index].m_Time > pData->m_Time)
 	{
 		Job.m_NewData = CPlayerScore(pData->m_aPlayerName, pData->m_Time, pData->m_aCpTime);
-		Job.m_Type = Job.m_pEntry ? JOBTYPE_UPDATE_SCORE : JOBTYPE_ADD_NEW;
-		m_lJobQueue.add(Job);
-		ProcessJobs(false);
+		m_lUpdateQueue.add(Job);
 	}
 	return 0;
 }
 
 int CFileScore::ShowRankHandler(CRankData *pData)
 {
-	int Rank;
-	const CPlayerScore *pPlayer = SearchScoreByName(pData->m_aSearchName, &Rank);
-	if(pPlayer)
+	int Index = SearchScoreByName(pData->m_aSearchName);
+	if(Index != -1)
 	{
 		CRecordData *pRecord = &pData->m_aRecords[pData->m_Num++];
-		str_copy(pRecord->m_aPlayerName, pPlayer->m_aName, sizeof(pRecord->m_aPlayerName));
-		pRecord->m_Time = pPlayer->m_Time;
-		pRecord->m_Rank = Rank;
+		str_copy(pRecord->m_aPlayerName, m_lTop[Index].m_aName, sizeof(pRecord->m_aPlayerName));
+		pRecord->m_Time = m_lTop[Index].m_Time;
+		pRecord->m_Rank = Index + 1;
 	}
 	else
 	{
-		Rank = 1;
-		for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty(); r.pop_front(), Rank++)
+		int Rank = 1;
+		for(sorted_array<CPlayerScore>::range r = m_lTop.all(); !r.empty() && pData->m_Num <= MAX_SEARCH_RECORDS; r.pop_front(), Rank++)
 		{
 			if(str_find_nocase(r.front().m_aName, pData->m_aSearchName))
 			{
