@@ -76,6 +76,7 @@ public:
 				fs_makedir(GetPath(TYPE_SAVE, "demos", aPath, sizeof(aPath)));
 				fs_makedir(GetPath(TYPE_SAVE, "demos/auto", aPath, sizeof(aPath)));
 				fs_makedir(GetPath(TYPE_SAVE, "configs", aPath, sizeof(aPath)));
+				fs_makedir(GetPath(TYPE_SAVE, "ghosts", aPath, sizeof(aPath)));
 			}
 			else
 			{

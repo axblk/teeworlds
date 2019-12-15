@@ -363,7 +363,7 @@ void CRenderTools::RenderTee(CAnimState *pAnim, const CTeeRenderInfo *pInfo, int
 				{
 					Graphics()->TextureSet(pInfo->m_BotTexture);
 					Graphics()->QuadsBegin();
-					Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
+					Graphics()->SetColor(pInfo->m_BotColor.a, pInfo->m_BotColor.a, pInfo->m_BotColor.a, pInfo->m_BotColor.a);
 					SelectSprite(SPRITE_TEE_BOT_BACKGROUND, 0, 0, 0);
 					Item = BotItem;
 					Graphics()->QuadsDraw(&Item, 1);
@@ -375,7 +375,7 @@ void CRenderTools::RenderTee(CAnimState *pAnim, const CTeeRenderInfo *pInfo, int
 				{
 					Graphics()->TextureSet(pInfo->m_BotTexture);
 					Graphics()->QuadsBegin();
-					Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
+					Graphics()->SetColor(pInfo->m_BotColor.a, pInfo->m_BotColor.a, pInfo->m_BotColor.a, pInfo->m_BotColor.a);
 					SelectSprite(SPRITE_TEE_BOT_FOREGROUND, 0, 0, 0);
 					Item = BotItem;
 					Graphics()->QuadsDraw(&Item, 1);
@@ -405,7 +405,7 @@ void CRenderTools::RenderTee(CAnimState *pAnim, const CTeeRenderInfo *pInfo, int
 				Graphics()->QuadsSetRotation(pAnim->GetBody()->m_Angle*pi*2);
 				if(OutLine)
 				{
-					Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
+					Graphics()->SetColor(pInfo->m_aColors[SKINPART_BODY].a, pInfo->m_aColors[SKINPART_BODY].a, pInfo->m_aColors[SKINPART_BODY].a, pInfo->m_aColors[SKINPART_BODY].a);
 					SelectSprite(SPRITE_TEE_BODY_OUTLINE, 0, 0, 0);
 				}
 				else
@@ -437,7 +437,7 @@ void CRenderTools::RenderTee(CAnimState *pAnim, const CTeeRenderInfo *pInfo, int
 					Graphics()->TextureSet(pInfo->m_aTextures[SKINPART_BODY]);
 					Graphics()->QuadsBegin();
 					Graphics()->QuadsSetRotation(pAnim->GetBody()->m_Angle*pi*2);
-					Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
+					Graphics()->SetColor(pInfo->m_aColors[SKINPART_BODY].a, pInfo->m_aColors[SKINPART_BODY].a, pInfo->m_aColors[SKINPART_BODY].a, pInfo->m_aColors[SKINPART_BODY].a);
 					for(int t = 0; t < 2; t++)
 					{
 						SelectSprite(t==0?SPRITE_TEE_BODY_SHADOW:SPRITE_TEE_BODY_UPPER_OUTLINE, 0, 0, 0);
@@ -527,7 +527,7 @@ void CRenderTools::RenderTee(CAnimState *pAnim, const CTeeRenderInfo *pInfo, int
 
 			if(OutLine)
 			{
-				Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
+				Graphics()->SetColor(pInfo->m_aColors[SKINPART_FEET].a, pInfo->m_aColors[SKINPART_FEET].a, pInfo->m_aColors[SKINPART_FEET].a, pInfo->m_aColors[SKINPART_FEET].a);
 				SelectSprite(SPRITE_TEE_FOOT_OUTLINE, 0, 0, 0);
 			}
 			else

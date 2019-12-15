@@ -34,6 +34,7 @@
 #include "components/effects.h"
 #include "components/emoticon.h"
 #include "components/flow.h"
+#include "components/ghost.h"
 #include "components/hud.h"
 #include "components/items.h"
 #include "components/infomessages.h"
@@ -113,6 +114,7 @@ static CDamageInd gsDamageInd;
 static CVoting gs_Voting;
 static CSpectator gs_Spectator;
 static CStats gs_Stats;
+static CGhost gs_Ghost;
 
 static CPlayers gs_Players;
 static CNamePlates gs_NamePlates;
@@ -244,6 +246,8 @@ void CGameClient::OnConsoleInit()
 	m_pMapLayersBackGround = &::gs_MapLayersBackGround;
 	m_pMapLayersForeGround = &::gs_MapLayersForeGround;
 	m_pStats = &::gs_Stats;
+	m_pPlayers = &::gs_Players;
+	m_pGhost = &::gs_Ghost;
 
 	// make a list of all the systems, make sure to add them in the corrent render order
 	m_All.Add(m_pSkins);
@@ -261,7 +265,8 @@ void CGameClient::OnConsoleInit()
 	m_All.Add(&gs_MapLayersBackGround); // first to render
 	m_All.Add(&m_pParticles->m_RenderTrail);
 	m_All.Add(m_pItems);
-	m_All.Add(&gs_Players);
+	m_All.Add(m_pPlayers);
+	m_All.Add(m_pGhost);
 	m_All.Add(&gs_MapLayersForeGround);
 	m_All.Add(&m_pParticles->m_RenderExplosions);
 	m_All.Add(&gs_NamePlates);
@@ -987,6 +992,8 @@ void CGameClient::OnMessage(int MsgId, CUnpacker *pUnpacker)
 			{
 				m_TeamCooldownTick = pMsg->m_CooldownTick;
 				m_TeamChangeTime = Client()->LocalTime();
+
+				m_pGhost->OnTeamJoin(pMsg->m_Team);
 			}
 		}
 
@@ -1479,6 +1486,9 @@ void CGameClient::OnNewSnapshot()
 		m_ServerMode = SERVERMODE_PURE;
 	else
 		m_ServerMode = SERVERMODE_PUREMOD;
+
+	
+	m_pGhost->OnNewSnapshot();
 }
 
 void CGameClient::OnDemoRecSnap()
@@ -1658,7 +1668,7 @@ bool CGameClient::ShouldUsePredicted() const
 
 bool CGameClient::ShouldUsePredictedChar(int ClientID) const
 {
-	return ClientID == m_LocalClientID || Config()->m_ClPredictPlayers;
+	return ClientID >= 0 && ClientID < MAX_CLIENTS && (ClientID == m_LocalClientID || Config()->m_ClPredictPlayers);
 }
 
 void CGameClient::UsePredictedChar(

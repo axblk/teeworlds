@@ -156,6 +156,9 @@ public:
 	virtual bool ConnectionProblems() const = 0;
 
 	virtual bool SoundInitFailed() const = 0;
+
+	// Race
+	virtual unsigned GetMapCrc() const = 0;
 };
 
 class IGameClient : public IInterface

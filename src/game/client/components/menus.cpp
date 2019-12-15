@@ -98,6 +98,8 @@ CMenus::CMenus()
 	m_ActiveListBox = ACTLB_NONE;
 
 	m_PopupSelection = -2;
+
+	m_LoadingGhosts = false;
 }
 
 float CMenus::CButtonContainer::GetFade(bool Checked, float Seconds)
@@ -909,8 +911,9 @@ void CMenus::RenderMenubar(CUIRect Rect)
 			Alpha = InactiveAlpha;
 
 		// render header backgrounds
+		float GhostAdditionalSize = m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_RACE ? ButtonWidth/2.5f + Spacing : 0.0f;
 		CUIRect Left, Right;
-		Box.VSplitLeft(ButtonWidth*4.0f + Spacing*3.0f, &Left, 0);
+		Box.VSplitLeft(ButtonWidth*4.0f + Spacing*3.0f + GhostAdditionalSize, &Left, 0);
 		Box.VSplitRight(ButtonWidth*1.5f + Spacing, 0, &Right);
 		RenderBackgroundShadow(&Left, false);
 		RenderBackgroundShadow(&Right, false);
@@ -940,6 +943,15 @@ void CMenus::RenderMenubar(CUIRect Rect)
 		static CButtonContainer s_CallVoteButton;
 		if(DoButton_MenuTabTop(&s_CallVoteButton, Localize("Call vote"), m_ActivePage == PAGE_CALLVOTE, &Button, Alpha, Alpha) || CheckHotKey(KEY_V))
 			NewPage = PAGE_CALLVOTE;
+
+		if(m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_RACE)
+		{
+			Left.VSplitLeft(Spacing, 0, &Left); // little space
+			Left.VSplitLeft(ButtonWidth/2.5f, &Button, &Left);
+			static CButtonContainer s_GhostsButton;
+			if(DoButton_SpriteID(&s_GhostsButton, IMAGE_EMOTICONS, SPRITE_GHOST, m_GamePage == PAGE_GHOST, &Button))
+				NewPage = PAGE_GHOST;
+		}
 
 		Right.VSplitRight(ButtonWidth, &Right, &Button);
 		static CButtonContainer s_SettingsButton;
@@ -1561,6 +1573,8 @@ int CMenus::Render()
 					RenderServerbrowser(MainView);
 				else if(m_GamePage == PAGE_LAN)
 					RenderServerbrowser(MainView);
+				else if(m_GamePage == PAGE_GHOST)
+					RenderGhost(MainView);
 			}
 			else
 			{
@@ -2172,6 +2186,10 @@ void CMenus::OnStateChange(int NewState, int OldState)
 void CMenus::OnRender()
 {
 	UI()->StartCheck();
+
+	// ugly... does not belong here
+	if(m_LoadingGhosts && m_ScanGhostsJob.Status() == CJob::STATE_DONE)
+		GhostlistUpdate();
 
 	// reset cursor
 	m_PrevCursorActive = m_CursorActive;

@@ -70,6 +70,7 @@ int CJobPool::Init(int NumThreads)
 int CJobPool::Add(CJob *pJob, JOBFUNC pfnFunc, void *pData)
 {
 	mem_zero(pJob, sizeof(CJob));
+	pJob->m_Status = CJob::STATE_PENDING;
 	pJob->m_pfnFunc = pfnFunc;
 	pJob->m_pFuncData = pData;
 

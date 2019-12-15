@@ -6,21 +6,23 @@
 
 class CPlayers : public CComponent
 {
+public:
 	void RenderPlayer(
 		const CNetObj_Character *pPrevChar,
 		const CNetObj_Character *pPlayerChar,
 		const CNetObj_PlayerInfo *pPlayerInfo,
 		const CTeeRenderInfo *pRenderInfo,
-		int ClientID
+		int ClientID,
+		float IntraTick
 	) const;
 	void RenderHook(
 		const CNetObj_Character *pPrevChar,
 		const CNetObj_Character *pPlayerChar,
 		const CTeeRenderInfo *pRenderInfo,
-		int ClientID
+		int ClientID,
+		float IntraTick
 	) const;
 
-public:
 	virtual void OnRender();
 };
 

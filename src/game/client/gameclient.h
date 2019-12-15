@@ -336,6 +336,8 @@ public:
 	class CItems *m_pItems;
 	class CMapLayers *m_pMapLayersBackGround;
 	class CMapLayers *m_pMapLayersForeGround;
+	class CPlayers *m_pPlayers;
+	class CGhost *m_pGhost;
 };
 
 

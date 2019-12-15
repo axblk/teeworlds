@@ -41,14 +41,13 @@ void CPlayers::RenderHook(
 	const CNetObj_Character *pPrevChar,
 	const CNetObj_Character *pPlayerChar,
 	const CTeeRenderInfo *pRenderInfo,
-	int ClientID
+	int ClientID,
+	float IntraTick
 	) const
 {
 	CNetObj_Character Prev = *pPrevChar;
 	CNetObj_Character Player = *pPlayerChar;
 	CTeeRenderInfo RenderInfo = *pRenderInfo;
-
-	float IntraTick = Client()->IntraGameTick();
 
 	// set size
 	RenderInfo.m_Size = 64.0f;
@@ -66,6 +65,9 @@ void CPlayers::RenderHook(
 		Graphics()->TextureSet(g_pData->m_aImages[IMAGE_GAME].m_Id);
 		Graphics()->QuadsBegin();
 		//Graphics()->QuadsBegin();
+
+		if(ClientID < 0)
+			Graphics()->SetColor(0.5f, 0.5f, 0.5f, 0.5f);
 
 		vec2 Pos = Position;
 		vec2 HookPos;
@@ -115,19 +117,18 @@ void CPlayers::RenderPlayer(
 	const CNetObj_Character *pPlayerChar,
 	const CNetObj_PlayerInfo *pPlayerInfo,
 	const CTeeRenderInfo *pRenderInfo,
-	int ClientID
+	int ClientID,
+	float IntraTick
 	) const
 {
 	CNetObj_Character Prev = *pPrevChar;
 	CNetObj_Character Player = *pPlayerChar;
 	CTeeRenderInfo RenderInfo = *pRenderInfo;
 
-	const CGameClient::CClientData *pClientData = &m_pClient->m_aClients[ClientID];
+	const CGameClient::CClientData *pClientData = (ClientID >= 0 && ClientID < MAX_CLIENTS) ? &m_pClient->m_aClients[ClientID] : 0;
 
 	// set size
 	RenderInfo.m_Size = 64.0f;
-
-	float IntraTick = Client()->IntraGameTick();
 
 	if(Prev.m_Angle < pi*-128 && Player.m_Angle > pi*128)
 		Prev.m_Angle += 2*pi*256;
@@ -235,6 +236,9 @@ void CPlayers::RenderPlayer(
 		Graphics()->TextureSet(g_pData->m_aImages[IMAGE_GAME].m_Id);
 		Graphics()->QuadsBegin();
 		Graphics()->QuadsSetRotation(State.GetAttach()->m_Angle*pi*2+Angle);
+
+		if(ClientID < 0)
+			Graphics()->SetColor(0.5f, 0.5f, 0.5f, 0.5f);
 
 		// normal weapons
 		int iw = clamp(Player.m_Weapon, 0, NUM_WEAPONS-1);
@@ -397,7 +401,7 @@ void CPlayers::RenderPlayer(
 
 	RenderTools()->RenderTee(&State, &RenderInfo, Player.m_Emote, Direction, Position);
 
-	if(pPlayerInfo->m_PlayerFlags&PLAYERFLAG_CHATTING)
+	if(pPlayerInfo && pPlayerInfo->m_PlayerFlags&PLAYERFLAG_CHATTING)
 	{
 		Graphics()->TextureSet(g_pData->m_aImages[IMAGE_EMOTICONS].m_Id);
 		Graphics()->QuadsBegin();
@@ -407,7 +411,7 @@ void CPlayers::RenderPlayer(
 		Graphics()->QuadsEnd();
 	}
 
-	if(pClientData->m_EmoticonStart != -1 && pClientData->m_EmoticonStart + 2 * Client()->GameTickSpeed() > Client()->GameTick())
+	if(pClientData && pClientData->m_EmoticonStart != -1 && pClientData->m_EmoticonStart + 2 * Client()->GameTickSpeed() > Client()->GameTick())
 	{
 		Graphics()->TextureSet(g_pData->m_aImages[IMAGE_EMOTICONS].m_Id);
 		Graphics()->QuadsBegin();
@@ -448,6 +452,8 @@ void CPlayers::OnRender()
 
 	static const CNetObj_PlayerInfo *s_apInfo[MAX_CLIENTS];
 	static CTeeRenderInfo s_aRenderInfo[MAX_CLIENTS];
+
+	float IntraTick = Client()->IntraGameTick();
 
 	// update RenderInfo for ninja
 	bool IsTeamplay = (m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_TEAMS) != 0;
@@ -512,7 +518,8 @@ void CPlayers::OnRender()
 						pPrevChar,
 						pCurChar,
 						&s_aRenderInfo[i],
-						i
+						i,
+						IntraTick
 					);
 			}
 			else
@@ -522,7 +529,8 @@ void CPlayers::OnRender()
 						pCurChar,
 						s_apInfo[i],
 						&s_aRenderInfo[i],
-						i
+						i,
+						IntraTick
 					);
 			}
 		}
