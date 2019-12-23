@@ -18,6 +18,7 @@ typedef void (*FPhysicsStepCallback)(vec2 Pos, float IntraTick, void *pUserData)
 
 struct CCollisionData
 {
+	bool m_Death;
 	FPhysicsStepCallback m_pfnPhysicsStepCallback;
 	void *m_pPhysicsStepUserData;
 	int m_PhysicsFlags;

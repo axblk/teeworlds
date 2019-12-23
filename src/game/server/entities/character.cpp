@@ -73,8 +73,8 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_Core.m_Pos = m_Pos;
 	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = &m_Core;
 
-	m_Core.m_Race.m_pfnPhysicsStepCallback = CCharacter::OnPhysicsStep;
-	m_Core.m_Race.m_pPhysicsStepUserData = this;
+	m_Core.m_ColData.m_pfnPhysicsStepCallback = CCharacter::OnPhysicsStep;
+	m_Core.m_ColData.m_pPhysicsStepUserData = this;
 
 	m_ReckoningTick = 0;
 	mem_zero(&m_SendCore, sizeof(m_SendCore));
@@ -627,7 +627,7 @@ void CCharacter::TickDefered()
 		m_Pos.x = m_Input.m_TargetX;
 		m_Pos.y = m_Input.m_TargetY;
 	}
-	else if(m_Core.m_Death)
+	else if(m_Core.m_ColData.m_Death)
 	{
 		// handle death-tiles
 		Die(m_pPlayer->GetCID(), WEAPON_WORLD);

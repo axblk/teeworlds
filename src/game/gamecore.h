@@ -170,13 +170,11 @@ public:
 	int m_Direction;
 	int m_Angle;
 
-	bool m_Death;
-
 	CNetObj_PlayerInput m_Input;
 
 	int m_TriggeredEvents;
 
-	CCollisionData m_Race;
+	CCollisionData m_ColData;
 
 	void Init(CWorldCore *pWorld, CCollision *pCollision);
 	void Reset();

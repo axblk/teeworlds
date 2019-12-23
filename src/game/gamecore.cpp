@@ -60,7 +60,7 @@ void CCharacterCore::Init(CWorldCore *pWorld, CCollision *pCollision)
 {
 	m_pWorld = pWorld;
 	m_pCollision = pCollision;
-	m_Race.m_PhysicsFlags = m_pWorld->m_PhysicsFlags;
+	m_ColData.m_PhysicsFlags = m_pWorld->m_PhysicsFlags;
 }
 
 void CCharacterCore::Reset()
@@ -74,8 +74,8 @@ void CCharacterCore::Reset()
 	m_HookedPlayer = -1;
 	m_Jumped = 0;
 	m_TriggeredEvents = 0;
-	m_Death = false;
-	m_Race.m_LastSpeedupTilePos = ivec2(-1,-1);
+	m_ColData.m_Death = false;
+	m_ColData.m_LastSpeedupTilePos = ivec2(-1,-1);
 }
 
 void CCharacterCore::Tick(bool UseInput)
@@ -359,10 +359,10 @@ void CCharacterCore::Move()
 	m_Vel.x = m_Vel.x*RampValue;
 
 	vec2 NewPos = m_Pos;
-	m_Race.m_Teleported = 0;
-	m_pCollision->MoveBox(&NewPos, &m_Vel, vec2(PhysSize, PhysSize), 0, &m_Race);
+	m_ColData.m_Teleported = 0;
+	m_pCollision->MoveBox(&NewPos, &m_Vel, vec2(PhysSize, PhysSize), 0, &m_ColData);
 
-	if(m_Race.m_Teleported)
+	if(m_ColData.m_Teleported)
 	{
 		m_HookedPlayer = -1;
 		m_HookState = HOOK_RETRACTED;
@@ -372,7 +372,7 @@ void CCharacterCore::Move()
 
 	m_Vel.x = m_Vel.x*(1.0f/RampValue);
 
-	if(m_pWorld->m_Tuning.m_PlayerCollision && !m_Race.m_Teleported)
+	if(m_pWorld->m_Tuning.m_PlayerCollision && !m_ColData.m_Teleported)
 	{
 		// check player collision
 		float Distance = distance(m_Pos, NewPos);

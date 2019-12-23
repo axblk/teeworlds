@@ -296,8 +296,8 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, float Elas
 	float Distance = length(Vel);
 	int Max = (int)Distance;
 
-	if(pDeath)
-		*pDeath = false;
+	if(pCollisionData)
+		pCollisionData->m_Death = false;
 
 	if(Distance > 0.00001f)
 	{
@@ -313,9 +313,9 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, float Elas
 
 			//You hit a deathtile, congrats to that :)
 			//Deathtiles are a bit smaller
-			if(pDeath && TestBox(vec2(NewPos.x, NewPos.y), Size*(2.0f/3.0f), COLFLAG_DEATH))
+			if(pCollisionData && TestBox(vec2(NewPos.x, NewPos.y), Size*(2.0f/3.0f), COLFLAG_DEATH))
 			{
-				*pDeath = true;
+				pCollisionData->m_Death = true;
 			}
 
 			if(TestBox(vec2(NewPos.x, NewPos.y), Size))
