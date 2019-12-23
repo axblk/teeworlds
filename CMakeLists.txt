@@ -485,12 +485,16 @@ add_library(json EXCLUDE_FROM_ALL OBJECT ${DEP_JSON_SRC})
 set_src(DEP_MD5_SRC GLOB src/engine/external/md5 md5.c md5.h)
 add_library(md5 EXCLUDE_FROM_ALL OBJECT ${DEP_MD5_SRC})
 
-list(APPEND TARGETS_DEP json md5)
+set_src(DEP_SQLITE_SRC GLOB src/engine/external/sqlite sqlite3.c sqlite3.h)
+add_library(sqlite EXCLUDE_FROM_ALL OBJECT ${DEP_SQLITE_SRC})
+
+list(APPEND TARGETS_DEP json md5 sqlite)
 set(DEP_JSON $<TARGET_OBJECTS:json>)
 set(DEP_MD5)
 if(NOT CRYPTO_FOUND)
   set(DEP_MD5 $<TARGET_OBJECTS:md5>)
 endif()
+set(DEP_SQLITE $<TARGET_OBJECTS:sqlite>)
 
 ########################################################################
 # DATA
@@ -1656,6 +1660,7 @@ add_executable(${TARGET_SERVER}
   ${DEPS}
   ${SERVER_SRC}
   ${SERVER_ICON}
+  ${DEP_SQLITE}
   $<TARGET_OBJECTS:engine-shared>
   $<TARGET_OBJECTS:game-shared>
 )
