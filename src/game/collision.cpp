@@ -108,9 +108,9 @@ int CCollision::GetTile(int x, int y) const
 		return 0;
 }
 
-bool CCollision::IsTileSolid(int x, int y) const
+bool CCollision::IsTile(int x, int y, int Flag) const
 {
-	return GetTile(x, y)&COLFLAG_SOLID;
+	return GetTile(x, y)&Flag;
 }
 
 // race
@@ -273,16 +273,16 @@ void CCollision::MovePoint(vec2 *pInoutPos, vec2 *pInoutVel, float Elasticity, i
 	}
 }
 
-bool CCollision::TestBox(vec2 Pos, vec2 Size) const
+bool CCollision::TestBox(vec2 Pos, vec2 Size, int Flag) const
 {
 	Size *= 0.5f;
-	if(CheckPoint(Pos.x-Size.x, Pos.y-Size.y))
+	if(CheckPoint(Pos.x-Size.x, Pos.y-Size.y, Flag))
 		return true;
-	if(CheckPoint(Pos.x+Size.x, Pos.y-Size.y))
+	if(CheckPoint(Pos.x+Size.x, Pos.y-Size.y, Flag))
 		return true;
-	if(CheckPoint(Pos.x-Size.x, Pos.y+Size.y))
+	if(CheckPoint(Pos.x-Size.x, Pos.y+Size.y, Flag))
 		return true;
-	if(CheckPoint(Pos.x+Size.x, Pos.y+Size.y))
+	if(CheckPoint(Pos.x+Size.x, Pos.y+Size.y, Flag))
 		return true;
 	return false;
 }
@@ -296,6 +296,9 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, float Elas
 	float Distance = length(Vel);
 	int Max = (int)Distance;
 
+	if(pDeath)
+		*pDeath = false;
+
 	if(Distance > 0.00001f)
 	{
 		//vec2 old_pos = pos;
@@ -307,6 +310,13 @@ void CCollision::MoveBox(vec2 *pInoutPos, vec2 *pInoutVel, vec2 Size, float Elas
 				//amount = 0;
 
 			vec2 NewPos = Pos + Vel*Fraction; // TODO: this row is not nice
+
+			//You hit a deathtile, congrats to that :)
+			//Deathtiles are a bit smaller
+			if(pDeath && TestBox(vec2(NewPos.x, NewPos.y), Size*(2.0f/3.0f), COLFLAG_DEATH))
+			{
+				*pDeath = true;
+			}
 
 			if(TestBox(vec2(NewPos.x, NewPos.y), Size))
 			{

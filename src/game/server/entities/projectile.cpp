@@ -15,6 +15,7 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 	m_Direction = Dir;
 	m_LifeSpan = Span;
 	m_Owner = Owner;
+	m_OwnerTeam = GameServer()->m_apPlayers[Owner]->GetTeam();
 	m_Force = Force;
 	m_Damage = Damage;
 	m_SoundImpact = SoundImpact;
@@ -27,7 +28,15 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 
 void CProjectile::Reset()
 {
-	GameServer()->m_World.DestroyEntity(this);
+	GameWorld()->DestroyEntity(this);
+}
+
+void CProjectile::LoseOwner()
+{
+	if(m_OwnerTeam == TEAM_BLUE)
+		m_Owner = PLAYER_TEAM_BLUE;
+	else
+		m_Owner = PLAYER_TEAM_RED;
 }
 
 vec2 CProjectile::GetPos(float Time)
@@ -65,7 +74,7 @@ void CProjectile::Tick()
 	vec2 CurPos = GetPos(Ct);
 	int Collide = GameServer()->Collision()->IntersectLine(PrevPos, CurPos, &CurPos, 0);
 	CCharacter *OwnerChar = GameServer()->GetPlayerChar(m_Owner);
-	CCharacter *TargetChr = 0; //GameServer()->m_World.IntersectCharacter(PrevPos, CurPos, 6.0f, CurPos, OwnerChar);
+	CCharacter *TargetChr = 0; //GameWorld()->IntersectCharacter(PrevPos, CurPos, 6.0f, CurPos, OwnerChar);
 
 	// remove projectile if the player is dead to prevent cheating at start
 	if(g_Config.m_SvDeleteGrenadesAfterDeath && !OwnerChar)
@@ -87,7 +96,7 @@ void CProjectile::Tick()
 		else if(TargetChr)
 			TargetChr->TakeDamage(m_Direction * max(0.001f, m_Force), m_Direction*-1, m_Damage, m_Owner, m_Weapon);
 
-		GameServer()->m_World.DestroyEntity(this);
+		GameWorld()->DestroyEntity(this);
 	}
 
 	if(m_Weapon == WEAPON_GRENADE && g_Config.m_SvTeleportGrenade)

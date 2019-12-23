@@ -15,7 +15,11 @@
 #if defined(CONF_FAMILY_WINDOWS)
 	PFNGLTEXIMAGE3DPROC glTexImage3DInternal;
 
-GLAPI void APIENTRY glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid *pixels)
+#if defined (_MSC_VER)
+	GLAPI void GLAPIENTRY glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid *pixels)
+#else
+	void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid *pixels)
+#endif
 	{
 		glTexImage3DInternal(target, level, internalFormat, width, height, depth, border, format, type, pixels);
 	}
@@ -641,7 +645,7 @@ void CCommandProcessor_SDL_OpenGL::RunBuffer(CCommandBuffer *pBuffer)
 
 // ------------ CGraphicsBackend_SDL_OpenGL
 
-int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *Screen, int *pWidth, int *pHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight)
+int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *Screen, int *pWindowWidth, int *pWindowHeight, int* pScreenWidth, int* pScreenHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight)
 {
 	if(!SDL_WasInit(SDL_INIT_VIDEO))
 	{
@@ -679,14 +683,16 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *Screen, int *pWidt
 	}
 
 	// use desktop resolution as default resolution
-	if (*pWidth == 0 || *pHeight == 0)
+	if (*pWindowWidth == 0 || *pWindowHeight == 0)
 	{
-		*pWidth = *pDesktopWidth;
-		*pHeight = *pDesktopHeight;
+		*pWindowWidth = *pDesktopWidth;
+		*pWindowHeight = *pDesktopHeight;
 	}
 
 	// set flags
 	int SdlFlags = SDL_WINDOW_OPENGL;
+	if(Flags&IGraphicsBackend::INITFLAG_HIGHDPI)
+		SdlFlags |= SDL_WINDOW_ALLOW_HIGHDPI;
 	if(Flags&IGraphicsBackend::INITFLAG_RESIZABLE)
 		SdlFlags |= SDL_WINDOW_RESIZABLE;
 	if(Flags&IGraphicsBackend::INITFLAG_BORDERLESS)
@@ -694,8 +700,8 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *Screen, int *pWidt
 	if(Flags&IGraphicsBackend::INITFLAG_FULLSCREEN)
 #if defined(CONF_PLATFORM_MACOSX)	// Todo SDL: remove this when fixed (game freezes when losing focus in fullscreen)
 		SdlFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;	// always use "fake" fullscreen
-	*pWidth = *pDesktopWidth;
-	*pHeight = *pDesktopHeight;
+	*pWindowWidth = *pDesktopWidth;
+	*pWindowHeight = *pDesktopHeight;
 #else
 		SdlFlags |= SDL_WINDOW_FULLSCREEN;
 #endif
@@ -719,21 +725,22 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *Screen, int *pWidt
 	// calculate centered position in windowed mode
 	int OffsetX = 0;
 	int OffsetY = 0;
-	if(!(Flags&IGraphicsBackend::INITFLAG_FULLSCREEN) && *pDesktopWidth > *pWidth && *pDesktopHeight > *pHeight)
+	if(!(Flags&IGraphicsBackend::INITFLAG_FULLSCREEN) && *pDesktopWidth > *pWindowWidth && *pDesktopHeight > *pWindowHeight)
 	{
-		OffsetX = (*pDesktopWidth - *pWidth) / 2;
-		OffsetY = (*pDesktopHeight - *pHeight) / 2;
+		OffsetX = (*pDesktopWidth - *pWindowWidth) / 2;
+		OffsetY = (*pDesktopHeight - *pWindowHeight) / 2;
 	}
 
 	// create window
-	m_pWindow = SDL_CreateWindow(pName, ScreenPos.x+OffsetX, ScreenPos.y+OffsetY, *pWidth, *pHeight, SdlFlags);
+	m_pWindow = SDL_CreateWindow(pName, ScreenPos.x+OffsetX, ScreenPos.y+OffsetY, *pWindowWidth, *pWindowHeight, SdlFlags);
 	if(m_pWindow == NULL)
 	{
 		dbg_msg("gfx", "unable to create window: %s", SDL_GetError());
 		return -1;
 	}
 
-	SDL_GetWindowSize(m_pWindow, pWidth, pHeight);
+	SDL_GetWindowSize(m_pWindow, pWindowWidth, pWindowHeight);
+	SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
 
 	// create gl context
 	m_GLContext = SDL_GL_CreateContext(m_pWindow);
@@ -755,6 +762,14 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *Screen, int *pWidt
 	SDL_GL_SetSwapInterval(Flags&IGraphicsBackend::INITFLAG_VSYNC ? 1 : 0);
 
 	SDL_GL_MakeCurrent(NULL, NULL);
+
+	// print sdl version
+	SDL_version Compiled;
+	SDL_version Linked;
+
+	SDL_VERSION(&Compiled);
+	SDL_GetVersion(&Linked);
+	dbg_msg("sdl", "SDL version %d.%d.%d (dll = %d.%d.%d)", Compiled.major, Compiled.minor, Compiled.patch, Linked.major, Linked.minor, Linked.patch);
 
 	// start the command processor
 	m_pProcessor = new CCommandProcessor_SDL_OpenGL;

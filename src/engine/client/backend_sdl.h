@@ -26,13 +26,13 @@
 			Class NSAutoreleasePoolClass = (Class) objc_getClass("NSAutoreleasePool");
 			m_Pool = class_createInstance(NSAutoreleasePoolClass, 0);
 			SEL selector = sel_registerName("init");
-			objc_msgSend(m_Pool, selector);
+			((id (*)(id, SEL))objc_msgSend)(m_Pool, selector);
 		}
 
 		~CAutoreleasePool()
 		{
 			SEL selector = sel_registerName("drain");
-			objc_msgSend(m_Pool, selector);
+			((id (*)(id, SEL))objc_msgSend)(m_Pool, selector);
 		}
 	};
 #endif
@@ -55,7 +55,7 @@ public:
 	virtual void RunBuffer(CCommandBuffer *pBuffer);
 	virtual bool IsIdle() const;
 	virtual void WaitForIdle();
-		
+
 protected:
 	void StartProcessor(ICommandProcessor *pProcessor);
 	void StopProcessor();
@@ -181,9 +181,9 @@ public:
 // command processor impelementation, uses the fragments to combine into one processor
 class CCommandProcessor_SDL_OpenGL : public CGraphicsBackend_Threaded::ICommandProcessor
 {
- 	CCommandProcessorFragment_OpenGL m_OpenGL;
- 	CCommandProcessorFragment_SDL m_SDL;
- 	CCommandProcessorFragment_General m_General;
+	CCommandProcessorFragment_OpenGL m_OpenGL;
+	CCommandProcessorFragment_SDL m_SDL;
+	CCommandProcessorFragment_General m_General;
  public:
 	virtual void RunBuffer(CCommandBuffer *pBuffer);
 };
@@ -198,7 +198,7 @@ class CGraphicsBackend_SDL_OpenGL : public CGraphicsBackend_Threaded
 	int m_NumScreens;
 	int m_TextureArraySize;
 public:
-	virtual int Init(const char *pName, int *Screen, int *Width, int *Height, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight);
+	virtual int Init(const char *pName, int *Screen, int *pWindowWidth, int *pWindowHeight, int *pScreenWidth, int *pScreenHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight);
 	virtual int Shutdown();
 
 	virtual int MemoryUsage() const;

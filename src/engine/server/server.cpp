@@ -301,7 +301,9 @@ void CServer::SetClientName(int ClientID, const char *pName)
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State < CClient::STATE_READY || !pName)
 		return;
 
-	str_copy(m_aClients[ClientID].m_aName, pName, MAX_NAME_LENGTH);
+	const char *pDefaultName = "(1)";
+	pName = str_utf8_skip_whitespaces(pName);
+	str_copy(m_aClients[ClientID].m_aName, *pName ? pName : pDefaultName, MAX_NAME_LENGTH);
 }
 
 void CServer::SetClientClan(int ClientID, const char *pClan)
@@ -904,7 +906,7 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				net_addr_str(m_NetServer.ClientAddr(ClientID), aAddrStr, sizeof(aAddrStr), true);
 
 				char aBuf[256];
-				str_format(aBuf, sizeof(aBuf), "player is ready. ClientID=%x addr=%s", ClientID, aAddrStr);
+				str_format(aBuf, sizeof(aBuf), "player is ready. ClientID=%d addr=%s", ClientID, aAddrStr);
 				Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "server", aBuf);
 
 				bool ConnectAsSpec = m_aClients[ClientID].m_State == CClient::STATE_CONNECTING_AS_SPEC;
@@ -921,7 +923,7 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				net_addr_str(m_NetServer.ClientAddr(ClientID), aAddrStr, sizeof(aAddrStr), true);
 
 				char aBuf[256];
-				str_format(aBuf, sizeof(aBuf), "player has entered the game. ClientID=%x addr=%s", ClientID, aAddrStr);
+				str_format(aBuf, sizeof(aBuf), "player has entered the game. ClientID=%d addr=%s", ClientID, aAddrStr);
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
 				m_aClients[ClientID].m_State = CClient::STATE_INGAME;
 				SendServerInfo(ClientID);
@@ -1132,8 +1134,12 @@ void CServer::GenerateServerInfo(CPacker *pPacker, int Token)
 	pPacker->AddString(GameServer()->GameType(), 16);
 
 	// flags
-	int Flag = g_Config.m_Password[0] ? SERVERINFO_FLAG_PASSWORD : 0;	// password set
-	pPacker->AddInt(Flag);
+	int Flags = 0;
+	if(g_Config.m_Password[0])  // password set
+		Flags |= SERVERINFO_FLAG_PASSWORD;
+	if(GameServer()->TimeScore())
+		Flags |= SERVERINFO_FLAG_TIMESCORE;
+	pPacker->AddInt(Flags);
 
 	pPacker->AddInt(g_Config.m_SvSkillLevel);	// server skill level
 	pPacker->AddInt(PlayerCount); // num players
@@ -1334,6 +1340,10 @@ int CServer::Run()
 	GameServer()->OnInit();
 	str_format(aBuf, sizeof(aBuf), "version %s", GameServer()->NetVersion());
 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
+	if(str_comp(GameServer()->NetVersionHashUsed(), GameServer()->NetVersionHashReal()))
+	{
+		m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "WARNING: netversion hash differs");
+	}
 
 	// process pending commands
 	m_pConsole->StoreCommands(false);
@@ -1715,7 +1725,7 @@ void CServer::RegisterCommands()
 	Console()->Register("kick", "i?r", CFGFLAG_SERVER, ConKick, this, "Kick player with specified id for any reason");
 	Console()->Register("status", "", CFGFLAG_SERVER, ConStatus, this, "List players");
 	Console()->Register("shutdown", "", CFGFLAG_SERVER, ConShutdown, this, "Shut down");
-	Console()->Register("logout", "", CFGFLAG_SERVER, ConLogout, this, "Logout of rcon");
+	Console()->Register("logout", "", CFGFLAG_SERVER|CFGFLAG_BASICACCESS, ConLogout, this, "Logout of rcon");
 
 	Console()->Register("record", "?s", CFGFLAG_SERVER|CFGFLAG_STORE, ConRecord, this, "Record to a file");
 	Console()->Register("stoprecord", "", CFGFLAG_SERVER, ConStopRecord, this, "Stop recording");
@@ -1850,7 +1860,7 @@ int main(int argc, const char **argv) // ignore_convention
 
 	// run the server
 	dbg_msg("server", "starting...");
-	pServer->Run();
+	int Ret = pServer->Run();
 
 	// free
 	delete pServer;
@@ -1863,6 +1873,6 @@ int main(int argc, const char **argv) // ignore_convention
 	delete pStorage;
 	delete pConfig;
 
-	return 0;
+	return Ret;
 }
 

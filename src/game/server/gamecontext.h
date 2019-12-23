@@ -149,6 +149,7 @@ public:
 		VOTE_CANCEL_TIME = 10,
 
 		MIN_SKINCHANGE_CLIENTVERSION = 0x0703,
+		MIN_RACE_CLIENTVERSION = 0x0704,
 	};
 	class CHeap *m_pVoteOptionHeap;
 	CVoteOptionServer *m_pVoteOptionFirst;
@@ -210,6 +211,8 @@ public:
 	virtual const char *GameType() const;
 	virtual const char *Version() const;
 	virtual const char *NetVersion() const;
+	virtual const char *NetVersionHashUsed() const;
+	virtual const char *NetVersionHashReal() const;
 };
 
 inline int64 CmaskAll() { return -1; }

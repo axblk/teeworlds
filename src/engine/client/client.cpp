@@ -40,7 +40,7 @@
 #include <mastersrv/mastersrv.h>
 #include <versionsrv/versionsrv.h>
 
-#include "friends.h"
+#include "contacts.h"
 #include "serverbrowser.h"
 #include "client.h"
 
@@ -262,6 +262,7 @@ CClient::CClient() : m_DemoPlayer(&m_SnapshotDelta), m_DemoRecorder(&m_SnapshotD
 	m_WindowMustRefocus = 0;
 	m_SnapCrcErrors = 0;
 	m_AutoScreenshotRecycle = false;
+	m_AutoStatScreenshotRecycle = false;
 	m_EditorActive = false;
 
 	m_AckGameTick = -1;
@@ -585,44 +586,39 @@ int CClient::LoadData()
 
 const void *CClient::SnapGetItem(int SnapID, int Index, CSnapItem *pItem) const
 {
-	CSnapshotItem *i;
 	dbg_assert(SnapID >= 0 && SnapID < NUM_SNAPSHOT_TYPES, "invalid SnapID");
-	i = m_aSnapshots[SnapID]->m_pAltSnap->GetItem(Index);
+	const CSnapshotItem *i = m_aSnapshots[SnapID]->m_pAltSnap->GetItem(Index);
 	pItem->m_DataSize = m_aSnapshots[SnapID]->m_pAltSnap->GetItemSize(Index);
 	pItem->m_Type = i->Type();
 	pItem->m_ID = i->ID();
-	return (void *)i->Data();
+	return i->Data();
 }
 
 void CClient::SnapInvalidateItem(int SnapID, int Index)
 {
-	CSnapshotItem *i;
 	dbg_assert(SnapID >= 0 && SnapID < NUM_SNAPSHOT_TYPES, "invalid SnapID");
-	i = m_aSnapshots[SnapID]->m_pAltSnap->GetItem(Index);
+	const CSnapshotItem *i = m_aSnapshots[SnapID]->m_pAltSnap->GetItem(Index);
 	if(i)
 	{
 		if((char *)i < (char *)m_aSnapshots[SnapID]->m_pAltSnap || (char *)i > (char *)m_aSnapshots[SnapID]->m_pAltSnap + m_aSnapshots[SnapID]->m_SnapSize)
 			m_pConsole->Print(IConsole::OUTPUT_LEVEL_DEBUG, "client", "snap invalidate problem");
 		if((char *)i >= (char *)m_aSnapshots[SnapID]->m_pSnap && (char *)i < (char *)m_aSnapshots[SnapID]->m_pSnap + m_aSnapshots[SnapID]->m_SnapSize)
 			m_pConsole->Print(IConsole::OUTPUT_LEVEL_DEBUG, "client", "snap invalidate problem");
-		i->m_TypeAndID = -1;
+		m_aSnapshots[SnapID]->m_pAltSnap->InvalidateItem(Index);
 	}
 }
 
 const void *CClient::SnapFindItem(int SnapID, int Type, int ID) const
 {
-	// TODO: linear search. should be fixed.
-	int i;
-
 	if(!m_aSnapshots[SnapID])
 		return 0x0;
 
-	for(i = 0; i < m_aSnapshots[SnapID]->m_pSnap->NumItems(); i++)
-	{
-		CSnapshotItem *pItem = m_aSnapshots[SnapID]->m_pAltSnap->GetItem(i);
-		if(pItem->Type() == Type && pItem->ID() == ID)
-			return (void *)pItem->Data();
-	}
+	CSnapshot* pAltSnap = m_aSnapshots[SnapID]->m_pAltSnap;
+	int Key = (Type<<16)|(ID&0xffff);
+	int Index = pAltSnap->GetItemIndex(Key);
+	if(Index != -1)
+		return pAltSnap->GetItem(Index)->Data();
+
 	return 0x0;
 }
 
@@ -884,7 +880,12 @@ int CClient::UnpackServerInfo(CUnpacker *pUnpacker, CServerInfo *pInfo, int *pTo
 		str_copy(pInfo->m_aHostname, pInfo->m_aAddress, sizeof(pInfo->m_aHostname));
 	str_copy(pInfo->m_aMap, pUnpacker->GetString(CUnpacker::SANITIZE_CC|CUnpacker::SKIP_START_WHITESPACES), sizeof(pInfo->m_aMap));
 	str_copy(pInfo->m_aGameType, pUnpacker->GetString(CUnpacker::SANITIZE_CC|CUnpacker::SKIP_START_WHITESPACES), sizeof(pInfo->m_aGameType));
-	pInfo->m_Flags = (pUnpacker->GetInt()&SERVERINFO_FLAG_PASSWORD) ? IServerBrowser::FLAG_PASSWORD : 0;
+	int Flags = pUnpacker->GetInt();
+	pInfo->m_Flags = 0;
+	if(Flags&SERVERINFO_FLAG_PASSWORD)
+		pInfo->m_Flags |= IServerBrowser::FLAG_PASSWORD;
+	if(Flags&SERVERINFO_FLAG_TIMESCORE)
+		pInfo->m_Flags |= IServerBrowser::FLAG_TIMESCORE;
 	pInfo->m_ServerLevel = clamp<int>(pUnpacker->GetInt(), SERVERINFO_LEVEL_MIN, SERVERINFO_LEVEL_MAX);
 	pInfo->m_NumPlayers = pUnpacker->GetInt();
 	pInfo->m_MaxPlayers = pUnpacker->GetInt();
@@ -932,6 +933,34 @@ int CClient::UnpackServerInfo(CUnpacker *pUnpacker, CServerInfo *pInfo, int *pTo
 	pInfo->m_NumClients = NumClients;
 
 	return 0;
+}
+
+bool CompareScore(const CServerInfo::CClient &C1, const CServerInfo::CClient &C2)
+{
+	if(C1.m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC)
+		return false;
+	if(C2.m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC)
+		return true;
+	return C1.m_Score > C2.m_Score;
+}
+
+bool CompareTime(const CServerInfo::CClient &C1, const CServerInfo::CClient &C2)
+{
+	if(C1.m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC)
+		return false;
+	if(C2.m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC)
+		return true;
+	if(C1.m_Score < 0)
+		return false;
+	if(C2.m_Score < 0)
+		return true;
+	return C1.m_Score < C2.m_Score;
+}
+
+inline void SortClients(CServerInfo *pInfo)
+{
+	std::stable_sort(pInfo->m_aClients, pInfo->m_aClients + pInfo->m_NumClients,
+		(pInfo->m_Flags&IServerBrowser::FLAG_TIMESCORE) ? CompareTime : CompareScore);
 }
 
 void CClient::ProcessConnlessPacket(CNetChunk *pPacket)
@@ -1044,7 +1073,7 @@ void CClient::ProcessConnlessPacket(CNetChunk *pPacket)
 		int Token;
 		if(!UnpackServerInfo(&Up, &Info, &Token) && !Up.Error())
 		{
-			std::stable_sort(Info.m_aClients, Info.m_aClients + Info.m_NumClients);
+			SortClients(&Info);
 			m_ServerBrowser.Set(pPacket->m_Address, CServerBrowser::SET_TOKEN, Token, &Info);
 		}
 	}
@@ -1185,7 +1214,7 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket)
 			net_addr_str(&pPacket->m_Address, Info.m_aAddress, sizeof(Info.m_aAddress), true);
 			if(!UnpackServerInfo(&Unpacker, &Info, 0) && !Unpacker.Error())
 			{
-				std::stable_sort(Info.m_aClients, Info.m_aClients + Info.m_NumClients);
+				SortClients(&Info);
 				mem_copy(&m_CurrentServerInfo, &Info, sizeof(m_CurrentServerInfo));
 				m_CurrentServerInfo.m_NetAddr = m_ServerAddress;
 			}
@@ -1761,6 +1790,7 @@ void CClient::RegisterInterfaces()
 	Kernel()->RegisterInterface(static_cast<IDemoPlayer*>(&m_DemoPlayer));
 	Kernel()->RegisterInterface(static_cast<IServerBrowser*>(&m_ServerBrowser));
 	Kernel()->RegisterInterface(static_cast<IFriends*>(&m_Friends));
+	Kernel()->RegisterInterface(static_cast<IBlacklist*>(&m_Blacklist));
 }
 
 void CClient::InitInterfaces()
@@ -1779,6 +1809,7 @@ void CClient::InitInterfaces()
 	//
 	m_ServerBrowser.Init(&m_ContactClient, m_pGameClient->NetVersion());
 	m_Friends.Init();
+	m_Blacklist.Init();
 }
 
 bool CClient::LimitFps()
@@ -1946,6 +1977,10 @@ void CClient::Run()
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "version %s", GameClient()->NetVersion());
 	m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "client", aBuf);
+	if(str_comp(GameClient()->NetVersionHashUsed(), GameClient()->NetVersionHashReal()))
+	{
+		m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "client", "WARNING: netversion hash differs");
+	}
 
 	//
 	m_FpsGraph.Init(0.0f, 120.0f);
@@ -2011,19 +2046,21 @@ void CClient::Run()
 		}
 
 		// panic quit button
-		if(Input()->KeyIsPressed(KEY_LCTRL) && Input()->KeyIsPressed(KEY_LSHIFT) && Input()->KeyPress(KEY_Q, true))
+		bool IsCtrlPressed = Input()->KeyIsPressed(KEY_LCTRL);
+		bool IsLShiftPressed = Input()->KeyIsPressed(KEY_LSHIFT);
+		if(IsCtrlPressed && IsLShiftPressed && Input()->KeyPress(KEY_Q, true))
 		{
 			Quit();
 			break;
 		}
 
-		if(Input()->KeyIsPressed(KEY_LCTRL) && Input()->KeyIsPressed(KEY_LSHIFT) && Input()->KeyPress(KEY_D, true))
+		if(IsCtrlPressed && IsLShiftPressed && Input()->KeyPress(KEY_D, true))
 			g_Config.m_Debug ^= 1;
 
-		if(Input()->KeyIsPressed(KEY_LCTRL) && Input()->KeyIsPressed(KEY_LSHIFT) && Input()->KeyPress(KEY_G, true))
+		if(IsCtrlPressed && IsLShiftPressed && Input()->KeyPress(KEY_G, true))
 			g_Config.m_DbgGraphs ^= 1;
 
-		if(Input()->KeyIsPressed(KEY_LCTRL) && Input()->KeyIsPressed(KEY_LSHIFT) && Input()->KeyPress(KEY_E, true))
+		if(IsCtrlPressed && IsLShiftPressed && Input()->KeyPress(KEY_E, true))
 		{
 			g_Config.m_ClEditor = g_Config.m_ClEditor^1;
 			Input()->MouseModeRelative();
@@ -2186,6 +2223,15 @@ void CClient::AutoScreenshot_Start()
 	}
 }
 
+void CClient::AutoStatScreenshot_Start()
+{
+	if(g_Config.m_ClAutoStatScreenshot)
+	{
+		Graphics()->TakeScreenshot("auto/stat");
+		m_AutoStatScreenshotRecycle = true;
+	}
+}
+
 void CClient::AutoScreenshot_Cleanup()
 {
 	if(m_AutoScreenshotRecycle)
@@ -2197,6 +2243,16 @@ void CClient::AutoScreenshot_Cleanup()
 			AutoScreens.Init(Storage(), "screenshots/auto", "autoscreen", ".png", g_Config.m_ClAutoScreenshotMax);
 		}
 		m_AutoScreenshotRecycle = false;
+	}
+	if(m_AutoStatScreenshotRecycle)
+	{
+		if(g_Config.m_ClAutoScreenshotMax)
+		{
+			// clean up auto taken stat screens
+			CFileCollection AutoScreens;
+			AutoScreens.Init(Storage(), "screenshots/auto", "stat", ".png", g_Config.m_ClAutoScreenshotMax);
+		}
+		m_AutoStatScreenshotRecycle = false;
 	}
 }
 
@@ -2476,6 +2532,13 @@ void CClient::ConnectOnStart(const char *pAddress)
 	str_copy(m_aCmdConnect, pAddress, sizeof(m_aCmdConnect));
 }
 
+void CClient::DoVersionSpecificActions()
+{
+	if(g_Config.m_ClLastVersionPlayed <= 0x0703)
+		str_copy(g_Config.m_ClMenuMap, "winter", sizeof(g_Config.m_ClMenuMap));
+	g_Config.m_ClLastVersionPlayed = CLIENT_VERSION;
+}
+
 /*
 	Server Time
 	Client Mirror Time
@@ -2585,7 +2648,8 @@ int main(int argc, const char **argv) // ignore_convention
 	if(!UseDefaultConfig)
 	{
 		// execute config file
-		pConsole->ExecuteFile("settings.cfg");
+		if(!pConsole->ExecuteFile(SETTINGS_FILENAME ".cfg"))
+			pConsole->ExecuteFile("settings.cfg"); // fallback to legacy naming scheme
 
 		// execute autoexec file
 		pConsole->ExecuteFile("autoexec.cfg");
@@ -2622,6 +2686,8 @@ int main(int argc, const char **argv) // ignore_convention
 	else if(!QuickEditMode)
 		dbg_console_init();
 #endif
+
+	pClient->DoVersionSpecificActions();
 
 	// restore empty config strings to their defaults
 	pConfig->RestoreStrings();

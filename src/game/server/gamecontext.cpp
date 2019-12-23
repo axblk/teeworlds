@@ -14,6 +14,7 @@
 #include <game/version.h>
 
 #include "entities/character.h"
+#include "entities/projectile.h"
 /*
 #include "gamemodes/ctf.h"
 #include "gamemodes/dm.h"
@@ -702,6 +703,12 @@ void CGameContext::OnClientEnter(int ClientID)
 
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
+	if(m_apPlayers[ClientID])
+	{
+		dbg_assert(m_apPlayers[ClientID]->IsDummy(), "invalid clientID");
+		OnClientDrop(ClientID, "removing dummy");
+	}
+
 	m_apPlayers[ClientID] = new(ClientID) CPlayer(this, ClientID, Dummy, AsSpec);
 
 	if(Dummy)
@@ -722,6 +729,14 @@ void CGameContext::OnClientTeamChange(int ClientID)
 {
 	if(m_apPlayers[ClientID]->GetTeam() == TEAM_SPECTATORS)
 		AbortVoteOnTeamChange(ClientID);
+
+	// mark client's projectile has team projectile
+	CProjectile *p = (CProjectile *)m_World.FindFirst(CGameWorld::ENTTYPE_PROJECTILE);
+	for(; p; p = (CProjectile *)p->TypeNext())
+	{
+		if(p->GetOwner() == ClientID)
+			p->LoseOwner();
+	}
 }
 
 void CGameContext::OnClientDrop(int ClientID, const char *pReason)
@@ -747,6 +762,14 @@ void CGameContext::OnClientDrop(int ClientID, const char *pReason)
 		if(g_Config.m_SvSilentSpectatorMode && m_apPlayers[ClientID]->GetTeam() == TEAM_SPECTATORS)
 			Msg.m_Silent = true;
 		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL|MSGFLAG_NORECORD, -1);
+	}
+
+	// mark client's projectile has team projectile
+	CProjectile *p = (CProjectile *)m_World.FindFirst(CGameWorld::ENTTYPE_PROJECTILE);
+	for(; p; p = (CProjectile *)p->TypeNext())
+	{
+		if(p->GetOwner() == ClientID)
+			p->LoseOwner();
 	}
 
 	delete m_apPlayers[ClientID];
@@ -790,9 +813,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				int Code = str_utf8_decode(&p);
 
 				// check if unicode is not empty
-				if(Code > 0x20 && Code != 0xA0 && Code != 0x034F && (Code < 0x2000 || Code > 0x200F) && (Code < 0x2028 || Code > 0x202F) &&
-					(Code < 0x205F || Code > 0x2064) && (Code < 0x206A || Code > 0x206F) && (Code < 0xFE00 || Code > 0xFE0F) &&
-					Code != 0xFEFF && (Code < 0xFFF9 || Code > 0xFFFC))
+				if(!str_utf8_is_whitespace(Code))
 				{
 					pEnd = 0;
 				}
@@ -1057,6 +1078,13 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 				SendSkinChange(pPlayer->GetCID(), i);
 			}
+
+			m_pController->OnPlayerInfoChange(pPlayer);
+		}
+		else if (MsgID == NETMSGTYPE_CL_COMMAND)
+		{
+			CNetMsg_Cl_Command *pMsg = (CNetMsg_Cl_Command*)pRawMsg;
+			m_pController->OnPlayerCommand(pPlayer, pMsg->m_Name, pMsg->m_Arguments);
 		}
 	}
 	else
@@ -1512,7 +1540,10 @@ void CGameContext::OnInit()
 	m_World.SetGameServer(this);
 	m_Events.SetGameServer(this);
 
-	for(int i = 0; i < NUM_NETOBJTYPES; i++)
+	// HACK: only set static size for items, which were available in the first 0.7 release
+	// so new items don't break the snapshot delta
+	static const int OLD_NUM_NETOBJTYPES = 23;
+	for(int i = 0; i < OLD_NUM_NETOBJTYPES; i++)
 		Server()->SnapSetStaticsize(i, m_NetObjHandler.GetObjSize(i));
 
 	m_Layers.Init(Kernel());
@@ -1594,6 +1625,9 @@ void CGameContext::OnInit()
 		g_Config.m_SvPlayerSlots = Server()->MaxClients();
 
 #ifdef CONF_DEBUG
+	// clamp dbg_dummies to 0..MaxClients-1
+	if(Server()->MaxClients() <= g_Config.m_DbgDummies)
+		g_Config.m_DbgDummies = Server()->MaxClients();
 	if(g_Config.m_DbgDummies)
 	{
 		for(int i = 0; i < g_Config.m_DbgDummies ; i++)
@@ -1657,5 +1691,7 @@ bool CGameContext::IsClientSpectator(int ClientID) const
 const char *CGameContext::GameType() const { return m_pController && m_pController->GetGameType() ? m_pController->GetGameType() : ""; }
 const char *CGameContext::Version() const { return GAME_VERSION; }
 const char *CGameContext::NetVersion() const { return GAME_NETVERSION; }
+const char *CGameContext::NetVersionHashUsed() const { return GAME_NETVERSION_HASH_FORCED; }
+const char *CGameContext::NetVersionHashReal() const { return GAME_NETVERSION_HASH; }
 
 IGameServer *CreateGameServer() { return new CGameContext; }

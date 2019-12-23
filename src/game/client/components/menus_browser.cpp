@@ -5,13 +5,13 @@
 #include <engine/external/json-parser/json.h>
 
 #include <engine/config.h>
-#include <engine/friends.h>
 #include <engine/graphics.h>
 #include <engine/keys.h>
 #include <engine/serverbrowser.h>
 #include <engine/storage.h>
 #include <engine/textrender.h>
 #include <engine/shared/config.h>
+#include <engine/client/contacts.h>
 
 #include <generated/client_data.h>
 #include <generated/protocol.h>
@@ -432,16 +432,23 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 			}
 
 			Rect.VSplitLeft(Rect.h, &Icon, &Rect);
-			if(pEntry->m_FriendState != IFriends::FRIEND_NO)
+			if(pEntry->m_FriendState != CContactInfo::CONTACT_NO)
 			{
 				Icon.Margin(2.0f, &Icon);
-				DoIcon(IMAGE_BROWSEICONS, Selected ? SPRITE_BROWSE_HEART_B : SPRITE_BROWSE_HEART_A, &Icon);
+				Graphics()->TextureSet(g_pData->m_aImages[IMAGE_BROWSEICONS].m_Id);
+				Graphics()->QuadsBegin();
+				Graphics()->SetColor(1.0f, 0.75f, 1.0f, 1.0f);
+				RenderTools()->SelectSprite(Selected ? SPRITE_BROWSE_HEART_B : SPRITE_BROWSE_HEART_A);
+				IGraphics::CQuadItem QuadItem(Icon.x, Icon.y, Icon.w, Icon.h);
+				Graphics()->QuadsDrawTL(&QuadItem, 1);
+				Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
+				Graphics()->QuadsEnd();
 			}
 		}
 		else if(ID == COL_BROWSER_NAME)
 		{
 			CTextCursor Cursor;
-			float tw = TextRender()->TextWidth(0, 12.0f, pEntry->m_aName, -1);
+			float tw = TextRender()->TextWidth(0, 12.0f, pEntry->m_aName, -1, -1.0f);
 			if(tw < Button.w)
 				TextRender()->SetCursor(&Cursor, Button.x, Button.y, 12.0f, TEXTFLAG_RENDER);
 			else
@@ -473,7 +480,7 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 		else if(ID == COL_BROWSER_MAP)
 		{
 			CTextCursor Cursor;
-			float tw = TextRender()->TextWidth(0, 12.0f, pEntry->m_aMap, -1);
+			float tw = TextRender()->TextWidth(0, 12.0f, pEntry->m_aMap, -1, -1.0f);
 			if(tw < Button.w)
 				TextRender()->SetCursor(&Cursor, Button.x, Button.y, 12.0f, TEXTFLAG_RENDER);
 			else
@@ -531,7 +538,7 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 			if(RenderOffset == 0.0f)
 			{
 				char aChar[2] = "0";
-				RenderOffset = TextRender()->TextWidth(0, 12.0f, aChar, -1);
+				RenderOffset = TextRender()->TextWidth(0, 12.0f, aChar, -1, -1.0f);
 			}
 
 			str_format(aTemp, sizeof(aTemp), "%d/%d", Num, Max);
@@ -546,7 +553,7 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 			if(!Num)
 				TextRender()->TextColor(1.0f, 1.0f, 1.0f, 0.5f);
 			UI()->DoLabel(&Button, aTemp, 12.0f, CUI::ALIGN_LEFT);
-			Button.x += TextRender()->TextWidth(0, 12.0f, aTemp, -1);
+			Button.x += TextRender()->TextWidth(0, 12.0f, aTemp, -1, -1.0f);
 		}
 		else if(ID == COL_BROWSER_PING)
 		{
@@ -723,6 +730,14 @@ void CMenus::RenderFilterHeader(CUIRect View, int FilterIndex)
 	}
 }
 
+static void FormatScore(char *pBuf, int BufSize, bool TimeScore, const CServerInfo::CClient *pClient)
+{
+	if(TimeScore)
+		FormatTime(pBuf, BufSize, pClient->m_Score * 1000, 0);
+	else
+		str_format(pBuf, BufSize, "%d", pClient->m_Score);
+}
+
 void CMenus::RenderServerbrowserOverlay()
 {
 	if(!m_InfoOverlayActive)
@@ -811,7 +826,7 @@ void CMenus::RenderServerbrowserOverlay()
 				ServerScoreBoard.HSplitTop(ButtonHeight, &Name, &ServerScoreBoard);
 				if(UI()->DoButtonLogic(&pInfo->m_aClients[i], "", 0, &Name))
 				{
-					if(pInfo->m_aClients[i].m_FriendState == IFriends::FRIEND_PLAYER)
+					if(pInfo->m_aClients[i].m_FriendState == CContactInfo::CONTACT_PLAYER)
 						m_pClient->Friends()->RemoveFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
 					else
 						m_pClient->Friends()->AddFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
@@ -819,7 +834,7 @@ void CMenus::RenderServerbrowserOverlay()
 					Client()->ServerBrowserUpdate();
 				}
 
-				vec4 Colour = pInfo->m_aClients[i].m_FriendState == IFriends::FRIEND_NO ? vec4(1.0f, 1.0f, 1.0f, (i%2+1)*0.05f) :
+				vec4 Colour = pInfo->m_aClients[i].m_FriendState == CContactInfo::CONTACT_NO ? vec4(1.0f, 1.0f, 1.0f, (i%2+1)*0.05f) :
 																									vec4(0.5f, 1.0f, 0.5f, 0.15f+(i%2+1)*0.05f);
 				RenderTools()->DrawUIRect(&Name, Colour, CUI::CORNER_ALL, 4.0f);
 				Name.VSplitLeft(5.0f, 0, &Name);
@@ -832,7 +847,7 @@ void CMenus::RenderServerbrowserOverlay()
 				if(!(pInfo->m_aClients[i].m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC))
 				{
 					char aTemp[16];
-					str_format(aTemp, sizeof(aTemp), "%d", pInfo->m_aClients[i].m_Score);
+					FormatScore(aTemp, sizeof(aTemp), pInfo->m_Flags&IServerBrowser::FLAG_TIMESCORE, &pInfo->m_aClients[i]);
 					TextRender()->SetCursor(&Cursor, Score.x, Score.y+(Score.h-FontSize)/4.0f, FontSize, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
 					Cursor.m_LineWidth = Score.w;
 					TextRender()->TextEx(&Cursor, aTemp, -1);
@@ -931,18 +946,17 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 	float ButtonHeight = 20.0f;
 
 	// background
-	RenderTools()->DrawUIRect(&View, vec4(0.0f, 0.0f, 0.0f, g_Config.m_ClMenuAlpha/100.0f), CUI::CORNER_ALL, 5.0f);
+	RenderTools()->DrawUIRect(&View, vec4(0.0f, 0.0f, 0.0f, g_Config.m_ClMenuAlpha/100.0f), (Client()->State() == IClient::STATE_OFFLINE) ? CUI::CORNER_ALL : CUI::CORNER_B|CUI::CORNER_TR, 5.0f);
 
-	// split scrollbar from view
-	CUIRect Scroll;
-	View.VSplitRight(20.0f, &View, &Scroll);
-	Scroll.HSplitTop(ms_ListheaderHeight, 0, &Scroll);
-	Scroll.HSplitBottom(ButtonHeight*3.0f+SpacingH*2.0f, &Scroll, 0);
+	// make room for scrollbar
+	{
+		CUIRect Scroll;
+		View.VSplitRight(20.0f, &View, &Scroll);
+	}
 
-	View.HSplitTop(ms_ListheaderHeight, &Headers, &View);
+	View.HSplitTop(GetListHeaderHeight(), &Headers, &View);
 	View.HSplitBottom(ButtonHeight*3.0f+SpacingH*2.0f, &View, &Status);
 
-	// Headers.VSplitRight(ms_ListheaderHeight, &Headers, &InfoButton); // split for info button
 	Headers.VSplitRight(2.f, &Headers, 0); // some margin on the right
 
 	// do layout
@@ -950,7 +964,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 	{
 		if(ms_aBrowserCols[i].m_Direction == -1)
 		{
-			Headers.VSplitLeft(ms_aBrowserCols[i].m_Width, &ms_aBrowserCols[i].m_Rect, &Headers);
+			Headers.VSplitLeft(ms_aBrowserCols[i].m_Width*GetListHeaderHeightFactor(), &ms_aBrowserCols[i].m_Rect, &Headers);
 
 			if(i+1 < NUM_BROWSER_COLS)
 			{
@@ -964,7 +978,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 	{
 		if(ms_aBrowserCols[i].m_Direction == 1)
 		{
-			Headers.VSplitRight(ms_aBrowserCols[i].m_Width, &Headers, &ms_aBrowserCols[i].m_Rect);
+			Headers.VSplitRight(ms_aBrowserCols[i].m_Width*GetListHeaderHeightFactor(), &Headers, &ms_aBrowserCols[i].m_Rect);
 			Headers.VSplitRight(2, &Headers, &ms_aBrowserCols[i].m_Spacer);
 		}
 	}
@@ -993,10 +1007,6 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 			}
 		}
 	}
-
-
-	// scrollbar background
-	RenderTools()->DrawUIRect(&Scroll, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
 
 	// list background
 	RenderTools()->DrawUIRect(&View, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
@@ -1051,34 +1061,8 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 	if(SelectedFilter == m_lFilters.size()) // no selected filter found
 		SelectedFilter = -1;
 
-	int NumFilters = m_lFilters.size();
-	float ListHeight = NumServers * ms_ListheaderHeight; // add server list height
-	ListHeight += NumFilters * SpacingH; // add filters
-	ListHeight += (NumFilters) * ButtonHeight;// add filters spacing
-	if(!m_SidebarActive && m_SelectedServer.m_Index != -1 && SelectedFilter != -1 && m_ShowServerDetails)
-		ListHeight += ms_ListheaderHeight*5;
-
-	// float LineH = ms_aBrowserCols[0].m_Rect.h;
-	float LineH = ms_ListheaderHeight;
-	static int s_ScrollBar = 0;
-	static float s_ScrollValue = 0;
-
-	Scroll.HMargin(5.0f, &Scroll);
-	s_ScrollValue = DoScrollbarV(&s_ScrollBar, &Scroll, s_ScrollValue);
-
-	// (int)+1 is to keep the first item right on top
-	// but it doesn't work because of filters, we should detect & remove the filters that are displayed beforehand
-	int ScrollNum = ceil((ListHeight-View.h)/LineH);
-	if(ScrollNum > 0)
-	{
-		if(Input()->KeyPress(KEY_MOUSE_WHEEL_UP) && UI()->MouseInside(&View))
-			s_ScrollValue -= 3.0f/ScrollNum;
-		if(Input()->KeyPress(KEY_MOUSE_WHEEL_DOWN) && UI()->MouseInside(&View))
-			s_ScrollValue += 3.0f/ScrollNum;
-	}
-	else
-		ScrollNum = 0;
-
+	// handle arrow hotkeys
+	bool NewSelection = false;
 	if(SelectedFilter > -1)
 	{
 		int NewIndex = -1;
@@ -1089,7 +1073,6 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 			if(!CtrlPressed)
 			{
 				NewIndex = SelectedIndex + 1;
-				// if(NewIndex >= NumServers)
 				if(NewIndex >= m_lFilters[SelectedFilter].NumSortedServers())
 					NewIndex = m_lFilters[SelectedFilter].NumSortedServers() - 1;
 			}
@@ -1123,26 +1106,12 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 
 		if(NewIndex > -1 && NewIndex < m_lFilters[NewFilter].NumSortedServers())
 		{
-			float CurViewY = (s_ScrollValue*ScrollNum*LineH);
-			float IndexY = NewIndex*LineH + (NewFilter+1)*(SpacingH+ButtonHeight); // this represents the Y position of the selected line
-
-			// Selected line = [IndexY,IndexY+LineH] must be in screen = [CurViewY,CurViewY+View.h].
-			if(IndexY < CurViewY) // scroll up
-			{
-				int NumScrolls = ceil((CurViewY-IndexY)/LineH);
-				s_ScrollValue -= NumScrolls/((float)ScrollNum);
-			}
-			if(IndexY+LineH > CurViewY+View.h) // scroll down
-			{
-				int NumScrolls = ceil( ((IndexY+LineH)-(CurViewY+View.h)) / LineH);
-				s_ScrollValue += NumScrolls/((float)ScrollNum);
-			}
-
 			m_SelectedServer.m_Filter = NewFilter;
 			if(m_SelectedServer.m_Index != NewIndex)
 			{
 				m_SelectedServer.m_Index = NewIndex;
 				m_ShowServerDetails = true;
+				NewSelection = true;
 			}
 
 			const CServerInfo *pItem = ServerBrowser()->SortedGet(NewFilter, NewIndex);
@@ -1150,14 +1119,17 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 		}
 	}
 
-	if(s_ScrollValue < 0) s_ScrollValue = 0;
-	if(s_ScrollValue > 1) s_ScrollValue = 1;
-
-	// set clipping
-	UI()->ClipEnable(&View);
-
-	CUIRect OriginalView = View;
-	View.y -= s_ScrollValue*ScrollNum*LineH;
+	// scrollbar
+	static CScrollRegion s_ScrollRegion;
+	vec2 ScrollOffset(0, 0);
+	CScrollRegionParams ScrollParams;
+	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
+	ScrollParams.m_Flags = CScrollRegionParams::FLAG_CONTENT_STATIC_WIDTH;
+	ScrollParams.m_SliderMinHeight = 5;
+	ScrollParams.m_ScrollSpeed = 10;
+	View.w += ScrollParams.m_ScrollbarWidth;
+	BeginScrollRegion(&s_ScrollRegion, &View, &ScrollOffset, &ScrollParams);
+	View.y += ScrollOffset.y;
 
 	int NumPlayers = ServerBrowser()->NumClients();
 
@@ -1168,6 +1140,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 		// filter header
 		CUIRect Row;
 		View.HSplitTop(20.0f, &Row, &View);
+		ScrollRegionAddRect(&s_ScrollRegion, Row);
 
 		// render header
 		RenderFilterHeader(Row, s);
@@ -1187,15 +1160,20 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 					m_SelectedServer.m_Index = i;
 				}
 
-				if(!m_SidebarActive && m_SelectedServer.m_Filter == s && m_SelectedServer.m_Index == i && m_ShowServerDetails)
-					View.HSplitTop(ms_ListheaderHeight*6, &Row, &View);
+				bool IsSelected = m_SelectedServer.m_Filter == s && m_SelectedServer.m_Index == i;
+				if(!m_SidebarActive && IsSelected && m_ShowServerDetails)
+					View.HSplitTop(GetListHeaderHeight()*6, &Row, &View);
 				else
-					View.HSplitTop(ms_ListheaderHeight, &Row, &View);
+					View.HSplitTop(GetListHeaderHeight(), &Row, &View);
+
+				ScrollRegionAddRect(&s_ScrollRegion, Row);
+				if(IsSelected && NewSelection) // new selection (hotkeys or address input)
+					ScrollRegionScrollHere(&s_ScrollRegion, CScrollRegion::SCROLLHERE_KEEP_IN_VIEW);
 
 				// make sure that only those in view can be selected
-				if(Row.y+Row.h > OriginalView.y && Row.y < OriginalView.y+OriginalView.h)
+				if(!ScrollRegionIsRectClipped(&s_ScrollRegion, Row))
 				{
-					if(m_SelectedServer.m_Filter == s && m_SelectedServer.m_Index == i)
+					if(IsSelected)
 					{
 						CUIRect r = Row;
 						RenderTools()->DrawUIRect(&r, vec4(1.0f, 1.0f, 1.0f, 0.5f), CUI::CORNER_ALL, 4.0f);
@@ -1211,7 +1189,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 					continue;
 				}
 
-				if(int ReturnValue = DoBrowserEntry(pFilter->ID(i), Row, pItem, pFilter, m_SelectedServer.m_Filter == s && m_SelectedServer.m_Index == i))
+				if(int ReturnValue = DoBrowserEntry(pFilter->ID(i), Row, pItem, pFilter, IsSelected))
 				{
 					m_ShowServerDetails = !m_ShowServerDetails || ReturnValue == 2 || m_SelectedServer.m_Index != i; // click twice on line => fold server details
 					m_SelectedServer.m_Filter = s;
@@ -1230,7 +1208,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 			View.HSplitTop(SpacingH, &Row, &View);
 	}
 
-	UI()->ClipDisable();
+	EndScrollRegion(&s_ScrollRegion);
 
 	// bottom
 	float SpacingW = 3.0f;
@@ -1273,7 +1251,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 	DoEditBox(&g_Config.m_UiServerAddress, &EditBox, g_Config.m_UiServerAddress, sizeof(g_Config.m_UiServerAddress), ButtonHeight*ms_FontmodHeight*0.8f, &s_AddressOffset, false, CUI::CORNER_ALL);
 
 	// render status
-	if(ServerBrowser()->IsRefreshing())
+	if(ServerBrowser()->IsRefreshing() && m_ActivePage != PAGE_LAN)
 	{
 		char aBuf[128];
 		Status.HSplitTop(ButtonHeight + SpacingH, 0, &Status);
@@ -1288,7 +1266,7 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 		if(RenderOffset == 0.0f)
 		{
 			char aChar[2] = "0";
-			RenderOffset = TextRender()->TextWidth(0, 12.0f, aChar, -1);
+			RenderOffset = TextRender()->TextWidth(0, 12.0f, aChar, -1, -1.0f);
 		}
 
 		float OffsetServer = 0.0f, OffsetPlayer = 0.0f;
@@ -1343,7 +1321,7 @@ void CMenus::RenderServerbrowserSidebar(CUIRect View)
 	}
 
 	// header
-	View.HSplitTop(ms_ListheaderHeight, &Header, &View);
+	View.HSplitTop(GetListHeaderHeight(), &Header, &View);
 	float Width = Header.w;
 	Header.VSplitLeft(Width*0.30f, &Button, &Header);
 	static CButtonContainer s_TabInfo;
@@ -1384,7 +1362,7 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 	const float FontSize = 10.0f;
 	static bool s_ListExtended[NUM_FRIEND_TYPES] = { 1, 1, 0 };
 
-	View.HSplitBottom(3*ms_ListheaderHeight, &View, &BottomArea);
+	View.HSplitBottom(3*GetListHeaderHeight(), &View, &BottomArea);
 
 	// calculate friends
 	// todo: optimize this
@@ -1394,12 +1372,12 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 	m_lFriendList[2].clear();
 	for(int f = 0; f < m_pClient->Friends()->NumFriends(); ++f)
 	{
-		const CFriendInfo *pFriendInfo = m_pClient->Friends()->GetFriend(f);
+		const CContactInfo *pFriendInfo = m_pClient->Friends()->GetFriend(f);
 		CFriendItem FriendItem;
 		FriendItem.m_pServerInfo = 0;
 		str_copy(FriendItem.m_aName, pFriendInfo->m_aName, sizeof(FriendItem.m_aName));
 		str_copy(FriendItem.m_aClan, pFriendInfo->m_aClan, sizeof(FriendItem.m_aClan));
-		FriendItem.m_FriendState = pFriendInfo->m_aName[0] ? IFriends::FRIEND_PLAYER : IFriends::FRIEND_CLAN;
+		FriendItem.m_FriendState = pFriendInfo->m_aName[0] ? CContactInfo::CONTACT_PLAYER : CContactInfo::CONTACT_CLAN;
 		FriendItem.m_IsPlayer = false;
 		m_lFriendList[2].add(FriendItem);
 	}
@@ -1407,12 +1385,12 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 	for(int ServerIndex = 0; ServerIndex < ServerBrowser()->NumServers(); ++ServerIndex)
 	{
 		const CServerInfo *pEntry = ServerBrowser()->Get(ServerIndex);
-		if(pEntry->m_FriendState == IFriends::FRIEND_NO)
+		if(pEntry->m_FriendState == CContactInfo::CONTACT_NO)
 			continue;
 				
 		for(int j = 0; j < pEntry->m_NumClients; ++j)
 		{
-			if(pEntry->m_aClients[j].m_FriendState == IFriends::FRIEND_NO)
+			if(pEntry->m_aClients[j].m_FriendState == CContactInfo::CONTACT_NO)
 				continue;
 			
 			CFriendItem FriendItem;
@@ -1422,7 +1400,7 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 			FriendItem.m_FriendState = pEntry->m_aClients[j].m_FriendState;
 			FriendItem.m_IsPlayer = !(pEntry->m_aClients[j].m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC);
 
-			if(pEntry->m_aClients[j].m_FriendState == IFriends::FRIEND_PLAYER)
+			if(pEntry->m_aClients[j].m_FriendState == CContactInfo::CONTACT_PLAYER)
 				m_lFriendList[0].add(FriendItem);
 			else
 				m_lFriendList[1].add(FriendItem);
@@ -1436,30 +1414,16 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 	}
 
 	// scrollbar
-	UI()->ClipEnable(&View);
-	float Length = 0.0f;
-	for(int i = 0; i < NUM_FRIEND_TYPES; ++i)
-	{
-		Length += ms_ListheaderHeight + 2.0f;
-		if(s_ListExtended[i])
-			Length += (20.0f+ms_ListheaderHeight+2.0f)*m_lFriendList[i].size();
-	}
-	static float s_ScrollValue = 0.0f;
-	int ScrollNum = (int)((Length - View.h)/ms_ListheaderHeight)+1;
-	if(ScrollNum > 0)
-	{
-		if(Input()->KeyPress(KEY_MOUSE_WHEEL_UP) && UI()->MouseInside(&View))
-			s_ScrollValue = clamp(s_ScrollValue - 3.0f/ScrollNum, 0.0f, 1.0f);
-		if(Input()->KeyPress(KEY_MOUSE_WHEEL_DOWN) && UI()->MouseInside(&View))
-			s_ScrollValue = clamp(s_ScrollValue + 3.0f / ScrollNum, 0.0f, 1.0f);
-	}
-	if(Length > View.h)
-	{
-		View.VSplitRight(8.0f, &View, &Button);
-		Button.HMargin(5.0f, &Button);
-		s_ScrollValue = DoScrollbarV(&s_ScrollValue, &Button, s_ScrollValue);
-		View.y += (View.h - Length) * s_ScrollValue;
-	}
+	static CScrollRegion s_ScrollRegion;
+	vec2 ScrollOffset(0, 0);
+	CScrollRegionParams ScrollParams;
+	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
+	ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
+	ScrollParams.m_ScrollbarWidth = 14;
+	ScrollParams.m_ScrollbarMargin = 5;
+	ScrollParams.m_ScrollSpeed = 15;
+	BeginScrollRegion(&s_ScrollRegion, &View, &ScrollOffset, &ScrollParams);
+	View.y += ScrollOffset.y;
 
 	// show lists
 	// only ~10 buttons will be displayed at once, a sliding window of 20 buttons ought to be enough
@@ -1469,13 +1433,15 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 	{
 		CUIRect Header;
 		char aBuf[64] = { 0 };
-		View.HSplitTop(ms_ListheaderHeight, &Header, &View);
+		View.HSplitTop(GetListHeaderHeight(), &Header, &View);
 		if(s_ListExtended[i])
 		{
 			// entries
 			for(int f = 0; f < m_lFriendList[i].size(); ++f, ++ButtonId)
 			{
-				View.HSplitTop(20.0f + ms_ListheaderHeight, &Rect, &View);
+				View.HSplitTop(20.0f + GetListHeaderHeight(), &Rect, &View);
+				ScrollRegionAddRect(&s_ScrollRegion, Rect);
+
 				RenderTools()->DrawUIRect(&Rect, vec4(0.5f, 0.5f, 0.5f, 0.5f), CUI::CORNER_ALL, 5.0f);
 				Rect.VMargin(2.0f, &Rect);
 				Rect.VSplitRight(45.0f, &Rect, &Icon);
@@ -1496,7 +1462,7 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 				// info
 				if(m_lFriendList[i][f].m_pServerInfo)
 				{
-					Rect.HSplitTop(ms_ListheaderHeight, &Button, &Rect);
+					Rect.HSplitTop(GetListHeaderHeight(), &Button, &Rect);
 					Button.VSplitLeft(2.0f, 0, &Button);
 					if(m_lFriendList[i][f].m_IsPlayer)
 						str_format(aBuf, sizeof(aBuf), Localize("Playing '%s' on '%s'", "Playing '(gametype)' on '(map)'"), m_lFriendList[i][f].m_pServerInfo->m_aGameType, m_lFriendList[i][f].m_pServerInfo->m_aMap);
@@ -1516,7 +1482,7 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 				// join button
 				if(m_lFriendList[i][f].m_pServerInfo)
 				{
-					Button.Margin((Button.h - ms_ListheaderHeight + 2.0f) / 2, &Button);
+					Button.Margin((Button.h - GetListHeaderHeight() + 2.0f) / 2, &Button);
 					if(DoButton_Menu(&(s_FriendJoinButtons[ButtonId%20]), Localize("Join", "Join a server"), 0, &Button) )
 					{
 						str_copy(g_Config.m_UiServerAddress, m_lFriendList[i][f].m_pServerInfo->m_aAddress, sizeof(g_Config.m_UiServerAddress));
@@ -1549,24 +1515,24 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 			s_ListExtended[i] ^= 1;
 		}
 	}
-	UI()->ClipDisable();
+	EndScrollRegion(&s_ScrollRegion);
 
 	// add friend
-	BottomArea.HSplitTop(ms_ListheaderHeight, &Button, &BottomArea);
+	BottomArea.HSplitTop(GetListHeaderHeight(), &Button, &BottomArea);
 	Button.VSplitLeft(50.0f, &Label, &Button);
 	UI()->DoLabel(&Label, Localize("Name"), FontSize, CUI::ALIGN_LEFT);
 	static char s_aName[MAX_NAME_LENGTH] = { 0 };
 	static float s_OffsetName = 0.0f;
 	DoEditBox(&s_aName, &Button, s_aName, sizeof(s_aName), Button.h*ms_FontmodHeight*0.8f, &s_OffsetName);
 
-	BottomArea.HSplitTop(ms_ListheaderHeight, &Button, &BottomArea);
+	BottomArea.HSplitTop(GetListHeaderHeight(), &Button, &BottomArea);
 	Button.VSplitLeft(50.0f, &Label, &Button);
 	UI()->DoLabel(&Label, Localize("Clan"), FontSize, CUI::ALIGN_LEFT);
 	static char s_aClan[MAX_CLAN_LENGTH] = { 0 };
 	static float s_OffsetClan = 0.0f;
 	DoEditBox(&s_aClan, &Button, s_aClan, sizeof(s_aClan), Button.h*ms_FontmodHeight*0.8f, &s_OffsetClan);
 
-	BottomArea.HSplitTop(ms_ListheaderHeight, &Button, &BottomArea);
+	BottomArea.HSplitTop(GetListHeaderHeight(), &Button, &BottomArea);
 	RenderTools()->DrawUIRect(&Button, vec4(1.0f, 1.0f, 1.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
 	if(s_aName[0] || s_aClan[0])
 		Button.VSplitLeft(Button.h, &Icon, &Label);
@@ -1638,7 +1604,7 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 	pFilter->GetFilter(&FilterInfo);
 
 	// server filter
-	ServerFilter.HSplitTop(ms_ListheaderHeight, &FilterHeader, &ServerFilter);
+	ServerFilter.HSplitTop(GetListHeaderHeight(), &FilterHeader, &ServerFilter);
 	RenderTools()->DrawUIRect(&FilterHeader, vec4(1, 1, 1, 0.25f), CUI::CORNER_T, 4.0f);
 	RenderTools()->DrawUIRect(&ServerFilter, vec4(0, 0, 0, 0.15f), CUI::CORNER_B, 4.0f);
 	FilterHeader.HMargin(2.0f, &FilterHeader);
@@ -1711,7 +1677,7 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 	{
 		if(FilterInfo.m_aGametype[i][0])
 		{
-			Length += TextRender()->TextWidth(0, FontSize, FilterInfo.m_aGametype[i], -1) + 14.0f;
+			Length += TextRender()->TextWidth(0, FontSize, FilterInfo.m_aGametype[i], -1, -1.0f) + 14.0f;
 		}
 	}
 	static float s_ScrollValue = 0.0f;
@@ -1721,7 +1687,7 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 	{
 		if(FilterInfo.m_aGametype[i][0])
 		{
-			float CurLength = TextRender()->TextWidth(0, FontSize, FilterInfo.m_aGametype[i], -1) + 12.0f;
+			float CurLength = TextRender()->TextWidth(0, FontSize, FilterInfo.m_aGametype[i], -1, -1.0f) + 12.0f;
 			Button.VSplitLeft(CurLength, &Icon, &Button);
 			RenderTools()->DrawUIRect(&Icon, vec4(0.75, 0.75, 0.75, 0.25f), CUI::CORNER_ALL, 3.0f);
 			UI()->DoLabel(&Icon, FilterInfo.m_aGametype[i], FontSize, CUI::ALIGN_LEFT);
@@ -1900,7 +1866,7 @@ void CMenus::RenderDetailInfo(CUIRect View, const CServerInfo *pInfo)
 {
 	CUIRect ServerHeader;
 	const float FontSize = 10.0f;
-	View.HSplitTop(ms_ListheaderHeight, &ServerHeader, &View);
+	View.HSplitTop(GetListHeaderHeight(), &ServerHeader, &View);
 	RenderTools()->DrawUIRect(&ServerHeader, vec4(1, 1, 1, 0.25f), CUI::CORNER_T, 4.0f);
 	RenderTools()->DrawUIRect(&View, vec4(0, 0, 0, 0.15f), CUI::CORNER_B, 4.0f);
 	ServerHeader.HMargin(2.0f, &ServerHeader);
@@ -2001,27 +1967,17 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 		float RowWidth = (RowCount == 0) ? View.w : (View.w * 0.25f);
 		float LineHeight = 20.0f;
 
-		if(RowCount == 0)
-		{
-			float Length = 20.0f * pInfo->m_NumClients;
-			static float s_ScrollValue = 0.0f;
-			int ScrollNum = (int)((Length - View.h)/20.0f)+1;
-			if(ScrollNum > 0)
-			{
-				if(Input()->KeyPress(KEY_MOUSE_WHEEL_UP) && UI()->MouseInside(&View))
-					s_ScrollValue = clamp(s_ScrollValue - 3.0f/ScrollNum, 0.0f, 1.0f);
-				if(Input()->KeyPress(KEY_MOUSE_WHEEL_DOWN) && UI()->MouseInside(&View))
-					s_ScrollValue = clamp(s_ScrollValue + 3.0f / ScrollNum, 0.0f, 1.0f);
-			}
-			if(Length > View.h)
-			{
-				View.VSplitRight(8.0f, &View, &Scroll);
-				Scroll.HMargin(5.0f, &Scroll);
-				s_ScrollValue = DoScrollbarV(&s_ScrollValue, &Scroll, s_ScrollValue);
-				View.y += (View.h - Length) * s_ScrollValue;
-			}
-		}
-		else
+		static CScrollRegion s_ScrollRegion;
+		vec2 ScrollOffset(0, 0);
+		CScrollRegionParams ScrollParams;
+		ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
+		ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
+		ScrollParams.m_ScrollbarWidth = 5;
+		ScrollParams.m_ScrollbarMargin = 1;
+		ScrollParams.m_ScrollSpeed = 15;
+		BeginScrollRegion(&s_ScrollRegion, &View, &ScrollOffset, &ScrollParams);
+		View.y += ScrollOffset.y;
+		if(RowCount != 0)
 		{
 			float Width = RowWidth * ((pInfo->m_NumClients+RowCount-1) / RowCount);
 			static float s_ScrollValue = 0.0f;
@@ -2051,12 +2007,13 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 			}
 	
 			Row.HSplitTop(LineHeight, &Name, &Row);
+			ScrollRegionAddRect(&s_ScrollRegion, Name);
 			RenderTools()->DrawUIRect(&Name, vec4(1.0f, 1.0f, 1.0f, (Count % 2 + 1)*0.05f), CUI::CORNER_ALL, 4.0f);
 
 			// friend
 			if(UI()->DoButtonLogic(&pInfo->m_aClients[i], "", 0, &Name))
 			{
-				if(pInfo->m_aClients[i].m_FriendState == IFriends::FRIEND_PLAYER)
+				if(pInfo->m_aClients[i].m_FriendState == CContactInfo::CONTACT_PLAYER)
 					m_pClient->Friends()->RemoveFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
 				else
 					m_pClient->Friends()->AddFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
@@ -2065,7 +2022,7 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 			}
 			Name.VSplitLeft(Name.h-8.0f, &Icon, &Name);
 			Icon.HMargin(4.0f, &Icon);
-			if(pInfo->m_aClients[i].m_FriendState != IFriends::FRIEND_NO)
+			if(pInfo->m_aClients[i].m_FriendState != CContactInfo::CONTACT_NO)
 				DoIcon(IMAGE_BROWSEICONS, SPRITE_BROWSE_HEART_A, &Icon);
 
 			Name.VSplitLeft(2.0f, 0, &Name);
@@ -2078,7 +2035,7 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 			if(!(pInfo->m_aClients[i].m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC))
 			{
 				char aTemp[16];
-				str_format(aTemp, sizeof(aTemp), "%d", pInfo->m_aClients[i].m_Score);
+				FormatScore(aTemp, sizeof(aTemp), pInfo->m_Flags&IServerBrowser::FLAG_TIMESCORE, &pInfo->m_aClients[i]);
 				TextRender()->SetCursor(&Cursor, Score.x, Score.y + (Score.h - FontSize-2) / 4.0f, FontSize-2, TEXTFLAG_RENDER | TEXTFLAG_STOP_AT_END);
 				Cursor.m_LineWidth = Score.w;
 				TextRender()->TextEx(&Cursor, aTemp, -1);
@@ -2135,6 +2092,7 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 
 			++Count;
 		}
+		EndScrollRegion(&s_ScrollRegion);
 	}
 }
 
@@ -2151,14 +2109,12 @@ void CMenus::RenderServerbrowserServerDetail(CUIRect View, const CServerInfo *pI
 	RenderDetailInfo(ServerDetails, pInfo);
 
 	// server scoreboard
-	ServerScoreboard.HSplitTop(ms_ListheaderHeight, &ServerHeader, &ServerScoreboard);
+	ServerScoreboard.HSplitTop(GetListHeaderHeight(), &ServerHeader, &ServerScoreboard);
 	RenderTools()->DrawUIRect(&ServerHeader, vec4(1, 1, 1, 0.25f), CUI::CORNER_T, 4.0f);
 	//RenderTools()->DrawUIRect(&View, vec4(0, 0, 0, 0.15f), CUI::CORNER_B, 4.0f);
 	ServerHeader.HMargin(2.0f, &ServerHeader);
 	UI()->DoLabel(&ServerHeader, Localize("Scoreboard"), FontSize + 2.0f, CUI::ALIGN_CENTER);
-	UI()->ClipEnable(&ServerScoreboard);
 	RenderDetailScoreboard(ServerScoreboard, pInfo, 0);
-	UI()->ClipDisable();
 }
 
 void CMenus::FriendlistOnUpdate()
@@ -2197,6 +2153,7 @@ void CMenus::RenderServerbrowserBottomBox(CUIRect MainView)
 		m_EnterPressed = false;
 	}
 }
+
 void CMenus::DoGameIcon(const char *pName, const CUIRect *pRect)
 {
 	char aNameBuf[128];
@@ -2275,7 +2232,8 @@ void CMenus::RenderServerbrowser(CUIRect MainView)
 
 	CUIRect ServerList, Sidebar, BottomBox, SidebarButton;
 
-	MainView.HSplitTop(20.0f, 0, &MainView);
+	if(Client()->State() == IClient::STATE_OFFLINE)
+		MainView.HSplitTop(20.0f, 0, &MainView);
 	MainView.HSplitBottom(80.0f, &MainView, &BottomBox);
 	MainView.VSplitRight(20.0f, &ServerList, &SidebarButton);
 	

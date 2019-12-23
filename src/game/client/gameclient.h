@@ -44,6 +44,7 @@ class CGameClient : public IGameClient
 	class IServerBrowser *m_pServerBrowser;
 	class IEditor *m_pEditor;
 	class IFriends *m_pFriends;
+	class IBlacklist *m_pBlacklist;
 
 	CLayers m_Layers;
 	class CCollision m_Collision;
@@ -56,11 +57,16 @@ class CGameClient : public IGameClient
 	int m_PredictedTick;
 	int m_LastNewPredictedTick;
 
+	int m_LastGameStartTick;
+	int m_LastFlagCarrierRed;
+	int m_LastFlagCarrierBlue;
+
 	static void ConTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConKill(IConsole::IResult *pResult, void *pUserData);
 	static void ConReadyChange(IConsole::IResult *pResult, void *pUserData);
 	static void ConchainSkinChange(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainFriendUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConchainBlacklistUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainXmasHatUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 	void EvolveCharacter(CNetObj_Character *pCharacter, int Tick);
@@ -84,6 +90,7 @@ public:
 	class CCollision *Collision() { return &m_Collision; };
 	class IEditor *Editor() { return m_pEditor; }
 	class IFriends *Friends() { return m_pFriends; }
+	class IBlacklist *Blacklist() { return m_pBlacklist; }
 
 	const char *NetobjFailedOn() { return m_NetObjHandler.FailedObjOn(); };
 	int NetobjNumFailures() { return m_NetObjHandler.NumObjFailures(); };
@@ -129,12 +136,14 @@ public:
 		const CNetObj_GameData *m_pGameData;
 		const CNetObj_GameDataTeam *m_pGameDataTeam;
 		const CNetObj_GameDataFlag *m_pGameDataFlag;
+		const CNetObj_GameDataRace *m_pGameDataRace;
 		int m_GameDataFlagSnapID;
 
 		int m_NotReadyCount;
 		int m_AliveCount[NUM_TEAMS];
 
 		const CNetObj_PlayerInfo *m_paPlayerInfos[MAX_CLIENTS];
+		const CNetObj_PlayerInfoRace *m_paPlayerInfosRace[MAX_CLIENTS];
 		CPlayerInfoItem m_aInfoByScore[MAX_CLIENTS];
 
 		// spectate data
@@ -226,32 +235,6 @@ public:
 		int m_PlayerSlots;
 	} m_ServerSettings;
 
-	// stats
-	class CClientStats
-	{
-	public:
-		CClientStats();
-		
-		int m_JoinDate;
-
-		int m_aFragsWith[NUM_WEAPONS];
-		int m_aDeathsFrom[NUM_WEAPONS];
-		int m_Frags;
-		int m_Deaths;
-		int m_Suicides;
-		int m_BestSpree;
-		int m_CurrentSpree;
-
-		int m_FlagGrabs;
-		int m_FlagCaptures;
-		int m_CarriersKilled;
-		int m_KillsCarrying;
-		int m_DeathsCarrying;
-
-		void Reset();
-	};
-	CClientStats m_aStats[MAX_CLIENTS];
-
 	CRenderTools m_RenderTools;
 
 	void OnReset();
@@ -276,20 +259,17 @@ public:
 	virtual void OnGameOver();
 	virtual void OnStartGame();
 
-	// stats hooks
-	int m_LastGameOver;
-	int m_LastRoundStartTick;
-	void OnGameRestart();
-	void OnRoundStart();
-	void OnFlagGrab(int Id);
-
 	virtual const char *GetItemName(int Type) const;
 	virtual const char *Version() const;
 	virtual const char *NetVersion() const;
+	virtual const char *NetVersionHashUsed() const;
+	virtual const char *NetVersionHashReal() const;
 	virtual int ClientVersion() const;
 	static void GetPlayerLabel(char* aBuf, int BufferSize, int ClientID, const char* ClientName);
 	bool IsXmas() const;
 	bool IsEaster() const;
+
+	int RacePrecision() const { return m_Snap.m_pGameDataRace ? m_Snap.m_pGameDataRace->m_Precision : 3; }
 
 	//
 	void DoEnterMessage(const char *pName, int ClientID, int Team);
@@ -328,6 +308,10 @@ public:
 	class CMapLayers *m_pMapLayersBackGround;
 	class CMapLayers *m_pMapLayersForeGround;
 };
+
+
+void FormatTime(char *pBuf, int Size, int Time, int Precision);
+void FormatTimeDiff(char *pBuf, int Size, int Time, int Precision, bool ForceSign = true);
 
 const char *Localize(const char *pStr, const char *pContext="")
 GNUC_ATTRIBUTE((format_arg(1)));

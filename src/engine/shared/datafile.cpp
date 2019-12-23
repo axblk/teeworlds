@@ -172,7 +172,7 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	m_pDataFile = pTmpDataFile;
 
 #if defined(CONF_ARCH_ENDIAN_BIG)
-	swap_endian(m_pDataFile->m_pData, sizeof(int), min(static_cast<unsigned>(Header.m_Swaplen), Size) / sizeof(int));
+	swap_endian(m_pDataFile->m_pData, sizeof(int), min(static_cast<unsigned>(Header.m_Swaplen), static_cast<unsigned>(Size)) / sizeof(int));
 #endif
 
 	//if(DEBUG)
@@ -445,6 +445,27 @@ unsigned CDataFileReader::Crc() const
 {
 	if(!m_pDataFile) return 0xFFFFFFFF;
 	return m_pDataFile->m_Crc;
+}
+
+bool CDataFileReader::CheckSha256(IOHANDLE Handle, const void *pSha256)
+{
+	// read the hash of the file
+	SHA256_CTX Sha256Ctx;
+	sha256_init(&Sha256Ctx);
+	unsigned char aBuffer[64*1024];
+	
+	while(1)
+	{
+		unsigned Bytes = io_read(Handle, aBuffer, sizeof(aBuffer));
+		if(Bytes == 0)
+			break;
+		sha256_update(&Sha256Ctx, aBuffer, Bytes);
+	}
+
+	io_seek(Handle, 0, IOSEEK_START);
+	SHA256_DIGEST Sha256 = sha256_finish(&Sha256Ctx);
+
+	return !sha256_comp(*(const SHA256_DIGEST *)pSha256, Sha256);
 }
 
 

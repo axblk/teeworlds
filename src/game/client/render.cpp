@@ -327,7 +327,7 @@ void CRenderTools::DrawUIRect4(const CUIRect *r, vec4 ColorTopLeft, vec4 ColorTo
 	Graphics()->QuadsEnd();
 }
 
-void CRenderTools::RenderTee(CAnimState *pAnim, CTeeRenderInfo *pInfo, int Emote, vec2 Dir, vec2 Pos)
+void CRenderTools::RenderTee(CAnimState *pAnim, const CTeeRenderInfo *pInfo, int Emote, vec2 Dir, vec2 Pos)
 {
 	vec2 Direction = Dir;
 	vec2 Position = Pos;
@@ -539,7 +539,7 @@ void CRenderTools::RenderTee(CAnimState *pAnim, CTeeRenderInfo *pInfo, int Emote
 	}
 }
 
-void CRenderTools::RenderTeeHand(CTeeRenderInfo *pInfo, vec2 CenterPos, vec2 Dir, float AngleOffset,
+void CRenderTools::RenderTeeHand(const CTeeRenderInfo *pInfo, vec2 CenterPos, vec2 Dir, float AngleOffset,
 								 vec2 PostRotOffset)
 {
 	// in-game hand size is 15 when tee size is 64
@@ -671,11 +671,26 @@ void CRenderTools::DrawClientID(ITextRender* pTextRender, CTextCursor* pCursor, 
 	Graphics()->GetScreen(&ScreenX0, &ScreenY0, &ScreenX1, &ScreenY1);
 	float FakeToScreenY = (Graphics()->ScreenHeight()/(ScreenY1-ScreenY0));
 	float FontSize = (int)(pCursor->m_FontSize * FakeToScreenY)/FakeToScreenY;
+	const float Width = 1.4f * FontSize;
+	float OffsetY = 0.0f;
+
+	// jump to the next line when reaching the line width
+	if((pCursor->m_Flags & (TEXTFLAG_ALLOW_NEWLINE|TEXTFLAG_STOP_AT_END)) && pCursor->m_LineWidth > 0.0f && pCursor->m_LineWidth + pCursor->m_StartX < pCursor->m_X + Width)
+	{
+		pCursor->m_X = pCursor->m_StartX;
+		pCursor->m_Y += FontSize;
+		pCursor->m_LineCount += 1;
+		OffsetY += FontSize;
+	}
+
+	// abort when exceeding the maximum numbers of lines
+	if(pCursor->m_MaxLines > 0 && pCursor->m_LineCount > pCursor->m_MaxLines)
+		return;
 
 	CUIRect Rect;
 	Rect.x = pCursor->m_X;
-	Rect.y = LinebaseY - FontSize + 0.025f * FontSize;
-	Rect.w = 1.4f * FontSize;
+	Rect.y = LinebaseY - FontSize + 0.025f * FontSize + OffsetY;
+	Rect.w = Width;
 	Rect.h = FontSize;
 	DrawRoundRect(&Rect, BgColor, 0.25f * FontSize);
 

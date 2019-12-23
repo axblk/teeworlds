@@ -45,7 +45,7 @@ void CPickup::Tick()
 	}
 	// Check if a player intersected us
 	CCharacter *apChrs[MAX_CLIENTS];
-	int Num = GameServer()->m_World.FindEntities(m_Pos, 20.0f, (CEntity**)apChrs, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+	int Num = GameWorld()->FindEntities(m_Pos, 20.0f, (CEntity**)apChrs, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
 	for(int j = 0; j < Num; j++)
 	{
 		CCharacter *pChr = apChrs[j];
@@ -110,7 +110,7 @@ void CPickup::Tick()
 
 					// loop through all players, setting their emotes
 					/*
-					CCharacter *pC = static_cast<CCharacter *>(GameServer()->m_World.FindFirst(CGameWorld::ENTTYPE_CHARACTER));
+					CCharacter *pC = static_cast<CCharacter *>(GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER));
 					for(; pC; pC = (CCharacter *)pC->TypeNext())
 					{
 						if (pC != pChr)
