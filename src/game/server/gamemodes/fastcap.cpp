@@ -15,7 +15,7 @@ CGameControllerFC::CGameControllerFC(class CGameContext *pGameServer)
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		m_apPlFlags[i] = 0;
 	m_pGameType = "FastCap";
-	m_GameFlags = GAMEFLAG_TEAMS|GAMEFLAG_FLAGS;
+	m_GameFlags = GAMEFLAG_TEAMS|GAMEFLAG_FLAGS|GAMEFLAG_RACE;
 }
 
 bool CGameControllerFC::OnEntity(int Index, vec2 Pos)

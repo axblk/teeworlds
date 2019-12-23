@@ -52,7 +52,7 @@ void CPlayer::Tick()
 		return;
 
 	int CurTime = GameServer()->Score()->PlayerData(m_ClientID)->m_CurTime;
-	int TimeScore = CurTime ? -(CurTime / 1000) : -9999;
+	int TimeScore = CurTime ? (CurTime / 1000) : -1;
 	Server()->SetClientScore(m_ClientID, g_Config.m_SvShowTimes ? TimeScore : 0);
 
 	// do latency stuff
@@ -162,8 +162,11 @@ void CPlayer::Snap(int SnappingClient)
 
 	pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
 	
-	int CurTime = GameServer()->Score()->PlayerData(m_ClientID)->m_CurTime;
-	int TimeScore = CurTime ? -(CurTime / 1000) : -9999;
+	int TimeScore = GameServer()->Score()->PlayerData(m_ClientID)->m_CurTime;
+	if(SnappingClient != -1 && Server()->GetClientVersion(SnappingClient) < CGameContext::MIN_RACE_CLIENTVERSION)
+		TimeScore = TimeScore ? -(TimeScore / 1000) : -9999;
+	else if(TimeScore == 0)
+		TimeScore = -1;
 	pPlayerInfo->m_Score = (g_Config.m_SvShowTimes || SnappingClient == m_ClientID) ? TimeScore : 0;
 
 	if(m_ClientID == SnappingClient && (m_Team == TEAM_SPECTATORS || m_DeadSpecMode))

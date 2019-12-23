@@ -213,6 +213,8 @@ public:
 	virtual const char *NetVersion() const;
 	virtual const char *NetVersionHashUsed() const;
 	virtual const char *NetVersionHashReal() const;
+
+	virtual bool TimeScore() const { return true; }
 };
 
 inline int64 CmaskAll() { return -1; }
