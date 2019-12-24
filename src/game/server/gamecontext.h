@@ -99,6 +99,7 @@ public:
 	class CGameControllerRACE *RaceController() { return (class CGameControllerRACE*)m_pController; }
 
 	void LoadMapSettings();
+	void ExecChatCommand(int ClientID, const char *pCommand);
 
 	CGameContext();
 	~CGameContext();

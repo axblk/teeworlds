@@ -17,6 +17,12 @@ CGameControllerRACE::CGameControllerRACE(class CGameContext *pGameServer) : IGam
 		m_aRace[i].Reset();
 	
 	SetRunning();
+
+	CommandsManager()->AddCommand("info", "", "Information about the mod", 0);
+	CommandsManager()->AddCommand("rank", "p", "Show the rank of a specific player", 0);
+	CommandsManager()->AddCommand("top5", "i", "Show the top 5", 0);
+	if(g_Config.m_SvShowOthers)
+		CommandsManager()->AddCommand("show_others", "", "Show/Hide other players", 0);
 }
 
 CGameControllerRACE::~CGameControllerRACE()

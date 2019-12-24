@@ -837,9 +837,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			if(pMsg->m_pMessage[0] == '/')
 			{
-				m_ChatConsoleClientID = ClientID;
-				m_pChatConsole->ExecuteLine(pMsg->m_pMessage + 1);
-				m_ChatConsoleClientID = -1;
+				ExecChatCommand(ClientID, pMsg->m_pMessage + 1);
 			}
 			else
 			{

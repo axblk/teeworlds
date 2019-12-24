@@ -1310,5 +1310,9 @@ void IGameController::OnPlayerCommand(CPlayer *pPlayer, const char *pCommandName
 	CChatCommand *pCommand = CommandsManager()->GetCommand(pCommandName);
 
 	if(pCommand)
-		pCommand->m_pfnCallback(pPlayer, pCommandArgs);
+	{
+		// TODO: implement this properly
+		//pCommand->m_pfnCallback(pPlayer, pCommandArgs);
+		GameServer()->ExecChatCommand(pPlayer->GetCID(), pCommandArgs+1);
+	}
 }
