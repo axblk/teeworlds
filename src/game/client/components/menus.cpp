@@ -636,12 +636,6 @@ void CMenus::DoEditBoxOption(void *pID, char *pOption, int OptionLength, const C
 
 void CMenus::DoScrollbarOption(void *pID, int *pOption, const CUIRect *pRect, const char *pStr, int Min, int Max, bool Infinite)
 {
-	RenderTools()->DrawUIRect(pRect, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
-
-	CUIRect Label, ScrollBar;
-
-	char aBufMax[128];
-	str_format(aBufMax, sizeof(aBufMax), "%s: %i", pStr, Max);
 	int Value = *pOption;
 	if(Infinite)
 	{
@@ -651,21 +645,27 @@ void CMenus::DoScrollbarOption(void *pID, int *pOption, const CUIRect *pRect, co
 			Value = Max;
 	}
 
+	char aBufMax[128];
+	str_format(aBufMax, sizeof(aBufMax), "%s: %i", pStr, Max);
 	char aBuf[128];
 	if(!Infinite || Value != Max)
-		str_format(aBuf, sizeof(aBuf), "%s: %i", pStr, *pOption);
+		str_format(aBuf, sizeof(aBuf), "%s: %i", pStr, Value);
 	else
 		str_format(aBuf, sizeof(aBuf), "%s: \xe2\x88\x9e", pStr);
+
 	float FontSize = pRect->h*ms_FontmodHeight*0.8f;
 	float VSplitVal = max(TextRender()->TextWidth(0, FontSize, aBuf, -1, -1.0f), TextRender()->TextWidth(0, FontSize, aBufMax, -1, -1.0f));
 
+	RenderTools()->DrawUIRect(pRect, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
+
+	CUIRect Label, ScrollBar;
 	pRect->VSplitLeft(pRect->h+10.0f+VSplitVal, &Label, &ScrollBar);
 	Label.VSplitLeft(Label.h+5.0f, 0, &Label);
 	Label.y += 2.0f;
 	UI()->DoLabel(&Label, aBuf, FontSize, CUI::ALIGN_LEFT);
 
 	ScrollBar.VMargin(4.0f, &ScrollBar);
-	Value = round_to_int(DoScrollbarH(pOption, &ScrollBar, (float)(Value - Min) / (float)(Max - Min))*(float)(Max - Min) + (float)Min + 0.1f);
+	Value = round_to_int(DoScrollbarH(pID, &ScrollBar, (float)(Value - Min) / (float)(Max - Min))*(float)(Max - Min) + (float)Min + 0.1f);
 	if(Infinite && Value == Max)
 		Value = 0;
 
@@ -793,7 +793,7 @@ float CMenus::DoScrollbarV(const void *pID, const CUIRect *pRect, float Current)
 {
 	CUIRect Handle;
 	static float OffsetY;
-	pRect->HSplitTop(33, &Handle, 0);
+	pRect->HSplitTop(min(pRect->h/8.0f, 33.0f), &Handle, 0);
 
 	Handle.y += (pRect->h-Handle.h)*Current;
 
@@ -850,7 +850,7 @@ float CMenus::DoScrollbarH(const void *pID, const CUIRect *pRect, float Current)
 {
 	CUIRect Handle;
 	static float OffsetX;
-	pRect->VSplitLeft(33, &Handle, 0);
+	pRect->VSplitLeft(min(pRect->w/8.0f, 33.0f), &Handle, 0);
 
 	Handle.x += (pRect->w-Handle.w)*Current;
 
@@ -1231,8 +1231,9 @@ void CMenus::RenderMenubar(CUIRect Rect)
 		Right.VSplitRight(Spacing, &Right, 0); // little space
 		Right.VSplitRight(ButtonWidth/2.0f, &Right, &Button);
 		static CButtonContainer s_ServerBrowserButton;
-		if(DoButton_SpriteID(&s_ServerBrowserButton, IMAGE_BROWSER, UI()->MouseInside(&Button) ? SPRITE_BROWSER_B : SPRITE_BROWSER_A, m_GamePage == PAGE_INTERNET || m_GamePage == PAGE_LAN, &Button) || CheckHotKey(KEY_B))
-			NewPage = PAGE_INTERNET;
+		if(DoButton_SpriteID(&s_ServerBrowserButton, IMAGE_BROWSER, UI()->MouseInside(&Button) || m_GamePage == PAGE_INTERNET || m_GamePage == PAGE_LAN ? SPRITE_BROWSER_B : SPRITE_BROWSER_A,
+			m_GamePage == PAGE_INTERNET || m_GamePage == PAGE_LAN, &Button) || CheckHotKey(KEY_B))
+			NewPage = ServerBrowser()->GetType() == IServerBrowser::TYPE_INTERNET ? PAGE_INTERNET : PAGE_LAN;
 
 		Rect.HSplitTop(Spacing, 0, &Rect);
 		Rect.HSplitTop(25.0f, &Box, &Rect);
@@ -1389,7 +1390,11 @@ void CMenus::RenderMenubar(CUIRect Rect)
 		if(Client()->State() == IClient::STATE_OFFLINE)
 			SetMenuPage(NewPage);
 		else
+		{
 			m_GamePage = NewPage;
+			if(NewPage == PAGE_INTERNET || NewPage == PAGE_LAN)
+				SetMenuPage(NewPage);
+		}
 	}
 }
 
@@ -1910,7 +1915,9 @@ int CMenus::Render()
 		else if(m_Popup == POPUP_REMOVE_FRIEND)
 		{
 			pTitle = Localize("Remove friend");
-			pExtraText = Localize("Are you sure that you want to remove the player from your friends list?");
+			pExtraText = m_pDeleteFriend->m_FriendState == CContactInfo::CONTACT_PLAYER
+						? Localize("Are you sure that you want to remove the player from your friends list?")
+						: Localize("Are you sure that you want to remove the clan from your friends list?");
 			ExtraAlign = CUI::ALIGN_LEFT;
 		}
 		else if(m_Popup == POPUP_REMOVE_FILTER)
@@ -2275,10 +2282,14 @@ int CMenus::Render()
 		}
 		else if(m_Popup == POPUP_REMOVE_FRIEND)
 		{
-			CUIRect Yes, No;
-			Box.HSplitTop(27.0f, 0, &Box);
-			Box.VMargin(5.0f, &Box);
+			CUIRect NameLabel, Yes, No;
+
+			Box.Margin(5.0f, &Box);
+			Box.HSplitMid(&Box, &NameLabel);
+
 			UI()->DoLabel(&Box, pExtraText, ButtonHeight*ms_FontmodHeight*0.8f, ExtraAlign, Box.w);
+			UI()->DoLabel(&NameLabel, m_pDeleteFriend->m_FriendState == CContactInfo::CONTACT_PLAYER ? m_pDeleteFriend->m_aName : m_pDeleteFriend->m_aClan,
+				ButtonHeight*ms_FontmodHeight*1.2f, CUI::ALIGN_CENTER, NameLabel.w);
 
 			// buttons
 			BottomBar.VSplitMid(&No, &Yes);
@@ -2287,7 +2298,10 @@ int CMenus::Render()
 
 			static CButtonContainer s_ButtonNo;
 			if(DoButton_Menu(&s_ButtonNo, Localize("No"), 0, &No) || m_EscapePressed)
+			{
 				m_Popup = POPUP_NONE;
+				m_pDeleteFriend = 0;
+			}
 
 			static CButtonContainer s_ButtonYes;
 			if(DoButton_Menu(&s_ButtonYes, Localize("Yes"), 0, &Yes) || m_EnterPressed)
@@ -2796,7 +2810,8 @@ void CMenus::ToggleMusic()
 	}
 }
 
-void CMenus::SetMenuPage(int NewPage) {
+void CMenus::SetMenuPage(int NewPage)
+{
 	if(NewPage == m_MenuPage)
 		return;
 

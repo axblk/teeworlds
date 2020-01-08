@@ -36,6 +36,7 @@ CServerFilterInfo CMenus::CBrowserFilter::ms_FilterStandard = {IServerBrowser::F
 CServerFilterInfo CMenus::CBrowserFilter::ms_FilterFavorites = {IServerBrowser::FILTER_COMPAT_VERSION|IServerBrowser::FILTER_FAVORITE, 999, -1, 0, {{0}}, {0}};
 CServerFilterInfo CMenus::CBrowserFilter::ms_FilterAll = {IServerBrowser::FILTER_COMPAT_VERSION, 999, -1, 0, {{0}}, {0}};
 
+vec3 TextHighlightColor = vec3(0.4f, 0.4f, 1.0f);
 
 // filters
 CMenus::CBrowserFilter::CBrowserFilter(int Custom, const char* pName, IServerBrowser *pServerBrowser)
@@ -461,12 +462,12 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 
 			if(g_Config.m_BrFilterString[0] && (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_SERVERNAME))
 			{
-				// highlight the parts that matches
+				// highlight the part that matches
 				const char *pStr = str_find_nocase(pEntry->m_aName, g_Config.m_BrFilterString);
 				if(pStr)
 				{
 					TextRender()->TextEx(&Cursor, pEntry->m_aName, (int)(pStr-pEntry->m_aName));
-					TextRender()->TextColor(0.4f, 0.4f, 1.0f, TextAlpha);
+					TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextAlpha);
 					TextRender()->TextEx(&Cursor, pStr, str_length(g_Config.m_BrFilterString));
 					TextRender()->TextColor(TextBaseColor.r, TextBaseColor.g, TextBaseColor.b, TextAlpha);
 					TextRender()->TextEx(&Cursor, pStr+str_length(g_Config.m_BrFilterString), -1);
@@ -493,12 +494,12 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 
 			if(g_Config.m_BrFilterString[0] && (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_MAPNAME))
 			{
-				// highlight the parts that matches
+				// highlight the part that matches
 				const char *pStr = str_find_nocase(pEntry->m_aMap, g_Config.m_BrFilterString);
 				if(pStr)
 				{
 					TextRender()->TextEx(&Cursor, pEntry->m_aMap, (int)(pStr-pEntry->m_aMap));
-					TextRender()->TextColor(0.4f, 0.4f, 1.0f, TextAlpha);
+					TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextAlpha);
 					TextRender()->TextEx(&Cursor, pStr, str_length(g_Config.m_BrFilterString));
 					TextRender()->TextColor(TextBaseColor.r, TextBaseColor.g, TextBaseColor.b, TextAlpha);
 					TextRender()->TextEx(&Cursor, pStr+str_length(g_Config.m_BrFilterString), -1);
@@ -543,7 +544,7 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 
 			str_format(aTemp, sizeof(aTemp), "%d/%d", Num, Max);
 			if(g_Config.m_BrFilterString[0] && (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_PLAYER))
-				TextRender()->TextColor(0.4f, 0.4f, 1.0f, TextAlpha);
+				TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextAlpha);
 			Button.y += 2.0f;
 
 			if(Num < 100)
@@ -602,13 +603,27 @@ int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEn
 
 			// gametype text
 			CTextCursor Cursor;
-			{
-				TextRender()->SetCursor(&Cursor, Button.x, Button.y, 12.0f, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
-				Cursor.m_LineWidth = Button.w;
-			}
-
+			TextRender()->SetCursor(&Cursor, Button.x, Button.y, 12.0f, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+			Cursor.m_LineWidth = Button.w;
 			TextRender()->TextColor(TextBaseColor.r, TextBaseColor.g, TextBaseColor.b, TextAlpha);
-			TextRender()->TextEx(&Cursor, pEntry->m_aGameType, -1);
+
+			if(g_Config.m_BrFilterString[0] && (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_GAMETYPE))
+			{
+				// highlight the part that matches
+				const char *pStr = str_find_nocase(pEntry->m_aGameType, g_Config.m_BrFilterString);
+				if(pStr)
+				{
+					TextRender()->TextEx(&Cursor, pEntry->m_aGameType, (int)(pStr-pEntry->m_aGameType));
+					TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextAlpha);
+					TextRender()->TextEx(&Cursor, pStr, str_length(g_Config.m_BrFilterString));
+					TextRender()->TextColor(TextBaseColor.r, TextBaseColor.g, TextBaseColor.b, TextAlpha);
+					TextRender()->TextEx(&Cursor, pStr+str_length(g_Config.m_BrFilterString), -1);
+				}
+				else
+					TextRender()->TextEx(&Cursor, pEntry->m_aGameType, -1);
+			}
+			else
+				TextRender()->TextEx(&Cursor, pEntry->m_aGameType, -1);
 		}
 	}
 
@@ -795,9 +810,10 @@ void CMenus::RenderServerbrowserOverlay()
 
 		CUIRect Screen = *UI()->Screen();
 		float ButtonHeight = 20.0f;
+		vec4 TextColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
 		TextRender()->TextOutlineColor(1.0f, 1.0f, 1.0f, 0.25f);
-		TextRender()->TextColor(0.0f, 0.0f, 0.0f, 1.0f);
+		TextRender()->TextColor(TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 
 		if(pInfo && pInfo->m_NumClients)
 		{
@@ -859,14 +875,14 @@ void CMenus::RenderServerbrowserOverlay()
 				const char *pName = pInfo->m_aClients[i].m_aName;
 				if(g_Config.m_BrFilterString[0])
 				{
-					// highlight the parts that matches
+					// highlight the part that matches
 					const char *s = str_find_nocase(pName, g_Config.m_BrFilterString);
 					if(s)
 					{
 						TextRender()->TextEx(&Cursor, pName, (int)(s-pName));
-						TextRender()->TextColor(0.4f, 0.4f, 1.0f, 1.0f);
+						TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextColor.a);
 						TextRender()->TextEx(&Cursor, s, str_length(g_Config.m_BrFilterString));
-						TextRender()->TextColor(0.0f, 0.0f, 0.0f, 1.0f);
+						TextRender()->TextColor(TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 						TextRender()->TextEx(&Cursor, s+str_length(g_Config.m_BrFilterString), -1);
 					}
 					else
@@ -881,14 +897,14 @@ void CMenus::RenderServerbrowserOverlay()
 				const char *pClan = pInfo->m_aClients[i].m_aClan;
 				if(g_Config.m_BrFilterString[0])
 				{
-					// highlight the parts that matches
+					// highlight the part that matches
 					const char *s = str_find_nocase(pClan, g_Config.m_BrFilterString);
 					if(s)
 					{
 						TextRender()->TextEx(&Cursor, pClan, (int)(s-pClan));
-						TextRender()->TextColor(0.4f, 0.4f, 1.0f, 1.0f);
+						TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextColor.a);
 						TextRender()->TextEx(&Cursor, s, str_length(g_Config.m_BrFilterString));
-						TextRender()->TextColor(0.0f, 0.0f, 0.0f, 1.0f);
+						TextRender()->TextColor(TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 						TextRender()->TextEx(&Cursor, s+str_length(g_Config.m_BrFilterString), -1);
 					}
 					else
@@ -1760,21 +1776,20 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 		ServerFilter.HSplitTop(LineSize - 4.f, &Button, &ServerFilter);
 
 	{
+		int Value = FilterInfo.m_Ping, Min = 20, Max = 999;
+
+		char aBuf[64];
+		str_format(aBuf, sizeof(aBuf), "%s %d", Localize("Maximum ping:"), Value);
+		UI()->DoLabel(&Button, aBuf, FontSize, CUI::ALIGN_LEFT);
+
 		ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-		CUIRect EditBox;
-		Button.VSplitRight(60.0f, &Button, &EditBox);
 
-		UI()->DoLabel(&Button, Localize("Maximum ping:"), FontSize, CUI::ALIGN_LEFT);
-
-		char aBuf[5];
-		str_format(aBuf, sizeof(aBuf), "%d", FilterInfo.m_Ping);
-		static float Offset = 0.0f;
+		RenderTools()->DrawUIRect(&Button, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
+		Button.VMargin(4.0f, &Button);
 		static int s_BrFilterPing = 0;
-		DoEditBox(&s_BrFilterPing, &EditBox, aBuf, sizeof(aBuf), FontSize, &Offset);
-		int NewPing = clamp(str_toint(aBuf), 0, 999);
-		if(NewPing != FilterInfo.m_Ping)
-		{
-			FilterInfo.m_Ping = NewPing;
+		Value = round_to_int(DoScrollbarH(&s_BrFilterPing, &Button, (float)(Value - Min) / (float)(Max - Min))*(float)(Max - Min) + (float)Min + 0.1f);
+		if(Value != FilterInfo.m_Ping) {
+			FilterInfo.m_Ping = Value;
 			pFilter->SetFilter(&FilterInfo);
 		}
 	}
@@ -1821,23 +1836,23 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 	Button.y -= 2.0f;
 	Button.VSplitLeft(Button.h, &Icon, &Button);
 	static CButtonContainer s_LevelButton1;
-	if(DoButton_SpriteID(&s_LevelButton1, IMAGE_LEVELICONS, (FilterInfo.m_ServerLevel & 1) ? SPRITE_LEVEL_A_B : SPRITE_LEVEL_A_ON, false, &Icon, CUI::CORNER_L, 5.0f, true))
+	if(DoButton_SpriteID(&s_LevelButton1, IMAGE_LEVELICONS, FilterInfo.IsLevelFiltered(CServerInfo::LEVEL_CASUAL) ? SPRITE_LEVEL_A_B : SPRITE_LEVEL_A_ON, false, &Icon, CUI::CORNER_L, 5.0f, true))
 	{
-		FilterInfo.m_ServerLevel ^= 1;
+		FilterInfo.ToggleLevel(CServerInfo::LEVEL_CASUAL);
 		pFilter->SetFilter(&FilterInfo);
 	}
 	Button.VSplitLeft(Button.h, &Icon, &Button);
 	static CButtonContainer s_LevelButton2;
-	if(DoButton_SpriteID(&s_LevelButton2, IMAGE_LEVELICONS, (FilterInfo.m_ServerLevel & 2) ? SPRITE_LEVEL_B_B : SPRITE_LEVEL_B_ON, false, &Icon, 0, 5.0f, true))
+	if(DoButton_SpriteID(&s_LevelButton2, IMAGE_LEVELICONS, FilterInfo.IsLevelFiltered(CServerInfo::LEVEL_NORMAL) ? SPRITE_LEVEL_B_B : SPRITE_LEVEL_B_ON, false, &Icon, 0, 5.0f, true))
 	{
-		FilterInfo.m_ServerLevel ^= 2;
+		FilterInfo.ToggleLevel(CServerInfo::LEVEL_NORMAL);
 		pFilter->SetFilter(&FilterInfo);
 	}
 	Button.VSplitLeft(Button.h, &Icon, &Button);
 	static CButtonContainer s_LevelButton3;
-	if(DoButton_SpriteID(&s_LevelButton3, IMAGE_LEVELICONS, (FilterInfo.m_ServerLevel & 4) ? SPRITE_LEVEL_C_B : SPRITE_LEVEL_C_ON, false, &Icon, CUI::CORNER_R, 5.0f, true))
+	if(DoButton_SpriteID(&s_LevelButton3, IMAGE_LEVELICONS, FilterInfo.IsLevelFiltered(CServerInfo::LEVEL_COMPETITIVE) ? SPRITE_LEVEL_C_B : SPRITE_LEVEL_C_ON, false, &Icon, CUI::CORNER_R, 5.0f, true))
 	{
-		FilterInfo.m_ServerLevel ^= 4;
+		FilterInfo.ToggleLevel(CServerInfo::LEVEL_COMPETITIVE);
 		pFilter->SetFilter(&FilterInfo);
 	}
 
@@ -2047,12 +2062,12 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 			const char *pName = pInfo->m_aClients[i].m_aName;
 			if(g_Config.m_BrFilterString[0])
 			{
-				// highlight the parts that matches
+				// highlight the part that matches
 				const char *s = str_find_nocase(pName, g_Config.m_BrFilterString);
 				if(s)
 				{
 					TextRender()->TextEx(&Cursor, pName, (int)(s - pName));
-					TextRender()->TextColor(0.4f, 0.4f, 1.0f, 1.0f);
+					TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextColor.a);
 					TextRender()->TextEx(&Cursor, s, str_length(g_Config.m_BrFilterString));
 					TextRender()->TextColor(TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 					TextRender()->TextEx(&Cursor, s + str_length(g_Config.m_BrFilterString), -1);
@@ -2069,12 +2084,12 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 			const char *pClan = pInfo->m_aClients[i].m_aClan;
 			if(g_Config.m_BrFilterString[0])
 			{
-				// highlight the parts that matches
+				// highlight the part that matches
 				const char *s = str_find_nocase(pClan, g_Config.m_BrFilterString);
 				if(s)
 				{
 					TextRender()->TextEx(&Cursor, pClan, (int)(s - pClan));
-					TextRender()->TextColor(0.4f, 0.4f, 1.0f, 1.0f);
+					TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextColor.a);
 					TextRender()->TextEx(&Cursor, s, str_length(g_Config.m_BrFilterString));
 					TextRender()->TextColor(TextColor.r, TextColor.g, TextColor.b, TextColor.a);
 					TextRender()->TextEx(&Cursor, s + str_length(g_Config.m_BrFilterString), -1);

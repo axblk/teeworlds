@@ -50,6 +50,9 @@ IGameController::IGameController(CGameContext *pGameServer)
 	m_aNumSpawnPoints[0] = 0;
 	m_aNumSpawnPoints[1] = 0;
 	m_aNumSpawnPoints[2] = 0;
+
+	// commands
+	CommandsManager()->OnInit();
 }
 
 //activity
@@ -1316,3 +1319,13 @@ void IGameController::OnPlayerCommand(CPlayer *pPlayer, const char *pCommandName
 		GameServer()->ExecChatCommand(pPlayer->GetCID(), pCommandArgs+1);
 	}
 }
+
+void IGameController::CChatCommands::OnInit()
+{
+	//AddCommand("example", "si", "I am a description", Com_Example);
+}
+
+/*void IGameController::Com_Example(class CPlayer *pPlayer, const char *pArgs)
+{
+	// Do something with the player here
+}*/
