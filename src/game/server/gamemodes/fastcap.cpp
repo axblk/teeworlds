@@ -73,11 +73,6 @@ void CGameControllerFC::OnCharacterSpawn(class CCharacter *pChr)
 		pChr->GiveWeapon(WEAPON_GRENADE, 10);
 }
 
-bool CGameControllerFC::CanBeMovedOnBalance(int Cid)
-{
-	return false;
-}
-
 void CGameControllerFC::OnRaceStart(int ID)
 {
 	CGameControllerRACE::OnRaceStart(ID);

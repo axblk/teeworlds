@@ -76,6 +76,8 @@ class IGameController
 			m_Got = false;
 			m_FriendlyTeam = -1;
 			m_Pos = vec2(100,100);
+			m_RandomSpawn = false;
+			m_Score = 0.0f;
 		}
 
 		vec2 m_Pos;

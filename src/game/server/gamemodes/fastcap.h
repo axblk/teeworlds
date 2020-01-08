@@ -10,6 +10,8 @@ class CGameControllerFC : public CGameControllerRACE
 	bool IsOwnFlagStand(vec2 Pos, int Team) const;
 	bool IsEnemyFlagStand(vec2 Pos, int Team) const;
 
+	virtual bool CanBeMovedOnBalance(int ClientID) const { return false; }
+
 protected:
 	virtual bool IsStart(vec2 Pos, int Team) const { return IsEnemyFlagStand(Pos, Team); }
 	virtual bool IsEnd(vec2 Pos, int Team) const { return IsOwnFlagStand(Pos, Team); }
@@ -19,8 +21,6 @@ protected:
 
 public:
 	CGameControllerFC(class CGameContext *pGameServer);
-	
-	virtual bool CanBeMovedOnBalance(int Cid);
 	
 	virtual bool OnEntity(int Index, vec2 Pos);
 	virtual void OnCharacterSpawn(class CCharacter *pChr);
