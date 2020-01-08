@@ -2,7 +2,7 @@
     <img src="https://repology.org/badge/vertical-allrepos/teeworlds.svg" alt="Packaging status" align="right">
 </a>
 
-Teeworlds ![GitHub Actions](https://github.com/teeworlds/teeworlds/workflows/Build/badge.svg)
+Teeworlds ![GitHub Actions](https://github.com/axblk/teeworlds/workflows/Build/badge.svg?branch=race)
 =========
 
 A retro multiplayer shooter

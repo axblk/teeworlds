@@ -1,24 +1,20 @@
 name: Build
 
-on: [push]
+on:
+  push:
+    branches:    
+      - race**
 
 jobs:
   build-cmake:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest, windows-latest, ubuntu-16.04]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
         include:
         - os: ubuntu-latest
           cmake-args: -G "Unix Makefiles"
           build-args: --parallel
-          package-file: teeworlds-*-linux_x86_64.tar.xz
-          env:
-            CFLAGS: -Wdeclaration-after-statement -Werror
-            CXXFLAGS: -Werror
-        - os: ubuntu-16.04
-          cmake-path: /usr/bin/
-          cmake-args: -G "Unix Makefiles"
           package-file: teeworlds-*-linux_x86_64.tar.xz
           env:
             CFLAGS: -Wdeclaration-after-statement -Werror
@@ -47,26 +43,14 @@ jobs:
         git submodule sync --recursive
         git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
 
-    - name: Prepare Linux
-      if: contains(matrix.os, 'ubuntu')
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install pkg-config cmake libfreetype6-dev libsdl2-dev -y
-
-    - name: Prepare MacOS
-      if: contains(matrix.os, 'macOS')
-      run: |
-        brew update
-        brew install pkg-config freetype sdl2
-
     - name: Build in debug mode
       env: ${{ matrix.env }}
       run: |
         mkdir debug
         cd debug
         ${{ matrix.cmake-path }}cmake --version
-        ${{ matrix.cmake-path }}cmake ${{ matrix.cmake-args }} -DCMAKE_BUILD_TYPE=Debug -Werror=dev -DDOWNLOAD_GTEST=ON -DDEV=ON -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG=. ..
-        ${{ matrix.cmake-path }}cmake --build . --config Debug ${{ matrix.build-args }} --target everything
+        ${{ matrix.cmake-path }}cmake ${{ matrix.cmake-args }} -DCMAKE_BUILD_TYPE=Debug -Werror=dev -DCLIENT=OFF -DDOWNLOAD_GTEST=ON -DDEV=ON -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG=. ..
+        ${{ matrix.cmake-path }}cmake --build . --config Debug ${{ matrix.build-args }} --target teeworlds_srv
     - name: Test debug
       run: |
         cd debug
@@ -78,26 +62,13 @@ jobs:
       run: |
         mkdir release
         cd release
-        ${{ matrix.cmake-path }}cmake ${{ matrix.cmake-args }} -DCMAKE_BUILD_TYPE=Release -Werror=dev -DDOWNLOAD_GTEST=ON -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=. ..
-        ${{ matrix.cmake-path }}cmake --build . --config Release ${{ matrix.build-args }} --target everything
+        ${{ matrix.cmake-path }}cmake ${{ matrix.cmake-args }} -DCMAKE_BUILD_TYPE=Release -Werror=dev -DCLIENT=OFF  -DDOWNLOAD_GTEST=ON -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=. ..
+        ${{ matrix.cmake-path }}cmake --build . --config Release ${{ matrix.build-args }} --target teeworlds_srv
     - name: Test release
       run: |
         cd release
         ${{ matrix.cmake-path }}cmake --build . --config Release ${{ matrix.build-args }} --target run_tests
         ./teeworlds_srv shutdown
-
-    - name: Package
-      run: |
-        cd release
-        ${{ matrix.cmake-path }}cmake --build . --config Release ${{ matrix.build-args }} --target package_default
-        mkdir artifacts
-        mv ${{ matrix.package-file }} artifacts
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v1
-      with:
-        name: teeworlds-${{ matrix.os }}
-        path: release/artifacts
 
   build-bam:
     runs-on: ${{ matrix.os }}
@@ -124,16 +95,12 @@ jobs:
     - name: Prepare Linux
       if: contains(matrix.os, 'ubuntu')
       run: |
-        sudo apt-get update -y
-        sudo apt-get install libfreetype6-dev libsdl2-dev -y
         cd bam
         ./make_unix.sh
 
     - name: Prepare MacOS
       if: contains(matrix.os, 'macOS')
       run: |
-        brew update
-        brew install freetype sdl2
         cd bam
         ./make_unix.sh
 
@@ -144,11 +111,11 @@ jobs:
         ./make_win64_msvc.bat
 
     - name: Build in debug mode
-      run: ./bam/bam conf=debug all
+      run: ./bam/bam conf=debug server content
     - name: Test debug
       run: ./build/x86_64/debug/teeworlds_srv shutdown
 
     - name: Build in release mode
-      run: ./bam/bam conf=release all
+      run: ./bam/bam conf=release server content
     - name: Test release
       run: ./build/x86_64/release/teeworlds_srv shutdown
