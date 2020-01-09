@@ -5,6 +5,7 @@
 #include <engine/config.h>
 #include <engine/shared/config.h>
 #include <engine/shared/memheap.h>
+#include <engine/engine.h>
 #include <engine/storage.h>
 #include <engine/map.h>
 
@@ -29,7 +30,6 @@
 #include "player.h"
 
 #include "score.h"
-#include "score/file_score.h"
 
 enum
 {
@@ -89,7 +89,7 @@ void CGameContext::Clear()
 	CVoteOptionServer *pVoteOptionLast = m_pVoteOptionLast;
 	int NumVoteOptions = m_NumVoteOptions;
 	CTuningParams Tuning = m_Tuning;
-	IScore *pScore = m_pScore;
+	CScore *pScore = m_pScore;
 	IConsole *pChatConsole = m_pChatConsole;
 
 	m_Resetting = true;
@@ -1522,6 +1522,7 @@ void CGameContext::OnConsoleInit()
 	m_pServer = Kernel()->RequestInterface<IServer>();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
+	m_pEngine = Kernel()->RequestInterface<IEngine>();
 
 	Console()->Register("tune", "si", CFGFLAG_SERVER, ConTuneParam, this, "Tune variable to value");
 	Console()->Register("tune_reset", "", CFGFLAG_SERVER, ConTuneReset, this, "Reset tuning");
@@ -1556,6 +1557,7 @@ void CGameContext::OnInit()
 	m_pServer = Kernel()->RequestInterface<IServer>();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
+	m_pEngine = Kernel()->RequestInterface<IEngine>();
 	m_World.SetGameServer(this);
 	m_Events.SetGameServer(this);
 
@@ -1601,9 +1603,7 @@ void CGameContext::OnInit()
 
 	// create score object
 	if(!m_pScore)
-	{
-		m_pScore = new CFileScore(this);
-	}
+		m_pScore = new CScore(this);
 
 	m_pScore->OnMapLoad();
 

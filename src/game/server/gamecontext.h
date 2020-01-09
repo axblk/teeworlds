@@ -39,13 +39,14 @@ class CGameContext : public IGameServer
 	class IConsole *m_pConsole;
 	class IConsole *m_pChatConsole;
 	class IStorage *m_pStorage;
+	class IEngine *m_pEngine;
 	CLayers m_Layers;
 	CCollision m_Collision;
 	CNetObjHandler m_NetObjHandler;
 	CTuningParams m_Tuning;
 
 	// race
-	class IScore *m_pScore;
+	class CScore *m_pScore;
 
 	static void ConTuneParam(IConsole::IResult *pResult, void *pUserData);
 	static void ConTuneReset(IConsole::IResult *pResult, void *pUserData);
@@ -91,11 +92,12 @@ public:
 	IServer *Server() const { return m_pServer; }
 	class IConsole *Console() { return m_pConsole; }
 	class IStorage *Storage() { return m_pStorage; }
+	class IEngine *Engine() { return m_pEngine; }
 	CCollision *Collision() { return &m_Collision; }
 	CTuningParams *Tuning() { return &m_Tuning; }
 
 	// race
-	class IScore *Score() { return m_pScore; }
+	class CScore *Score() { return m_pScore; }
 	class CGameControllerRACE *RaceController() { return (class CGameControllerRACE*)m_pController; }
 
 	void LoadMapSettings();

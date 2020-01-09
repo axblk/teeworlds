@@ -99,13 +99,16 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 		zlib = Compile(settings, Collect("src/engine/external/zlib/*.c"))
 	end
 
+	settings.cc.includes:Add("src/engine/external/sqlite")
+
 	local md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
 	local wavpack = Compile(settings, Collect("src/engine/external/wavpack/*.c"))
 	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
+	local sqlite = Compile(settings, Collect("src/engine/external/sqlite/*.c"))
 
 	-- globally available libs
-	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json}
+	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json, sqlite=sqlite}
 end
 
 function GenerateMacOSXSettings(settings, conf, arch, compiler)
@@ -190,6 +193,8 @@ function GenerateLinuxSettings(settings, conf, arch, compiler)
 		os.exit(1)
 	end
 	settings.link.libs:Add("pthread")
+
+	settings.link.flags:Add("-ldl")
 
 	GenerateCommonSettings(settings, conf, arch, compiler)
 
@@ -365,7 +370,7 @@ function BuildServer(settings, family, platform)
 	
 	local game_server = Compile(settings, CollectRecursive("src/game/server/*.cpp"), SharedServerFiles())
 	
-	return Link(settings, "teeworlds_srv", libs["zlib"], libs["md5"], server, game_server)
+	return Link(settings, "teeworlds_srv", libs["zlib"], libs["md5"], libs["sqlite"], server, game_server)
 end
 
 function BuildTools(settings)
@@ -437,6 +442,8 @@ function GenerateSettings(conf, arch, builddir, compiler)
 		settings.optimize = 1
 		settings.cc.defines:Add("CONF_RELEASE")
 	end
+
+	settings.cc.defines:Add("CONF_SQLITE")
 	
 	-- Generate object files in {builddir}/objs/
 	settings.cc.Output = function (settings_, input)

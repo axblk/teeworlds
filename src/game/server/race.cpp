@@ -100,7 +100,7 @@ void CGameContext::ChatConRank(IConsole::IResult *pResult, void *pUser)
 		pSelf->Score()->ShowRank(pSelf->m_ChatConsoleClientID, aStr);
 	}
 	else
-		pSelf->Score()->ShowRank(pSelf->m_ChatConsoleClientID);
+		pSelf->Score()->ShowRank(pSelf->m_ChatConsoleClientID, pSelf->m_ChatConsoleClientID);
 }
 
 void CGameContext::ChatConShowOthers(IConsole::IResult *pResult, void *pUser)

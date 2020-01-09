@@ -129,6 +129,9 @@ public:
 		int m_Authed;
 		int m_AuthTries;
 
+		int m_PlayerID;
+		int m_ConnectionNum;
+
 		int m_MapChunk;
 		bool m_NoRconNote;
 		bool m_Quitting;
@@ -192,6 +195,8 @@ public:
 	int m_RconPasswordSet;
 	int m_GeneratedRconPassword;
 
+	int m_ConnectionCounter;
+
 	CDemoRecorder m_DemoRecorder;
 	CRegister m_Register;
 	CMapChecker m_MapChecker;
@@ -225,6 +230,12 @@ public:
 	int ClientCountry(int ClientID) const;
 	bool ClientIngame(int ClientID) const;
 	int MaxClients() const;
+
+	void SetPlayerID(int ClientID, int PlayerID) { m_aClients[ClientID].m_PlayerID = PlayerID; }
+	int GetPlayerID(int ClientID) const { return m_aClients[ClientID].m_PlayerID; }
+
+	int GetConnID(int ClientID) const;
+	int GetClientIDFromConnID(int ConnID) const;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);
 

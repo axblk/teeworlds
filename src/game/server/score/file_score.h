@@ -1,76 +1,63 @@
 /* copyright (c) 2008 rajh and gregwar. Score stuff */
 
-#ifndef GAME_SERVER_FILESCORE_H
-#define GAME_SERVER_FILESCORE_H
+#ifndef GAME_SERVER_SCORE_FILESCORE_H
+#define GAME_SERVER_SCORE_FILESCORE_H
 
 #include <base/tl/sorted_array.h>
+
 #include "../score.h"
 
-class CFileScore : public IScore
+class CFileScore : public IScoreBackend
 {
-	CGameContext *m_pGameServer;
-	IServer *m_pServer;
-	
+	class IStorage *m_pStorage;
+
 	class CPlayerScore
 	{
 	public:
 		char m_aName[MAX_NAME_LENGTH];
 		int m_Time;
-		//char m_aIP[16];
 		int m_aCpTime[NUM_CHECKPOINTS];
-		
+
 		CPlayerScore() {};
 		CPlayerScore(const char *pName, int Time, int *apCpTime);
-		
+
 		bool operator<(const CPlayerScore& other) const { return (this->m_Time < other.m_Time); }
 	};
 
-	enum MyEnum
-	{
-		JOBTYPE_ADD_NEW=0,
-		JOBTYPE_UPDATE_SCORE,
-		//JOBTYPE_UPDATE_IP
-	};
-
-	struct CScoreJob
+	struct CScoreUpdate
 	{
 		int m_Type;
-		CPlayerScore *m_pEntry;
+		int m_Index;
 		CPlayerScore m_NewData;
 	};
 	
 	sorted_array<CPlayerScore> m_lTop;
-	array<CScoreJob> m_lJobQueue;
+	array<CScoreUpdate> m_lUpdateQueue;
 
+	int m_MapID;
 	char m_aMap[64];
-	
-	CGameContext *GameServer() { return m_pGameServer; }
-	IServer *Server() { return m_pServer; }
-	
-	CPlayerScore *SearchScoreByID(int ID, int *pPosition=0);
-	CPlayerScore *SearchScoreByName(const char *pName, int *pPosition, bool ExactMatch);
 
-	void ProcessJobs(bool Block);
+	int SearchScoreByName(const char *pName) const;
+
+	void ProcessUpdates(bool Block);
 	static void SaveScoreThread(void *pUser);
 
 	void WriteEntry(IOHANDLE File, const CPlayerScore *pEntry) const;
 	IOHANDLE OpenFile(int Flags) const;
-	
-	bool CheckSpamProtection(int ClientID);
+
+	int LoadMapHandler(CMapData *pRequestData);
+	int LoadPlayerHandler(CScoreData *pRequestData);
+	int SaveScoreHandler(CScoreData *pRequestData);
+	int ShowRankHandler(CRankData *pRequestData);
+	int ShowTop5Handler(CRankData *pRequestData);
 
 public:
-	CFileScore(CGameContext *pGameServer);
+	CFileScore(IScoreResponseListener *pListener, IStorage *pStorage);
 	~CFileScore();
 
-	void OnMapLoad();
-	void Tick() { ProcessJobs(false); }
-	
-	void OnPlayerInit(int ClientID, bool PrintRank);
-	void OnPlayerFinish(int ClientID, int Time, int *pCpTime);
-	
-	void ShowTop5(int ClientID, int Debut=1);
-	void ShowRank(int ClientID, const char *pName);
-	void ShowRank(int ClientID);
+	bool Ready() const { return true; };
+	void Tick() { ProcessUpdates(false); }
+	void AddRequest(int Type, CRequestData *pRequestData = 0);
 };
 
 #endif

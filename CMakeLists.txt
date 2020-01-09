@@ -82,6 +82,8 @@ option(DOWNLOAD_GTEST "Download and compile GTest if not found" ${AUTO_DEPENDENC
 option(PREFER_BUNDLED_LIBS "Prefer bundled libraries over system libraries" ${AUTO_DEPENDENCIES_DEFAULT})
 option(DEV "Don't generate stuff necessary for packaging" OFF)
 
+option(SQLITE "Enable sqlite support" ON)
+
 set(OpenGL_GL_PREFERENCE LEGACY)
 
 # Set the default build type to Release
@@ -316,6 +318,12 @@ find_package(Pnglite)
 find_package(SDL2)
 find_package(Threads)
 find_package(Wavpack)
+if(SQLITE)
+  find_package(SQLite3)
+else()
+  set(SQLite3_LIBRARIES)
+  set(SQLite3_DEP)
+endif()
 
 
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
@@ -366,6 +374,9 @@ show_dependency_status("OpenSSL Crypto" CRYPTO)
 show_dependency_status("Pnglite" PNGLITE)
 show_dependency_status("PythonInterp" PYTHONINTERP)
 show_dependency_status("SDL2" SDL2)
+if(SQLITE)
+  show_dependency_status("SQLite3" SQLite3)
+endif()
 show_dependency_status("Wavpack" WAVPACK)
 show_dependency_status("Zlib" ZLIB)
 
@@ -1632,9 +1643,12 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   player.cpp
   player.h
   race.cpp
+  score.cpp
   score.h
   score/file_score.cpp
   score/file_score.h
+  score/sqlite_score.cpp
+  score/sqlite_score.h
 )
 set(GAME_GENERATED_SERVER
   src/generated/server_data.cpp
@@ -1648,7 +1662,7 @@ else()
 endif()
 
 # Libraries
-set(LIBS_SERVER ${LIBS})
+set(LIBS_SERVER ${LIBS} ${SQLite3_LIBRARIES})
 
 # Target
 set(TARGET_SERVER ${SERVER_EXECUTABLE})
@@ -1656,10 +1670,15 @@ add_executable(${TARGET_SERVER}
   ${DEPS}
   ${SERVER_SRC}
   ${SERVER_ICON}
+  ${SQLite3_DEP}
   $<TARGET_OBJECTS:engine-shared>
   $<TARGET_OBJECTS:game-shared>
 )
 target_link_libraries(${TARGET_SERVER} ${LIBS_SERVER})
+if(SQLITE)
+  target_include_directories(${TARGET_SERVER} PRIVATE ${SQLite3_INCLUDE_DIRS})
+  target_compile_definitions(${TARGET_SERVER} PRIVATE CONF_SQLITE)
+endif()
 list(APPEND TARGETS_OWN ${TARGET_SERVER})
 list(APPEND TARGETS_LINK ${TARGET_SERVER})
 
