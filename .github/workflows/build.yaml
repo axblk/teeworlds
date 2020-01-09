@@ -43,6 +43,12 @@ jobs:
         git submodule sync --recursive
         git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
 
+    - name: Prepare Linux
+      if: contains(matrix.os, 'ubuntu')
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install libsqlite3-dev -y
+
     - name: Build in debug mode
       env: ${{ matrix.env }}
       run: |
