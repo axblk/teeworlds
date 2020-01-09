@@ -99,6 +99,8 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 		zlib = Compile(settings, Collect("src/engine/external/zlib/*.c"))
 	end
 
+	settings.cc.includes:Add("src/engine/external/sqlite")
+
 	local md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
 	local wavpack = Compile(settings, Collect("src/engine/external/wavpack/*.c"))
 	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
@@ -440,6 +442,8 @@ function GenerateSettings(conf, arch, builddir, compiler)
 		settings.optimize = 1
 		settings.cc.defines:Add("CONF_RELEASE")
 	end
+
+	settings.cc.defines:Add("CONF_SQLITE")
 	
 	-- Generate object files in {builddir}/objs/
 	settings.cc.Output = function (settings_, input)

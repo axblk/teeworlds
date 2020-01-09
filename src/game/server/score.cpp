@@ -4,7 +4,9 @@
 
 #include "gamecontext.h"
 #include "score/file_score.h"
+#ifdef CONF_SQLITE
 #include "score/sqlite_score.h"
+#endif
 
 #include "score.h"
 
@@ -42,8 +44,12 @@ CScore::CScore(CGameContext *pGameServer) :
 {
 	if(str_comp(g_Config.m_SvScore, "file") == 0)
 		m_pBackend = new CFileScore(this, GameServer()->Storage());
-	else
+#ifdef CONF_SQLITE
+	else if(str_comp(g_Config.m_SvScore, "sqlite") == 0)
 		m_pBackend = new CSQLiteScore(this, GameServer()->Engine(), GameServer()->Storage());
+#endif
+	else
+		m_pBackend = new CFileScore(this, GameServer()->Storage());
 }
 
 void CScore::UpdateThrottling(int ClientID)

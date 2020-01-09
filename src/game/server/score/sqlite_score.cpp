@@ -1,4 +1,5 @@
-#include <engine/external/sqlite/sqlite3.h>
+#ifdef CONF_SQLITE
+#include <sqlite3.h>
 
 #include <engine/shared/config.h>
 #include <engine/engine.h>
@@ -7,7 +8,6 @@
 #include "sqlite_score.h"
 
 // TODO:
-// use sqlite from OS
 // add mysql
 // better error handling
 // display last runs (timestamps)
@@ -282,3 +282,5 @@ int CSQLiteScore::ShowTop5Handler(sqlite3 *pDB, CRequestData *pRequestData)
 
 	return 0;
 }
+
+#endif
