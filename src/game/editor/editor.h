@@ -502,6 +502,7 @@ class CEditor : public IEditor
 {
 	class IInput *m_pInput;
 	class IClient *m_pClient;
+	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 	class IGraphics *m_pGraphics;
 	class ITextRender *m_pTextRender;
@@ -511,6 +512,7 @@ class CEditor : public IEditor
 public:
 	class IInput *Input() { return m_pInput; };
 	class IClient *Client() { return m_pClient; };
+	class CConfig *Config() { return m_pConfig; }
 	class IConsole *Console() { return m_pConsole; };
 	class IGraphics *Graphics() { return m_pGraphics; };
 	class ITextRender *TextRender() { return m_pTextRender; };
@@ -532,7 +534,7 @@ public:
 
 		m_GridActive = false;
 		m_GridFactor = 1;
-		
+
 		m_MouseEdMode = MOUSE_EDIT;
 
 		m_aFileName[0] = 0;
@@ -586,7 +588,7 @@ public:
 		m_ShowEnvelopePreview = SHOWENV_NONE;
 		m_SelectedQuadEnvelope = -1;
 		m_SelectedEnvelopePoint = -1;
-		
+
 		m_SelectedColor = vec4(0,0,0,0);
 		m_InitialPickerColor = vec3(1,0,0);
 		m_SelectedPickerColor = vec3(1,0,0);
@@ -624,17 +626,17 @@ public:
 
 	bool m_GridActive;
 	int m_GridFactor;
-	
+
 	enum
 	{
 		MOUSE_EDIT=0,
 		MOUSE_PIPETTE,
 	};
-	
+
 	int m_MouseEdMode;
 
-	char m_aFileName[512];
-	char m_aFileSaveName[512];
+	char m_aFileName[IO_MAX_PATH_LENGTH];
+	char m_aFileSaveName[IO_MAX_PATH_LENGTH];
 	bool m_ValidSaveFilename;
 
 	enum
@@ -654,8 +656,6 @@ public:
 	{
 		FILETYPE_MAP,
 		FILETYPE_IMG,
-
-		MAX_PATH_LENGTH = 512
 	};
 
 	int m_FileDialogStorageType;
@@ -663,9 +663,9 @@ public:
 	const char *m_pFileDialogButtonText;
 	void (*m_pfnFileDialogFunc)(const char *pFileName, int StorageType, void *pUser);
 	void *m_pFileDialogUser;
-	char m_aFileDialogFileName[MAX_PATH_LENGTH];
-	char m_aFileDialogCurrentFolder[MAX_PATH_LENGTH];
-	char m_aFileDialogCurrentLink[MAX_PATH_LENGTH];
+	char m_aFileDialogFileName[IO_MAX_PATH_LENGTH];
+	char m_aFileDialogCurrentFolder[IO_MAX_PATH_LENGTH];
+	char m_aFileDialogCurrentLink[IO_MAX_PATH_LENGTH];
 	char *m_pFileDialogPath;
 	bool m_aFileDialogActivate;
 	int m_FileDialogFileType;
@@ -675,6 +675,10 @@ public:
 	char m_FileDialogNewFolderName[64];
 	char m_FileDialogErrString[64];
 	float m_FilesSearchBoxID;
+	IGraphics::CTextureHandle m_FilePreviewImage;
+	bool m_PreviewImageIsLoaded;
+	CImageInfo m_FilePreviewImageInfo;
+
 
 	struct CFilelistItem
 	{
@@ -732,9 +736,9 @@ public:
 	int m_SelectedPoints;
 	int m_SelectedEnvelope;
 	int m_SelectedEnvelopePoint;
-    int m_SelectedQuadEnvelope;
+	int m_SelectedQuadEnvelope;
 	int m_SelectedImage;
-	
+
 	vec4 m_SelectedColor;
 	vec3 m_InitialPickerColor;
 	vec3 m_SelectedPickerColor;
@@ -746,6 +750,7 @@ public:
 
 	CLayerGroup m_Brush;
 	CLayerTiles m_TilesetPicker;
+	CLayerQuads m_QuadsetPicker;
 
 	static const void *ms_pUiGotContext;
 

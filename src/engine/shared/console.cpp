@@ -86,21 +86,52 @@ int CConsole::ParseStart(CResult *pResult, const char *pString, int Length)
 	return 0;
 }
 
+bool CConsole::ArgStringIsValid(const char *pFormat)
+{
+	char Command = *pFormat;
+	bool Valid = true;
+	bool Last = false;
+
+	while(Valid)
+	{
+		if(!Command)
+			break;
+
+		if(Last && *pFormat)
+			return false;
+
+		if(Command == '?')
+		{
+			if(!pFormat[1])
+				return false;
+		}
+		else
+		{
+			if(Command == 'i' || Command == 'f' || Command == 's')
+				;
+			else if(Command == 'r')
+				Last = true;
+			else
+				return false;
+		}
+
+		Valid = !NextParam(&Command, pFormat);
+	}
+
+	return Valid;
+}
+
 int CConsole::ParseArgs(CResult *pResult, const char *pFormat)
 {
-	char Command;
+	char Command = *pFormat;
 	char *pStr;
 	int Optional = 0;
 	int Error = 0;
 
 	pStr = pResult->m_pArgsStart;
 
-	while(1)
+	while(!Error)
 	{
-		// fetch command
-		Command = *pFormat;
-		pFormat++;
-
 		if(!Command)
 			break;
 
@@ -113,7 +144,9 @@ int CConsole::ParseArgs(CResult *pResult, const char *pFormat)
 			if(!(*pStr)) // error, non optional command needs value
 			{
 				if(!Optional)
+				{
 					Error = 1;
+				}
 				break;
 			}
 
@@ -173,9 +206,52 @@ int CConsole::ParseArgs(CResult *pResult, const char *pFormat)
 				}
 			}
 		}
+
+		// fetch next command
+		Error = NextParam(&Command, pFormat);
 	}
 
 	return Error;
+}
+
+bool CConsole::NextParam(char *pNext, const char *&pFormat)
+{
+	if(*pFormat)
+	{
+		pFormat++;
+
+		if(*pFormat == '[')
+		{
+			// skip bracket contents
+			pFormat += str_span(pFormat, "]");
+			if(!*pFormat)
+				return true;
+
+			// skip ']'
+			pFormat++;
+		}
+
+		// skip space if there is one
+		pFormat = str_skip_whitespaces_const(pFormat);
+	}
+	*pNext = *pFormat;
+	return false;
+}
+
+int CConsole::ParseCommandArgs(const char *pArgs, const char *pFormat, FCommandCallback pfnCallback, void *pContext)
+{
+	CResult Result;
+	str_copy(Result.m_aStringStorage, pArgs, sizeof(Result.m_aStringStorage));
+	Result.m_pArgsStart = Result.m_aStringStorage;
+
+	int Error = ParseArgs(&Result, pFormat);
+	if(Error)
+		return Error;
+
+	if(pfnCallback)
+		pfnCallback(&Result, pContext);
+
+	return 0;
 }
 
 int CConsole::RegisterPrintCallback(int OutputLevel, FPrintCallback pfnPrintCallback, void *pUserData)
@@ -324,8 +400,7 @@ void CConsole::ExecuteLineStroked(int Stroke, const char *pStr)
 					else if(m_StoreCommands && pCommand->m_Flags&CFGFLAG_STORE)
 					{
 						m_ExecutionQueue.AddEntry();
-						m_ExecutionQueue.m_pLast->m_pfnCommandCallback = pCommand->m_pfnCallback;
-						m_ExecutionQueue.m_pLast->m_pCommandUserData = pCommand->m_pUserData;
+						m_ExecutionQueue.m_pLast->m_pCommand = pCommand;
 						m_ExecutionQueue.m_pLast->m_Result = Result;
 					}
 					else
@@ -408,8 +483,6 @@ bool CConsole::ExecuteFile(const char *pFilename)
 			return false;
 
 	if(!m_pStorage)
-		m_pStorage = Kernel()->RequestInterface<IStorage>();
-	if(!m_pStorage)
 		return false;
 
 	// push this one to the stack
@@ -441,7 +514,13 @@ bool CConsole::ExecuteFile(const char *pFilename)
 	{
 		str_format(aBuf, sizeof(aBuf), "failed to open '%s'", pFilename);
 		Print(IConsole::OUTPUT_LEVEL_STANDARD, "console", aBuf);
-		Print(IConsole::OUTPUT_LEVEL_STANDARD, "console", "Info: only relative paths starting from the ones you specify in 'storage.cfg' are allowed");
+		bool AbsHeur = false;
+		AbsHeur = AbsHeur || (pFilename[0] == '/' || pFilename[0] == '\\');
+		AbsHeur = AbsHeur || (pFilename[0] && pFilename[1] == ':' && (pFilename[2] == '/' || pFilename[2] == '\\'));
+		if(AbsHeur)
+		{
+			Print(IConsole::OUTPUT_LEVEL_STANDARD, "console", "Info: only relative paths starting from the ones you specify in 'storage.cfg' are allowed");
+		}
 	}
 
 	m_pFirstExec = pPrev;
@@ -670,7 +749,6 @@ CConsole::CConsole(int FlagMask)
 	m_paStrokeStr[0] = "0";
 	m_paStrokeStr[1] = "1";
 	m_pTempMapListHeap = 0;
-	m_NumMapListEntries = 0;
 	m_pFirstMapEntry = 0;
 	m_pLastMapEntry = 0;
 	m_ExecutionQueue.Reset();
@@ -679,35 +757,18 @@ CConsole::CConsole(int FlagMask)
 	mem_zero(m_aPrintCB, sizeof(m_aPrintCB));
 	m_NumPrintCB = 0;
 
+	m_pConfig = 0;
 	m_pStorage = 0;
 
 	// register some basic commands
-	Register("echo", "r", CFGFLAG_SERVER|CFGFLAG_CLIENT, Con_Echo, this, "Echo the text");
-	Register("exec", "r", CFGFLAG_SERVER|CFGFLAG_CLIENT, Con_Exec, this, "Execute the specified file");
+	Register("echo", "r[text]", CFGFLAG_SERVER|CFGFLAG_CLIENT, Con_Echo, this, "Echo the text");
+	Register("exec", "r[file]", CFGFLAG_SERVER|CFGFLAG_CLIENT, Con_Exec, this, "Execute the specified file");
 
-	Register("toggle", "sii", CFGFLAG_SERVER|CFGFLAG_CLIENT, ConToggle, this, "Toggle config value");
-	Register("+toggle", "sii", CFGFLAG_CLIENT, ConToggleStroke, this, "Toggle config value via keypress");
+	Register("toggle", "s[config-option] i[value1] i[value2]", CFGFLAG_SERVER|CFGFLAG_CLIENT, ConToggle, this, "Toggle config value");
+	Register("+toggle", "s[config-option] i[value1] i[value2]", CFGFLAG_CLIENT, ConToggleStroke, this, "Toggle config value via keypress");
 
-	Register("mod_command", "s?i", CFGFLAG_SERVER, ConModCommandAccess, this, "Specify command accessibility for moderators");
+	Register("mod_command", "s[command] ?i[access-level]", CFGFLAG_SERVER, ConModCommandAccess, this, "Specify command accessibility for moderators");
 	Register("mod_status", "", CFGFLAG_SERVER, ConModCommandStatus, this, "List all commands which are accessible for moderators");
-
-	// TODO: this should disappear
-	#define MACRO_CONFIG_INT(Name,ScriptName,Def,Min,Max,Flags,Desc) \
-	{ \
-		static CIntVariableData Data = { this, &g_Config.m_##Name, Min, Max }; \
-		Register(#ScriptName, "?i", Flags, IntVariableCommand, &Data, Desc); \
-	}
-
-	#define MACRO_CONFIG_STR(Name,ScriptName,Len,Def,Flags,Desc) \
-	{ \
-		static CStrVariableData Data = { this, g_Config.m_##Name, Len }; \
-		Register(#ScriptName, "?r", Flags, StrVariableCommand, &Data, Desc); \
-	}
-
-	#include "config_variables.h"
-
-	#undef MACRO_CONFIG_INT
-	#undef MACRO_CONFIG_STR
 }
 
 CConsole::~CConsole()
@@ -723,6 +784,35 @@ CConsole::~CConsole()
 
 		pCommand = pNext;
 	}
+	if(m_pTempMapListHeap)
+	{
+		delete m_pTempMapListHeap;
+		m_pTempMapListHeap = 0;
+	}
+}
+
+void CConsole::Init()
+{
+	m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
+	m_pStorage = Kernel()->RequestInterface<IStorage>();
+
+	// TODO: this should disappear
+	#define MACRO_CONFIG_INT(Name,ScriptName,Def,Min,Max,Flags,Desc) \
+	{ \
+		static CIntVariableData Data = { this, &m_pConfig->m_##Name, Min, Max }; \
+		Register(#ScriptName, "?i", Flags, IntVariableCommand, &Data, Desc); \
+	}
+
+	#define MACRO_CONFIG_STR(Name,ScriptName,Len,Def,Flags,Desc) \
+	{ \
+		static CStrVariableData Data = { this, m_pConfig->m_##Name, Len }; \
+		Register(#ScriptName, "?r", Flags, StrVariableCommand, &Data, Desc); \
+	}
+
+	#include "config_variables.h"
+
+	#undef MACRO_CONFIG_INT
+	#undef MACRO_CONFIG_STR
 }
 
 void CConsole::ParseArguments(int NumArgs, const char **ppArguments)
@@ -897,29 +987,20 @@ void CConsole::RegisterTempMap(const char *pName)
 	if(!m_pFirstMapEntry)
 		m_pFirstMapEntry = pEntry;
 	str_copy(pEntry->m_aName, pName, TEMPMAP_NAME_LENGTH);
-	m_NumMapListEntries++;
 }
 
 void CConsole::DeregisterTempMap(const char *pName)
 {
-	CMapListEntryTemp *pEntry = m_pFirstMapEntry;
+	if(!m_pFirstMapEntry)
+		return;
 
-	while(pEntry)
-	{
-		if(str_comp_nocase(pName, pEntry->m_aName) == 0)
-			break;
-		pEntry = pEntry->m_pNext;
-	}
-
-	m_NumMapListEntries--;
 	CHeap *pNewTempMapListHeap = new CHeap();
 	CMapListEntryTemp *pNewFirstEntry = 0;
 	CMapListEntryTemp *pNewLastEntry = 0;
-	int NewMapEntryNum = m_NumMapListEntries;
 
 	for(CMapListEntryTemp *pSrc = m_pFirstMapEntry; pSrc; pSrc = pSrc->m_pNext)
 	{
-		if(pSrc == pEntry)
+		if(str_comp_nocase(pName, pSrc->m_aName) == 0)
 			continue;
 
 		CMapListEntryTemp *pDst = (CMapListEntryTemp *)pNewTempMapListHeap->Allocate(sizeof(CMapListEntryTemp));
@@ -938,7 +1019,6 @@ void CConsole::DeregisterTempMap(const char *pName)
 	m_pTempMapListHeap = pNewTempMapListHeap;
 	m_pFirstMapEntry = pNewFirstEntry;
 	m_pLastMapEntry = pNewLastEntry;
-	m_NumMapListEntries = NewMapEntryNum;
 }
 
 void CConsole::DeregisterTempMapAll()
@@ -947,7 +1027,6 @@ void CConsole::DeregisterTempMapAll()
 		m_pTempMapListHeap->Reset();
 	m_pFirstMapEntry = 0;
 	m_pLastMapEntry = 0;
-	m_NumMapListEntries = 0;
 }
 
 void CConsole::Con_Chain(IResult *pResult, void *pUserData)
@@ -986,7 +1065,7 @@ void CConsole::StoreCommands(bool Store)
 	if(!Store)
 	{
 		for(CExecutionQueue::CQueueEntry *pEntry = m_ExecutionQueue.m_pFirst; pEntry; pEntry = pEntry->m_pNext)
-			pEntry->m_pfnCommandCallback(&pEntry->m_Result, pEntry->m_pCommandUserData);
+			pEntry->m_pCommand->m_pfnCallback(&pEntry->m_Result, pEntry->m_pCommand->m_pUserData);
 		m_ExecutionQueue.Reset();
 	}
 	m_StoreCommands = Store;

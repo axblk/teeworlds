@@ -30,7 +30,8 @@ class CInfoMessages : public CComponent
 		// finish msg
 		int m_Time;
 		int m_Diff;
-		bool m_NewRecord;
+		int m_RecordPersonal;
+		int m_RecordServer;
 	};
 
 	enum

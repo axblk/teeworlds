@@ -6,6 +6,8 @@
 #include <base/vmath.h>
 #include <base/tl/array.h>
 
+#include <game/commands.h>
+
 #include <generated/protocol.h>
 
 /*
@@ -16,6 +18,7 @@
 class IGameController
 {
 	class CGameContext *m_pGameServer;
+	class CConfig *m_pConfig;
 	class IServer *m_pServer;
 
 	// activity
@@ -48,7 +51,7 @@ class IGameController
 
 		IGS_GAME_PAUSED,		// game paused (infinite or tick timer)
 		IGS_GAME_RUNNING,		// game running (infinite)
-		
+
 		IGS_END_MATCH,			// match is over (tick timer)
 		IGS_END_ROUND,			// round is over (tick timer)
  	};
@@ -65,7 +68,7 @@ class IGameController
 
 	// map
 	char m_aMapWish[128];
-	
+
 	void CycleMap();
 
 	// spawn
@@ -88,7 +91,7 @@ class IGameController
 	};
 	vec2 m_aaSpawnPoints[3][64];
 	int m_aNumSpawnPoints[3];
-	
+
 	float EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos) const;
 	void EvaluateSpawnType(CSpawnEval *pEval, int Type) const;
 
@@ -97,6 +100,7 @@ class IGameController
 
 protected:
 	CGameContext *GameServer() const { return m_pGameServer; }
+	CConfig *Config() const { return m_pConfig; }
 	IServer *Server() const { return m_pServer; }
 
 	// game
@@ -123,46 +127,6 @@ protected:
 	} m_GameInfo;
 
 	void UpdateGameInfo(int ClientID);
-
-	typedef void (*COMMAND_CALLBACK)(class CPlayer *pPlayer, const char *pArgs);
-
-	//static void Com_Example(class CPlayer *pPlayer, const char *pArgs);
-
-	struct CChatCommand 
-	{
-		char m_aName[32];
-		char m_aHelpText[64];
-		char m_aArgsFormat[16];
-		COMMAND_CALLBACK m_pfnCallback;
-		bool m_Used;
-	};
-
-	class CChatCommands
-	{
-		enum
-		{
-			// 8 is the number of vanilla commands, 14 the number of commands left to fill the chat.
-			MAX_COMMANDS = 8 + 14
-		};
-
-		CChatCommand m_aCommands[MAX_COMMANDS];
-	public:
-		CChatCommands();
-
-		// Format: i = int, s = string, p = playername, c = subcommand
-		void AddCommand(const char *pName, const char *pArgsFormat, const char *pHelpText, COMMAND_CALLBACK pfnCallback);
-		void RemoveCommand(const char *pName);
-		void SendRemoveCommand(class IServer *pServer, const char *pName, int ID);
-		CChatCommand *GetCommand(const char *pName);
-
-		void OnPlayerConnect(class IServer *pServer, class CPlayer *pPlayer);
-
-		void OnInit();
-	};
-
-	CChatCommands m_Commands;
-
-	CChatCommands *CommandsManager() { return &m_Commands; }
 
 public:
 	IGameController(class CGameContext *pGameServer);
@@ -223,10 +187,7 @@ public:
 	void DoPause(int Seconds) { SetGameState(IGS_GAME_PAUSED, Seconds); }
 	void DoWarmup(int Seconds)
 	{
-		if(m_GameState==IGS_WARMUP_GAME)
-			SetGameState(IGS_WARMUP_GAME, 0);
-		else
-			SetGameState(IGS_WARMUP_USER, Seconds);
+		SetGameState(IGS_WARMUP_USER, Seconds);
 	}
 	void SwapTeamscore();
 
@@ -263,9 +224,12 @@ public:
 
 	void DoTeamChange(class CPlayer *pPlayer, int Team, bool DoChatMsg=true);
 	void ForceTeamBalance() { if(!(m_GameFlags&GAMEFLAG_SURVIVAL)) DoTeamBalance(); }
-	
+
 	int GetRealPlayerNum() const { return m_aTeamSize[TEAM_RED]+m_aTeamSize[TEAM_BLUE]; }
 	int GetStartTeam();
+
+	//static void Com_Example(IConsole::IResult *pResult, void *pContext);
+	virtual void RegisterChatCommands(CCommandManager *pManager);
 };
 
 #endif

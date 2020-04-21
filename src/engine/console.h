@@ -22,7 +22,7 @@ public:
 
 		TEMPCMD_NAME_LENGTH=32,
 		TEMPCMD_HELP_LENGTH=96,
-		TEMPCMD_PARAMS_LENGTH=16,
+		TEMPCMD_PARAMS_LENGTH=96,
 
 		TEMPMAP_NAME_LENGTH = 32,
 
@@ -66,6 +66,7 @@ public:
 	typedef void (*FCommandCallback)(IResult *pResult, void *pUserData);
 	typedef void (*FChainCommandCallback)(IResult *pResult, void *pUserData, FCommandCallback pfnCallback, void *pCallbackUserData);
 
+	virtual void Init() = 0;
 	virtual const CCommandInfo *FirstCommandInfo(int AccessLevel, int Flagmask) const = 0;
 	virtual const CCommandInfo *GetCommandInfo(const char *pName, int FlagMask, bool Temp) = 0;
 	virtual void PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback, void *pUser) = 0;
@@ -82,6 +83,7 @@ public:
 	virtual void Chain(const char *pName, FChainCommandCallback pfnChainFunc, void *pUser) = 0;
 	virtual void StoreCommands(bool Store) = 0;
 
+	virtual bool ArgStringIsValid(const char *pFormat) = 0;
 	virtual bool LineIsValid(const char *pStr) = 0;
 	virtual void ExecuteLine(const char *pStr) = 0;
 	virtual void ExecuteLineFlag(const char *pStr, int FlagMask) = 0;
@@ -91,6 +93,8 @@ public:
 	virtual int RegisterPrintCallback(int OutputLevel, FPrintCallback pfnPrintCallback, void *pUserData) = 0;
 	virtual void SetPrintOutputLevel(int Index, int OutputLevel) = 0;
 	virtual void Print(int Level, const char *pFrom, const char *pStr, bool Highlighted=false) = 0;
+
+	virtual int ParseCommandArgs(const char *pArgs, const char *pFormat, FCommandCallback pfnCallback, void *pContext) = 0;
 
 	virtual void SetAccessLevel(int AccessLevel) = 0;
 };

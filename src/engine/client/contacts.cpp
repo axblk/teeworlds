@@ -98,7 +98,7 @@ void IContactList::RemoveContact(int Index)
 	return;
 }
 
-void IContactList::ConfigSave(IConfig *pConfig, const char* pCmdStr)
+void IContactList::ConfigSave(IConfigManager *pConfigManager, const char* pCmdStr)
 {
 	char aBuf[128];
 	const char *pEnd = aBuf+sizeof(aBuf)-4;
@@ -129,8 +129,8 @@ void IContactList::ConfigSave(IConfig *pConfig, const char* pCmdStr)
 		*pDst++ = '"';
 		*pDst++ = 0;
 
-		pConfig->WriteLine(aBuf);
-	}	
+		pConfigManager->WriteLine(aBuf);
+	}
 }
 
 void CFriends::ConAddFriend(IConsole::IResult *pResult, void *pUserData)
@@ -159,40 +159,40 @@ void CBlacklist::ConRemoveIgnore(IConsole::IResult *pResult, void *pUserData)
 
 void CFriends::Init()
 {
-	IConfig *pConfig = Kernel()->RequestInterface<IConfig>();
-	if(pConfig)
-		pConfig->RegisterCallback(ConfigSaveCallback, this);
+	IConfigManager *pConfigManager = Kernel()->RequestInterface<IConfigManager>();
+	if(pConfigManager)
+		pConfigManager->RegisterCallback(ConfigSaveCallback, this);
 
 	IConsole *pConsole = Kernel()->RequestInterface<IConsole>();
 	if(pConsole)
 	{
-		pConsole->Register("add_friend", "ss", CFGFLAG_CLIENT, ConAddFriend, this, "Add a friend");
-		pConsole->Register("remove_friend", "ss", CFGFLAG_CLIENT, ConRemoveFriend, this, "Remove a friend");
+		pConsole->Register("add_friend", "s[name] s[clan]", CFGFLAG_CLIENT, ConAddFriend, this, "Add a friend");
+		pConsole->Register("remove_friend", "s[name] s[clan]", CFGFLAG_CLIENT, ConRemoveFriend, this, "Remove a friend");
 	}
 }
 
 void CBlacklist::Init()
 {
-	IConfig *pConfig = Kernel()->RequestInterface<IConfig>();
-	if(pConfig)
-		pConfig->RegisterCallback(ConfigSaveCallback, this);
+	IConfigManager *pConfigManager = Kernel()->RequestInterface<IConfigManager>();
+	if(pConfigManager)
+		pConfigManager->RegisterCallback(ConfigSaveCallback, this);
 
 	IConsole *pConsole = Kernel()->RequestInterface<IConsole>();
 	if(pConsole)
 	{
-		pConsole->Register("add_ignore", "ss", CFGFLAG_CLIENT, ConAddIgnore, this, "Ignore a player");
-		pConsole->Register("remove_ignore", "ss", CFGFLAG_CLIENT, ConRemoveIgnore, this, "Stop ignoring a player");
+		pConsole->Register("add_ignore", "s[name] s[clan]", CFGFLAG_CLIENT, ConAddIgnore, this, "Ignore a player");
+		pConsole->Register("remove_ignore", "s[name] s[clan]", CFGFLAG_CLIENT, ConRemoveIgnore, this, "Stop ignoring a player");
 	}
 }
 
-void CFriends::ConfigSaveCallback(IConfig *pConfig, void *pUserData)
+void CFriends::ConfigSaveCallback(IConfigManager *pConfigManager, void *pUserData)
 {
 	CFriends *pSelf = (CFriends *)pUserData;
-	pSelf->ConfigSave(pConfig, "add_friend ");
+	pSelf->ConfigSave(pConfigManager, "add_friend ");
 }
 
-void CBlacklist::ConfigSaveCallback(IConfig *pConfig, void *pUserData)
+void CBlacklist::ConfigSaveCallback(IConfigManager *pConfigManager, void *pUserData)
 {
 	CBlacklist *pSelf = (CBlacklist *)pUserData;
-	pSelf->ConfigSave(pConfig, "add_ignore ");
+	pSelf->ConfigSave(pConfigManager, "add_ignore ");
 }
