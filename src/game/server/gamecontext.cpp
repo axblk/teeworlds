@@ -57,7 +57,6 @@ void CGameContext::Construct(int Resetting)
 		m_pVoteOptionHeap = new CHeap();
 
 	m_pScore = 0;
-	m_pChatConsole = 0;
 }
 
 CGameContext::CGameContext(int Resetting)
@@ -78,7 +77,6 @@ CGameContext::~CGameContext()
 	{
 		delete m_pVoteOptionHeap;
 		delete m_pScore;
-		delete m_pChatConsole;
 	}
 }
 
@@ -90,7 +88,6 @@ void CGameContext::Clear()
 	int NumVoteOptions = m_NumVoteOptions;
 	CTuningParams Tuning = m_Tuning;
 	CScore *pScore = m_pScore;
-	IConsole *pChatConsole = m_pChatConsole;
 
 	m_Resetting = true;
 	this->~CGameContext();
@@ -103,7 +100,6 @@ void CGameContext::Clear()
 	m_NumVoteOptions = NumVoteOptions;
 	m_Tuning = Tuning;
 	m_pScore = pScore;
-	m_pChatConsole = pChatConsole;
 }
 
 
@@ -873,7 +869,17 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			if(pMsg->m_pMessage[0] == '/')
 			{
-				ExecChatCommand(ClientID, pMsg->m_pMessage + 1);
+				char aCommand[256];
+				str_copy(aCommand, pMsg->m_pMessage + 1, sizeof(aCommand));
+				char *pArgs = str_skip_to_whitespace(aCommand);
+
+				if(*pArgs)
+				{
+					pArgs[0] = 0;
+					pArgs++;
+				}
+
+				CommandManager()->OnCommand(aCommand, pArgs, ClientID);
 			}
 			else
 			{
@@ -1634,8 +1640,6 @@ void CGameContext::OnInit()
 	else
 		m_pController = new CGameControllerDM(this);
 	*/
-
-	InitChatConsole();
 
 	IConfigManager *pConfigManager = Kernel()->RequestInterface<IConfigManager>();
 	if(pConfigManager)

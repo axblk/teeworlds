@@ -63,103 +63,72 @@ void CGameContext::ConGetPos(IConsole::IResult *pResult, void *pUserData)
 	}
 }
 
-void CGameContext::ChatConInfo(IConsole::IResult *pResult, void *pUser)
+void CGameContext::ChatConInfo(IConsole::IResult *pResult, void *pContext)
 {
-	CGameContext *pSelf = (CGameContext *)pUser;
+	CCommandManager::SCommandContext *pComContext = (CCommandManager::SCommandContext *)pContext;
+	CGameContext *pSelf = (CGameContext *)pComContext->m_pContext;
 
 	char aBuf[128];
 	str_format(aBuf, sizeof(aBuf), "Race mod %s (C)Rajh, Redix and Sushi", RACE_VERSION);
-	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", aBuf);
+	pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, aBuf);
 }
 
-void CGameContext::ChatConTop5(IConsole::IResult *pResult, void *pUser)
+void CGameContext::ChatConTop5(IConsole::IResult *pResult, void *pContext)
 {
-	CGameContext *pSelf = (CGameContext *)pUser;
+	CCommandManager::SCommandContext *pComContext = (CCommandManager::SCommandContext *)pContext;
+	CGameContext *pSelf = (CGameContext *)pComContext->m_pContext;
 
 	if(!pSelf->Config()->m_SvShowTimes)
 	{
-		pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "Showing the Top5 is not allowed on this server.");
+		pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "Showing the Top5 is not allowed on this server.");
 		return;
 	}
 
 	if(pResult->NumArguments() > 0)
-		pSelf->Score()->ShowTop5(pSelf->m_ChatConsoleClientID, max(1, pResult->GetInteger(0)));
+		pSelf->Score()->ShowTop5(pComContext->m_ClientID, max(1, pResult->GetInteger(0)));
 	else
-		pSelf->Score()->ShowTop5(pSelf->m_ChatConsoleClientID);
+		pSelf->Score()->ShowTop5(pComContext->m_ClientID);
 }
 
-void CGameContext::ChatConRank(IConsole::IResult *pResult, void *pUser)
+void CGameContext::ChatConRank(IConsole::IResult *pResult, void *pContext)
 {
-	CGameContext *pSelf = (CGameContext *)pUser;
+	CCommandManager::SCommandContext *pComContext = (CCommandManager::SCommandContext *)pContext;
+	CGameContext *pSelf = (CGameContext *)pComContext->m_pContext;
 
 	if(pSelf->Config()->m_SvShowTimes && pResult->NumArguments() > 0)
 	{
 		char aStr[256];
 		str_copy(aStr, pResult->GetString(0), sizeof(aStr));
 		str_clean_whitespaces(aStr);
-		pSelf->Score()->ShowRank(pSelf->m_ChatConsoleClientID, aStr);
+		pSelf->Score()->ShowRank(pComContext->m_ClientID, aStr);
 	}
 	else
-		pSelf->Score()->ShowRank(pSelf->m_ChatConsoleClientID, pSelf->m_ChatConsoleClientID);
+		pSelf->Score()->ShowRank(pComContext->m_ClientID, pComContext->m_ClientID);
 }
 
-void CGameContext::ChatConShowOthers(IConsole::IResult *pResult, void *pUser)
+void CGameContext::ChatConShowOthers(IConsole::IResult *pResult, void *pContext)
 {
-	CGameContext *pSelf = (CGameContext *)pUser;
+	CCommandManager::SCommandContext *pComContext = (CCommandManager::SCommandContext *)pContext;
+	CGameContext *pSelf = (CGameContext *)pComContext->m_pContext;
 
 	if(!pSelf->Config()->m_SvShowOthers)
-		pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "This command is not allowed on this server.");
+		pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "This command is not allowed on this server.");
 	else
-		pSelf->m_apPlayers[pSelf->m_ChatConsoleClientID]->ToggleShowOthers();
+		pSelf->m_apPlayers[pComContext->m_ClientID]->ToggleShowOthers();
 }
 
-void CGameContext::ChatConHelp(IConsole::IResult *pResult, void *pUser)
+void CGameContext::ChatConHelp(IConsole::IResult *pResult, void *pContext)
 {
-	CGameContext *pSelf = (CGameContext *)pUser;
+	CCommandManager::SCommandContext *pComContext = (CCommandManager::SCommandContext *)pContext;
+	CGameContext *pSelf = (CGameContext *)pComContext->m_pContext;
 
-	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "---Command List---");
-	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/info\" Information about the mod");
-	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/rank\" Show your rank");
-	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/rank NAME\" Show the rank of a specific player");
-	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/top5 X\" Show the top 5");
+	pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "---Command List---");
+	pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "\"/info\" Information about the mod");
+	pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "\"/rank\" Show your rank");
+	pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "\"/rank NAME\" Show the rank of a specific player");
+	pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "\"/top5 X\" Show the top 5");
 	if(pSelf->Config()->m_SvShowOthers)
-		pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/show_others\" Show/Hide other players");
-}
-
-void CGameContext::InitChatConsole()
-{
-	if(m_pChatConsole)
-		return;
-
-	m_pChatConsole = CreateConsole(CFGFLAG_SERVERCHAT);
-	m_ChatConsoleClientID = -1;
-
-	m_pChatConsole->RegisterPrintCallback(IConsole::OUTPUT_LEVEL_STANDARD, SendChatResponse, this);
-
-	m_pChatConsole->Register("info", "", CFGFLAG_SERVERCHAT, ChatConInfo, this, "");
-	m_pChatConsole->Register("top5", "?i", CFGFLAG_SERVERCHAT, ChatConTop5, this, "");
-	m_pChatConsole->Register("rank", "?r", CFGFLAG_SERVERCHAT, ChatConRank, this, "");
-	m_pChatConsole->Register("show_others", "", CFGFLAG_SERVERCHAT, ChatConShowOthers, this, "");
-	m_pChatConsole->Register("help", "", CFGFLAG_SERVERCHAT, ChatConHelp, this, "");
-}
-
-void CGameContext::SendChatResponse(const char *pLine, void *pUser, bool Highlighted)
-{
-	CGameContext *pSelf = (CGameContext *)pUser;
-	if(pSelf->m_ChatConsoleClientID == -1)
-		return;
-
-	static volatile int ReentryGuard = 0;
-	if(ReentryGuard)
-		return;
-	ReentryGuard++;
-
-	while(*pLine && *pLine != ' ')
-		pLine++;
-	if(*pLine && *(pLine + 1))
-		pSelf->SendChat(-1, CHAT_ALL, pSelf->m_ChatConsoleClientID, pLine + 1);
-
-	ReentryGuard--;
+		pSelf->SendChat(-1, CHAT_ALL, pComContext->m_ClientID, "\"/show_others\" Show/Hide other players");
 }
 
 void CGameContext::LoadMapSettings()
@@ -181,13 +150,6 @@ void CGameContext::LoadMapSettings()
 		delete[] pCommand;
 		m_Layers.Map()->UnloadData(pLayer->m_Data);
 	}
-}
-
-void CGameContext::ExecChatCommand(int ClientID, const char *pCommand)
-{
-	m_ChatConsoleClientID = ClientID;
-	m_pChatConsole->ExecuteLine(pCommand);
-	m_ChatConsoleClientID = -1;
 }
 
 int64 CmaskRace(CGameContext *pGameServer, int Owner)

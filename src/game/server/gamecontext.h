@@ -39,7 +39,6 @@ class CGameContext : public IGameServer
 	IServer *m_pServer;
 	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
-	class IConsole *m_pChatConsole;
 	class IStorage *m_pStorage;
 	class IEngine *m_pEngine;
 	CLayers m_Layers;
@@ -80,20 +79,17 @@ class CGameContext : public IGameServer
 	static void ConTeleportTo(IConsole::IResult *pResult, void *pUserData);
 	static void ConGetPos(IConsole::IResult *pResult, void *pUserData);
 
-	static void SendChatResponse(const char *pLine, void *pUser, bool Highlighted);
-	static void ChatConInfo(IConsole::IResult *pResult, void *pUser);
-	static void ChatConTop5(IConsole::IResult *pResult, void *pUser);
-	static void ChatConRank(IConsole::IResult *pResult, void *pUser);
-	static void ChatConShowOthers(IConsole::IResult *pResult, void *pUser);
-	static void ChatConHelp(IConsole::IResult *pResult, void *pUser);
-
-	int m_ChatConsoleClientID;
-
 	CGameContext(int Resetting);
 	void Construct(int Resetting);
 
 	bool m_Resetting;
 public:
+	static void ChatConInfo(IConsole::IResult *pResult, void *pContext);
+	static void ChatConTop5(IConsole::IResult *pResult, void *pContext);
+	static void ChatConRank(IConsole::IResult *pResult, void *pContext);
+	static void ChatConShowOthers(IConsole::IResult *pResult, void *pContext);
+	static void ChatConHelp(IConsole::IResult *pResult, void *pContext);
+
 	IServer *Server() const { return m_pServer; }
 	class CConfig *Config() { return m_pConfig; }
 	class IConsole *Console() { return m_pConsole; }
@@ -107,14 +103,11 @@ public:
 	class CGameControllerRACE *RaceController() { return (class CGameControllerRACE*)m_pController; }
 
 	void LoadMapSettings();
-	void ExecChatCommand(int ClientID, const char *pCommand);
 
 	CGameContext();
 	~CGameContext();
 
 	void Clear();
-
-	void InitChatConsole();
 
 	CEventHandler m_Events;
 	class CPlayer *m_apPlayers[MAX_CLIENTS];

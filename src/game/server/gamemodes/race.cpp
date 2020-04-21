@@ -27,12 +27,13 @@ void CGameControllerRACE::RegisterChatCommands(CCommandManager *pManager)
 {
 	IGameController::RegisterChatCommands(pManager);
 
-	//pManager->AddCommand("test", "Test the command system", "r", Com_Example, this);
-	pManager->AddCommand("info", "", "Information about the mod", 0, 0);
-	pManager->AddCommand("rank", "?r[player]", "Show the rank of a specific player", 0, 0);
-	pManager->AddCommand("top5", "i[start]", "Show the top 5", 0, 0);
+	pManager->AddCommand("info", "Information about the mod", "", CGameContext::ChatConInfo, GameServer());
+	pManager->AddCommand("rank", "Show the rank of a specific player", "?r[name]", CGameContext::ChatConRank, GameServer());
+	pManager->AddCommand("top5", "Show the top 5", "?i[start]", CGameContext::ChatConTop5, GameServer());
 	if(Config()->m_SvShowOthers)
-		pManager->AddCommand("show_others", "", "Show/Hide other players", 0, 0);
+		pManager->AddCommand("show_others", "Show/Hide other players", "", CGameContext::ChatConShowOthers, GameServer());
+	// TODO: hide this?
+	pManager->AddCommand("help", "Print help text", "", CGameContext::ChatConHelp, GameServer());
 }
 
 void CGameControllerRACE::OnCharacterSpawn(CCharacter *pChr)
