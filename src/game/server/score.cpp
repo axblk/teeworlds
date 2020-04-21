@@ -42,11 +42,11 @@ CScore::CScore(CGameContext *pGameServer) :
 	m_MapID(-1),
 	m_CurrentRecord(0)
 {
-	if(str_comp(g_Config.m_SvScore, "file") == 0)
+	if(str_comp(GameServer()->Config()->m_SvScore, "file") == 0)
 		m_pBackend = new CFileScore(this, GameServer()->Storage());
 #ifdef CONF_SQLITE
-	else if(str_comp(g_Config.m_SvScore, "sqlite") == 0)
-		m_pBackend = new CSQLiteScore(this, GameServer()->Engine(), GameServer()->Storage());
+	else if(str_comp(GameServer()->Config()->m_SvScore, "sqlite") == 0)
+		m_pBackend = new CSQLiteScore(this, GameServer()->Engine(), GameServer()->Storage(), GameServer()->Config()->m_SvSQLiteDatabase);
 #endif
 	else
 		m_pBackend = new CFileScore(this, GameServer()->Storage());
@@ -109,7 +109,7 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 		{
 			dbg_msg("score", "loaded player time: %d (%d)", ClientID, pData->m_Time);
 			m_aPlayerCache[ClientID].SetTime(pData->m_Time, pData->m_aCpTime);
-			if(g_Config.m_SvLoadBest)
+			if(GameServer()->Config()->m_SvLoadBest)
 				m_aPlayerCache[ClientID].UpdateCurTime(pData->m_Time);
 		}
 	}
@@ -158,7 +158,7 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 				IRace::FormatTimeLong(aTime, sizeof(aTime), pRec->m_Time);
 				str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", pRec->m_Rank, pRec->m_aPlayerName, aTime);
 
-				if(g_Config.m_SvShowTimes)
+				if(GameServer()->Config()->m_SvShowTimes)
 				{
 					To = -1;
 					if(!Own)

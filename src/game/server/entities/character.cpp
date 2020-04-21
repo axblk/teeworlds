@@ -415,7 +415,7 @@ void CCharacter::FireWeapon()
 
 	m_AttackTick = Server()->Tick();
 
-	if(m_aWeapons[m_ActiveWeapon].m_Ammo > 0 && !g_Config.m_SvInfiniteAmmo) // -1 == unlimited
+	if(m_aWeapons[m_ActiveWeapon].m_Ammo > 0 && !Config()->m_SvInfiniteAmmo) // -1 == unlimited
 		m_aWeapons[m_ActiveWeapon].m_Ammo--;
 
 	if(!m_ReloadTimer)
@@ -545,7 +545,7 @@ void CCharacter::Tick()
 	m_Core.Tick(true);
 
 	// race
-	if(g_Config.m_SvRegen > 0 && (Server()->Tick()%g_Config.m_SvRegen) == 0)
+	if(Config()->m_SvRegen > 0 && (Server()->Tick()%Config()->m_SvRegen) == 0)
 	{
 		if(m_Health < 10)
 			m_Health++;
@@ -587,7 +587,7 @@ void CCharacter::TickDefered()
 	bool StuckAfterQuant = GameServer()->Collision()->TestBox(m_Core.m_Pos, ColBox);
 	m_Pos = m_Core.m_Pos;
 
-	if(m_Core.m_TriggeredEvents&COREEVENTFLAG_TELEPORTED && g_Config.m_SvStrip)
+	if(m_Core.m_TriggeredEvents&COREEVENTFLAG_TELEPORTED && Config()->m_SvStrip)
 	{
 		if(m_ActiveWeapon >= WEAPON_SHOTGUN)
 			m_ActiveWeapon = WEAPON_HAMMER;
@@ -754,7 +754,7 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 			return false;
 	}
 
-	if(From == m_pPlayer->GetCID() && !g_Config.m_SvRocketJumpDamage)
+	if(From == m_pPlayer->GetCID() && !Config()->m_SvRocketJumpDamage)
 	{
 		m_EmoteType = EMOTE_PAIN;
 		m_EmoteStop = Server()->Tick() + 500 * Server()->TickSpeed() / 1000;

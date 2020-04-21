@@ -63,6 +63,8 @@ public:
 	virtual int OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon);
 	virtual bool IsFriendlyFire(int ClientID1, int ClientID2) const { return ClientID1 != ClientID2; };
 
+	virtual void RegisterChatCommands(CCommandManager *pManager);
+
 	void OnPhysicsStep(int ID, vec2 Pos, float IntraTick);
 
 	virtual bool CanStartRace(int ID) const;

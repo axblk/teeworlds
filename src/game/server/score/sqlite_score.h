@@ -43,7 +43,7 @@ class CSQLiteScore : public IScoreBackend
 	static int ShowTop5Handler(sqlite3 *pDB, CRequestData *pRequestData);
 
 public:
-	CSQLiteScore(IScoreResponseListener *pListener, IEngine *pEngine, IStorage *pStorage);
+	CSQLiteScore(IScoreResponseListener *pListener, IEngine *pEngine, IStorage *pStorage, const char *pDatabase);
 	~CSQLiteScore();
 
 	bool Ready() const { return m_DBValid; };

@@ -77,7 +77,7 @@ void CProjectile::Tick()
 	CCharacter *TargetChr = 0; //GameWorld()->IntersectCharacter(PrevPos, CurPos, 6.0f, CurPos, OwnerChar);
 
 	// remove projectile if the player is dead to prevent cheating at start
-	if(g_Config.m_SvDeleteGrenadesAfterDeath && !OwnerChar)
+	if(Config()->m_SvDeleteGrenadesAfterDeath && !OwnerChar)
 	{
 		GameServer()->m_World.DestroyEntity(this);
 		return;
@@ -99,7 +99,7 @@ void CProjectile::Tick()
 		GameWorld()->DestroyEntity(this);
 	}
 
-	if(m_Weapon == WEAPON_GRENADE && g_Config.m_SvTeleportGrenade)
+	if(m_Weapon == WEAPON_GRENADE && Config()->m_SvTeleportGrenade)
 	{
 		bool Stop;
 		int Tele = GameServer()->Collision()->CheckTeleport(CurPos, &Stop);

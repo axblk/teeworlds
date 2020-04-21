@@ -34,7 +34,7 @@ void CPickup::Tick()
 	// wait for respawn
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(m_SpawnTick[i] > 0 && Server()->Tick() > m_SpawnTick[i] && g_Config.m_SvPickupRespawn > -1)
+		if(m_SpawnTick[i] > 0 && Server()->Tick() > m_SpawnTick[i] && Config()->m_SvPickupRespawn > -1)
 		{
 			// respawn
 			m_SpawnTick[i] = -1;
@@ -136,8 +136,8 @@ void CPickup::Tick()
 			if(RespawnTime >= 0)
 				m_SpawnTick = Server()->Tick() + Server()->TickSpeed() * RespawnTime;*/
 
-			if(g_Config.m_SvPickupRespawn > -1)
-				m_SpawnTick[ClientID] = Server()->Tick() + Server()->TickSpeed() * g_Config.m_SvPickupRespawn;
+			if(Config()->m_SvPickupRespawn > -1)
+				m_SpawnTick[ClientID] = Server()->Tick() + Server()->TickSpeed() * Config()->m_SvPickupRespawn;
 			else
 				m_SpawnTick[ClientID] = 1;
 		}

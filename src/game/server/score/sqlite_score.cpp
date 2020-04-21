@@ -35,11 +35,11 @@ void RecordFromRow(IScoreBackend::CRecordData *pRecord, sqlite3_stmt *pStmt)
 	pRecord->m_Rank = sqlite3_column_int(pStmt, 2);
 }
 
-CSQLiteScore::CSQLiteScore(IScoreResponseListener *pListener, IEngine *pEngine, IStorage *pStorage)
+CSQLiteScore::CSQLiteScore(IScoreResponseListener *pListener, IEngine *pEngine, IStorage *pStorage, const char *pDatabase)
 	: IScoreBackend(pListener), m_pEngine(pEngine), m_pStorage(pStorage), m_DBValid(false)
 {
 	char m_aFile[512];
-	str_format(m_aFile, sizeof(m_aFile), "records/%s", g_Config.m_SvSQLiteDatabase);
+	str_format(m_aFile, sizeof(m_aFile), "records/%s", pDatabase);
 	m_pStorage->GetCompletePath(IStorage::TYPE_SAVE, m_aFile, m_aDBFilename, sizeof(m_aDBFilename));
 
 	sqlite3_config(SQLITE_CONFIG_MULTITHREAD);

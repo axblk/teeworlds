@@ -76,7 +76,7 @@ void CGameContext::ChatConTop5(IConsole::IResult *pResult, void *pUser)
 {
 	CGameContext *pSelf = (CGameContext *)pUser;
 
-	if(!g_Config.m_SvShowTimes)
+	if(!pSelf->Config()->m_SvShowTimes)
 	{
 		pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "Showing the Top5 is not allowed on this server.");
 		return;
@@ -92,7 +92,7 @@ void CGameContext::ChatConRank(IConsole::IResult *pResult, void *pUser)
 {
 	CGameContext *pSelf = (CGameContext *)pUser;
 
-	if(g_Config.m_SvShowTimes && pResult->NumArguments() > 0)
+	if(pSelf->Config()->m_SvShowTimes && pResult->NumArguments() > 0)
 	{
 		char aStr[256];
 		str_copy(aStr, pResult->GetString(0), sizeof(aStr));
@@ -107,7 +107,7 @@ void CGameContext::ChatConShowOthers(IConsole::IResult *pResult, void *pUser)
 {
 	CGameContext *pSelf = (CGameContext *)pUser;
 
-	if(!g_Config.m_SvShowOthers)
+	if(!pSelf->Config()->m_SvShowOthers)
 		pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "This command is not allowed on this server.");
 	else
 		pSelf->m_apPlayers[pSelf->m_ChatConsoleClientID]->ToggleShowOthers();
@@ -122,7 +122,7 @@ void CGameContext::ChatConHelp(IConsole::IResult *pResult, void *pUser)
 	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/rank\" Show your rank");
 	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/rank NAME\" Show the rank of a specific player");
 	pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/top5 X\" Show the top 5");
-	if(g_Config.m_SvShowOthers)
+	if(pSelf->Config()->m_SvShowOthers)
 		pSelf->m_pChatConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "chat", "\"/show_others\" Show/Hide other players");
 }
 

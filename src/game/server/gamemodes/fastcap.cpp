@@ -69,7 +69,7 @@ void CGameControllerFC::OnCharacterSpawn(class CCharacter *pChr)
 	pChr->IncreaseArmor(10);
 
 	// give nades
-	if(!g_Config.m_SvNoItems)
+	if(!Config()->m_SvNoItems)
 		pChr->GiveWeapon(WEAPON_GRENADE, 10);
 }
 

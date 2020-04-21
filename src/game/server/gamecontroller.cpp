@@ -300,7 +300,7 @@ bool IGameController::OnEntity(int Index, vec2 Pos)
 			Type = PICKUP_NINJA;
 	}
 
-	if(Type != -1 && !g_Config.m_SvNoItems)
+	if(Type != -1 && !Config()->m_SvNoItems)
 	{
 		new CPickup(&GameServer()->m_World, Type, Pos);
 		return true;

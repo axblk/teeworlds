@@ -1635,19 +1635,17 @@ void CGameContext::OnInit()
 		m_pController = new CGameControllerDM(this);
 	*/
 
-	m_pController->RegisterChatCommands(CommandManager());
-
 	InitChatConsole();
 
-	IConfig *pConfig = Kernel()->RequestInterface<IConfig>();
-	if(pConfig)
-		pConfig->Reset(CFGFLAG_MAPSETTINGS);
+	IConfigManager *pConfigManager = Kernel()->RequestInterface<IConfigManager>();
+	if(pConfigManager)
+		pConfigManager->Reset(CFGFLAG_MAPSETTINGS);
 	LoadMapSettings();
 
-	if(str_find_nocase(g_Config.m_SvMap, "no-weapons") || str_find_nocase(g_Config.m_SvGametype, "no-weapons"))
-		g_Config.m_SvNoItems = true;
+	if(str_find_nocase(Config()->m_SvMap, "no-weapons") || str_find_nocase(Config()->m_SvGametype, "no-weapons"))
+		Config()->m_SvNoItems = true;
 
-	if(str_find_nocase(g_Config.m_SvGametype, "fastcap"))
+	if(str_find_nocase(Config()->m_SvGametype, "fastcap"))
 		m_pController = new CGameControllerFC(this);
 	else
 		m_pController = new CGameControllerRACE(this);
@@ -1660,6 +1658,8 @@ void CGameContext::OnInit()
 
 	m_Tuning.m_PlayerCollision = 0;
 	m_Tuning.m_PlayerHooking = 0;
+
+	m_pController->RegisterChatCommands(CommandManager());
 
 	// create all entities from the game layer
 	CMapItemLayerTilemap *pTileMap = m_Layers.GameLayer();

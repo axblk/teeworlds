@@ -74,7 +74,7 @@ public:
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual bool DemoRecorder_IsRecording() = 0;
 
-	virtual const char *GetMapName() const = 0;
+	virtual const char *GetMapName() = 0;
 };
 
 class IGameServer : public IInterface

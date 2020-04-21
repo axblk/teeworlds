@@ -17,16 +17,22 @@ CGameControllerRACE::CGameControllerRACE(class CGameContext *pGameServer) : IGam
 		m_aRace[i].Reset();
 	
 	SetRunning();
-
-	CommandsManager()->AddCommand("info", "", "Information about the mod", 0);
-	CommandsManager()->AddCommand("rank", "p", "Show the rank of a specific player", 0);
-	CommandsManager()->AddCommand("top5", "i", "Show the top 5", 0);
-	if(g_Config.m_SvShowOthers)
-		CommandsManager()->AddCommand("show_others", "", "Show/Hide other players", 0);
 }
 
 CGameControllerRACE::~CGameControllerRACE()
 {
+}
+
+void CGameControllerRACE::RegisterChatCommands(CCommandManager *pManager)
+{
+	IGameController::RegisterChatCommands(pManager);
+
+	//pManager->AddCommand("test", "Test the command system", "r", Com_Example, this);
+	pManager->AddCommand("info", "", "Information about the mod", 0, 0);
+	pManager->AddCommand("rank", "?r[player]", "Show the rank of a specific player", 0, 0);
+	pManager->AddCommand("top5", "i[start]", "Show the top 5", 0, 0);
+	if(Config()->m_SvShowOthers)
+		pManager->AddCommand("show_others", "", "Show/Hide other players", 0, 0);
 }
 
 void CGameControllerRACE::OnCharacterSpawn(CCharacter *pChr)
@@ -49,7 +55,7 @@ void CGameControllerRACE::DoWincheck()
 {
 	/*if(m_GameOverTick == -1 && !m_Warmup)
 	{
-		if((g_Config.m_SvTimelimit > 0 && (Server()->Tick()-m_RoundStartTick) >= g_Config.m_SvTimelimit*Server()->TickSpeed()*60))
+		if((Config()->m_SvTimelimit > 0 && (Server()->Tick()-m_RoundStartTick) >= Config()->m_SvTimelimit*Server()->TickSpeed()*60))
 			EndRound();
 	}*/
 }
@@ -70,7 +76,7 @@ void CGameControllerRACE::Tick()
 			SendTime(i, i);
 
 		int SpecID = GameServer()->m_apPlayers[i] ? GameServer()->m_apPlayers[i]->GetSpectatorID() : -1;
-		if(SpecID != -1 && g_Config.m_SvShowTimes && m_aRace[SpecID].m_RaceState == RACE_STARTED &&
+		if(SpecID != -1 && Config()->m_SvShowTimes && m_aRace[SpecID].m_RaceState == RACE_STARTED &&
 			(Server()->Tick() - m_aRace[SpecID].m_StartTick) % Server()->TickSpeed() == 0)
 			SendTime(SpecID, i);
 	}
@@ -94,7 +100,7 @@ void CGameControllerRACE::Snap(int SnappingClient)
 		if(m_aRace[i].m_RaceState != RACE_STARTED)
 			continue;
 
-		if(i == SnappingClient || (g_Config.m_SvShowTimes && (SnappingClient == -1 || i == GameServer()->m_apPlayers[SnappingClient]->GetSpectatorID())))
+		if(i == SnappingClient || (Config()->m_SvShowTimes && (SnappingClient == -1 || i == GameServer()->m_apPlayers[SnappingClient]->GetSpectatorID())))
 		{
 			CNetObj_PlayerInfoRace *pPlayerInfoRace = static_cast<CNetObj_PlayerInfoRace *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFORACE, i, sizeof(CNetObj_PlayerInfoRace)));
 			if(!pPlayerInfoRace)
@@ -172,7 +178,8 @@ void CGameControllerRACE::SendFinish(int ID, int FinishTime, int Diff, bool NewR
 	FinishMsg.m_ClientID = ID;
 	FinishMsg.m_Time = FinishTime;
 	FinishMsg.m_Diff = Diff;
-	FinishMsg.m_NewRecord = NewRecord;
+	FinishMsg.m_RecordPersonal = NewRecord;
+	FinishMsg.m_RecordServer = false; // TODO
 	Server()->SendPackMsg(&FinishMsg, MSGFLAG_VITAL, To);
 
 	char aBuf[128];
@@ -223,7 +230,7 @@ void CGameControllerRACE::OnRaceEnd(int ID, int FinishTime)
 
 	// save the score
 	GameServer()->Score()->OnPlayerFinish(ID, FinishTime, p->m_aCpCurrent);
-	SendFinish(ID, FinishTime, Diff, NewRecord, g_Config.m_SvShowTimes ? -1 : ID);
+	SendFinish(ID, FinishTime, Diff, NewRecord, Config()->m_SvShowTimes ? -1 : ID);
 }
 
 bool CGameControllerRACE::IsStart(vec2 Pos, int Team) const
@@ -259,7 +266,7 @@ void CGameControllerRACE::OnPhysicsStep(int ID, vec2 Pos, float IntraTick)
 bool CGameControllerRACE::CanStartRace(int ID) const
 {
 	CCharacter *pChr = GameServer()->GetPlayerChar(ID);
-	bool AllowRestart = g_Config.m_SvAllowRestartOld && !pChr->HasWeapon(WEAPON_GRENADE) && !pChr->Armor();
+	bool AllowRestart = Config()->m_SvAllowRestartOld && !pChr->HasWeapon(WEAPON_GRENADE) && !pChr->Armor();
 	return (m_aRace[ID].m_RaceState == RACE_NONE || AllowRestart) && GameServer()->IsPureTuning();
 }
 

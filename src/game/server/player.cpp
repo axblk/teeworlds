@@ -53,7 +53,7 @@ void CPlayer::Tick()
 
 	int CurTime = GameServer()->Score()->PlayerData(m_ClientID)->m_CurTime;
 	int TimeScore = CurTime ? (CurTime / 1000) : -1;
-	Server()->SetClientScore(m_ClientID, g_Config.m_SvShowTimes ? TimeScore : 0);
+	Server()->SetClientScore(m_ClientID, GameServer()->Config()->m_SvShowTimes ? TimeScore : 0);
 
 	// do latency stuff
 	{
@@ -167,7 +167,7 @@ void CPlayer::Snap(int SnappingClient)
 		TimeScore = TimeScore ? -(TimeScore / 1000) : -9999;
 	else if(TimeScore == 0)
 		TimeScore = -1;
-	pPlayerInfo->m_Score = (g_Config.m_SvShowTimes || SnappingClient == m_ClientID) ? TimeScore : 0;
+	pPlayerInfo->m_Score = (GameServer()->Config()->m_SvShowTimes || SnappingClient == m_ClientID) ? TimeScore : 0;
 
 	if(m_ClientID == SnappingClient && (m_Team == TEAM_SPECTATORS || m_DeadSpecMode))
 	{
@@ -279,7 +279,7 @@ void CPlayer::OnDirectInput(CNetObj_PlayerInput *NewInput)
 		if(!m_ActiveSpecSwitch)
 		{
 			m_ActiveSpecSwitch = true;
-			if(m_SpecMode == SPEC_FREEVIEW && g_Config.m_SvShowOthers)
+			if(m_SpecMode == SPEC_FREEVIEW && GameServer()->Config()->m_SvShowOthers)
 			{
 				CCharacter *pChar = (CCharacter *)GameServer()->m_World.ClosestEntity(m_ViewPos, 6.0f*32, CGameWorld::ENTTYPE_CHARACTER, 0);
 				CFlag *pFlag = (CFlag *)GameServer()->m_World.ClosestEntity(m_ViewPos, 6.0f*32, CGameWorld::ENTTYPE_FLAG, 0);
@@ -361,7 +361,7 @@ bool CPlayer::SetSpectatorID(int SpecMode, int SpectatorID)
 {
 	if((SpecMode == m_SpecMode && SpecMode != SPEC_PLAYER) ||
 		(m_SpecMode == SPEC_PLAYER && SpecMode == SPEC_PLAYER && (SpectatorID == -1 || m_SpectatorID == SpectatorID || m_ClientID == SpectatorID)) ||
-		(SpecMode == SPEC_PLAYER && !g_Config.m_SvShowOthers))
+		(SpecMode == SPEC_PLAYER && !GameServer()->Config()->m_SvShowOthers))
 	{
 		return false;
 	}
@@ -487,5 +487,5 @@ void CPlayer::TryRespawn()
 
 bool CPlayer::ShowOthers() const
 {
-	return g_Config.m_SvShowOthers && (m_ShowOthers || m_Team == TEAM_SPECTATORS);
+	return GameServer()->Config()->m_SvShowOthers && (m_ShowOthers || m_Team == TEAM_SPECTATORS);
 }
