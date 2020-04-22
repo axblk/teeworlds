@@ -1728,8 +1728,6 @@ set_src(MAPLIB_SRC GLOB src/tools/map
   mapitems_race.h
 )
 
-list(APPEND EXTRA_TOOL_SRC ${MAPLIB_SRC})
-
 set(TARGETS_TOOLS)
 set_src(TOOLS GLOB src/tools
   crapnet.cpp
@@ -1746,10 +1744,12 @@ foreach(ABS_T ${TOOLS})
     string(REGEX REPLACE "\\.cpp$" "" TOOL "${T}")
     set(TOOL_DEPS ${DEPS})
     set(TOOL_LIBS ${LIBS})
-    if(TOOL MATCHES "map_update")
+    set(EXTRA_TOOL_SRC)
+    if(TOOL MATCHES "map_update" OR TOOL MATCHES "map_resave")
       list(APPEND TOOL_DEPS ${PNGLITE_DEP})
       list(APPEND TOOL_LIBS ${PNGLITE_LIBRARIES})
       list(APPEND TOOL_INCLUDE_DIRS ${PNGLITE_INCLUDE_DIRS})
+      list(APPEND EXTRA_TOOL_SRC ${MAPLIB_SRC})
     endif()
     add_executable(${TOOL} EXCLUDE_FROM_ALL
       ${TOOL_DEPS}
