@@ -8,7 +8,6 @@
 class CGameControllerRACE : public IGameController
 {
 	void SendTime(int ClientID, int To);
-	void SendFinish(int ID, int FinishTime, int Diff, bool NewRecord, int To);
 	void OnCheckpoint(int ID, int z);
 
 	int GetTime(int ID) const;

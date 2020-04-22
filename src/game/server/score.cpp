@@ -64,10 +64,58 @@ bool CScore::IsThrottled(int ClientID)
 
 bool CScore::UpdateRecord(int Time)
 {
-	bool Check = !m_CurrentRecord || Time < m_CurrentRecord;
-	if(Check)
+	bool NewRecord = m_CurrentRecord == 0 || Time < m_CurrentRecord;
+	if(NewRecord)
 		m_CurrentRecord = Time;
-	return Check;
+	return NewRecord;
+}
+
+void CScore::SendFinish(int ID, int FinishTime, int Diff, bool RecordPersonal, bool RecordServer, int To)
+{
+	CNetMsg_Sv_RaceFinish FinishMsg;
+	FinishMsg.m_ClientID = ID;
+	FinishMsg.m_Time = FinishTime;
+	FinishMsg.m_Diff = Diff;
+	FinishMsg.m_RecordPersonal = RecordPersonal;
+	FinishMsg.m_RecordServer = RecordServer;
+	Server()->SendPackMsg(&FinishMsg, MSGFLAG_VITAL, To);
+
+	char aBuf[256];
+	char aTime[32];
+	IRace::FormatTime(aTime, sizeof(aTime), FinishTime, 3);
+
+	if(RecordPersonal || RecordServer)
+	{
+		if(RecordServer)
+			str_format(aBuf, sizeof(aBuf), "'%s' has set a new map record: %s", Server()->ClientName(ID), aTime);
+		else // RecordPersonal
+			str_format(aBuf, sizeof(aBuf), "'%s' has set a new personal record: %s", Server()->ClientName(ID), aTime);
+		
+		if(Diff < 0)
+		{
+			char aImprovement[64];
+			IRace::FormatTimeDiff(aTime, sizeof(aTime), absolute(Diff), 3, false);
+			str_format(aImprovement, sizeof(aImprovement), " (%s seconds faster)", aTime);
+			str_append(aBuf, aImprovement, sizeof(aBuf));
+		}
+	}
+	else
+	{
+		str_format(aBuf, sizeof(aBuf), "'%s' finished in: %s", Server()->ClientName(ID), aTime);
+	}
+
+	if(To == -1)
+	{
+		for(int i = 0; i < MAX_CLIENTS; ++i)
+		{
+			if(GameServer()->m_apPlayers[i] && Server()->ClientIngame(i) && Server()->GetClientVersion(i) < CGameContext::MIN_RACE_CLIENTVERSION)
+				GameServer()->SendChat(-1, CHAT_ALL, i, aBuf);
+		}
+	}
+	else if(Server()->GetClientVersion(To) < CGameContext::MIN_RACE_CLIENTVERSION)
+	{
+		GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
+	}
 }
 
 void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData, bool Error)
@@ -122,7 +170,17 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 			dbg_msg("score", "player init: %d:%d", ClientID, pData->m_PlayerID);
 			Server()->SetPlayerID(ClientID, pData->m_PlayerID);
 		}
-		dbg_msg("score", "saved time: %d (%d)", ClientID, pData->m_Time);
+		if(ClientID != -1)
+		{
+			dbg_msg("score", "saved time: %d (%d)", ClientID, pData->m_Time);
+			// TODO: check backend instead of cache?
+			int Diff = m_aPlayerCache[ClientID].m_Time == 0 ? 0 : pData->m_Time - m_aPlayerCache[ClientID].m_Time;
+			bool RecordPersonal = m_aPlayerCache[ClientID].UpdateTime(pData->m_Time, pData->m_aCpTime);
+			bool RecordServer = UpdateRecord(pData->m_Time);
+
+			SendFinish(ClientID, pData->m_Time, Diff, RecordPersonal, RecordServer,
+				GameServer()->Config()->m_SvShowTimes ? -1 : ClientID);
+		}
 	}
 	else if(Type == IScoreBackend::REQTYPE_SHOW_RANK)
 	{
@@ -146,7 +204,7 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 				for(int i = 0; i < min((int)IScoreBackend::MAX_SEARCH_RECORDS, pData->m_Num); i++)
 				{
 					const IScoreBackend::CRecordData *pRec = &pData->m_aRecords[i];
-					IRace::FormatTimeLong(aTime, sizeof(aTime), pRec->m_Time);
+					IRace::FormatTime(aTime, sizeof(aTime), pRec->m_Time);
 					str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", pRec->m_Rank, pRec->m_aPlayerName, aTime);
 					GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
 				}
@@ -155,7 +213,7 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 			else if(pData->m_Num == 1)
 			{
 				const IScoreBackend::CRecordData *pRec = &pData->m_aRecords[0];
-				IRace::FormatTimeLong(aTime, sizeof(aTime), pRec->m_Time);
+				IRace::FormatTime(aTime, sizeof(aTime), pRec->m_Time);
 				str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s", pRec->m_Rank, pRec->m_aPlayerName, aTime);
 
 				if(GameServer()->Config()->m_SvShowTimes)
@@ -191,7 +249,7 @@ void CScore::OnRequestFinished(int Type, IScoreBackend::CRequestData *pUserData,
 			GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, "----------- Top 5 -----------");
 			for(int i = 0; i < min((int)IScoreBackend::MAX_TOP_RECORDS, pData->m_Num); i++)
 			{
-				IRace::FormatTimeLong(aTime, sizeof(aTime), pData->m_aRecords[i].m_Time);
+				IRace::FormatTime(aTime, sizeof(aTime), pData->m_aRecords[i].m_Time);
 				str_format(aBuf, sizeof(aBuf), "%d. %s Time: %s",
 					pData->m_aRecords[i].m_Rank, pData->m_aRecords[i].m_aPlayerName, aTime);
 				GameServer()->SendChat(-1, CHAT_ALL, RequestingClientID, aBuf);
@@ -245,9 +303,6 @@ void CScore::OnPlayerInit(int ClientID)
 
 void CScore::OnPlayerFinish(int ClientID, int Time, int *pCpTime)
 {
-	m_aPlayerCache[ClientID].UpdateTime(Time, pCpTime);
-	UpdateRecord(Time);
-
 	if(!m_pBackend->Ready() || m_MapID == -1)
 		return;
 

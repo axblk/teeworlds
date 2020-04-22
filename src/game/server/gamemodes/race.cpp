@@ -114,7 +114,7 @@ void CGameControllerRACE::Snap(int SnappingClient)
 
 void CGameControllerRACE::SendTime(int ClientID, int To)
 {
-	if(Server()->GetClientVersion(ClientID) >= CGameContext::MIN_RACE_CLIENTVERSION)
+	if(Server()->GetClientVersion(To) >= CGameContext::MIN_RACE_CLIENTVERSION)
 		return;
 
 	CRaceData *p = &m_aRace[ClientID];
@@ -125,7 +125,7 @@ void CGameControllerRACE::SendTime(int ClientID, int To)
 	if(Checkpoint)
 	{
 		char aDiff[64];
-		IRace::FormatTimeDiff(aDiff, sizeof(aDiff), p->m_CpDiff, false);
+		IRace::FormatTimeDiff(aDiff, sizeof(aDiff), p->m_CpDiff, 2);
 		const char *pColor = (p->m_CpDiff <= 0) ? "^090" : "^900";
 		str_format(aBuf, sizeof(aBuf), "%s%s\\n^999", pColor, aDiff);
 	}
@@ -173,65 +173,15 @@ void CGameControllerRACE::OnRaceStart(int ID)
 	p->m_AddTime = 0.f;
 }
 
-void CGameControllerRACE::SendFinish(int ID, int FinishTime, int Diff, bool NewRecord, int To)
-{
-	CNetMsg_Sv_RaceFinish FinishMsg;
-	FinishMsg.m_ClientID = ID;
-	FinishMsg.m_Time = FinishTime;
-	FinishMsg.m_Diff = Diff;
-	FinishMsg.m_RecordPersonal = NewRecord;
-	FinishMsg.m_RecordServer = false; // TODO
-	Server()->SendPackMsg(&FinishMsg, MSGFLAG_VITAL, To);
-
-	char aBuf[128];
-	char aBuf2[128];
-	IRace::FormatTimeLong(aBuf2, sizeof(aBuf2), FinishTime, true);
-	str_format(aBuf, sizeof(aBuf), "%s finished in: %s", Server()->ClientName(ID), aBuf2);
-	str_format(aBuf2, sizeof(aBuf2), "New record: %d.%03d second(s) better", -Diff / 1000, -Diff % 1000);
-
-	if(To == -1)
-	{
-		for(int i = 0; i < MAX_CLIENTS; ++i)
-		{
-			if(!GameServer()->m_apPlayers[i] || !Server()->ClientIngame(i) || Server()->GetClientVersion(i) >= CGameContext::MIN_RACE_CLIENTVERSION)
-				continue;
-
-			GameServer()->SendChat(-1, CHAT_ALL, i, aBuf);
-			if(Diff < 0)
-				GameServer()->SendChat(-1, CHAT_ALL, i, aBuf2);
-		}
-	}
-	else if(Server()->GetClientVersion(To) < CGameContext::MIN_RACE_CLIENTVERSION)
-	{
-		GameServer()->SendChat(-1, CHAT_ALL, To, aBuf);
-		if(Diff < 0)
-			GameServer()->SendChat(-1, CHAT_ALL, To, aBuf2);
-	}
-}
-
 void CGameControllerRACE::OnRaceEnd(int ID, int FinishTime)
 {
 	CRaceData *p = &m_aRace[ID];
 	p->m_RaceState = RACE_FINISHED;
 
-	if(!FinishTime)
-		return;
-
-	// TODO:
-	// move all this into the scoring classes so the selected
-	// scoring backend can decide how to handle the situation
-
-	int Diff = 0;
-	bool NewRecord = true;
-	if(GameServer()->Score()->PlayerData(ID)->m_Time > 0)
+	if(FinishTime != 0)
 	{
-		Diff = FinishTime - GameServer()->Score()->PlayerData(ID)->m_Time;
-		NewRecord = Diff < 0;
+		GameServer()->Score()->OnPlayerFinish(ID, FinishTime, p->m_aCpCurrent);
 	}
-
-	// save the score
-	GameServer()->Score()->OnPlayerFinish(ID, FinishTime, p->m_aCpCurrent);
-	SendFinish(ID, FinishTime, Diff, NewRecord, Config()->m_SvShowTimes ? -1 : ID);
 }
 
 bool CGameControllerRACE::IsStart(vec2 Pos, int Team) const

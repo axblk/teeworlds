@@ -112,22 +112,17 @@ public:
 
 	void UpdateCurTime(int Time)
 	{
-		if(!m_CurTime || Time < m_CurTime)
+		if(m_CurTime == 0 || Time < m_CurTime)
 			m_CurTime = Time;
-	}
-	
-	bool CheckTime(int Time) const
-	{
-		return !m_Time || Time < m_Time;
 	}
 
 	bool UpdateTime(int Time, const int *pCpTime)
 	{
 		UpdateCurTime(Time);
-		bool Check = CheckTime(Time);
-		if(Check)
+		bool NewRecord = m_Time == 0 || Time < m_Time;
+		if(NewRecord)
 			SetTime(Time, pCpTime);
-		return Check;
+		return NewRecord;
 	}
 
 	int m_Time;
@@ -155,6 +150,7 @@ class CScore : public IScoreResponseListener
 	bool IsThrottled(int ClientID);
 
 	bool UpdateRecord(int Time);
+	void SendFinish(int ClientID, int FinishTime, int Diff, bool RecordPersonal, bool RecordServer, int To);
 	
 public:
 	CScore(CGameContext *pGameServer);
