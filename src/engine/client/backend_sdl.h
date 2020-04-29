@@ -87,6 +87,14 @@ public:
 // takes care of wgpu related rendering
 class CCommandProcessorFragment_WGPU
 {
+	class CTextureData
+	{
+	public:
+		WGPUTextureId m_Tex;
+		WGPUTextureViewId m_TexView;
+		WGPUBindGroupId m_BindGroups[4];
+	};
+
 	class CTexture
 	{
 	public:
@@ -96,8 +104,8 @@ class CCommandProcessorFragment_WGPU
 			STATE_TEX2D = 1,
 			STATE_TEX3D = 2,
 		};
-		WGPUBindGroupId m_Tex2D;
-		WGPUBindGroupId m_Tex3D;
+		CTextureData m_Tex2D;
+		CTextureData m_Tex3D;
 		int m_State;
 		int m_Format;
 		int m_MemSize;
@@ -108,13 +116,16 @@ class CCommandProcessorFragment_WGPU
 	WGPUSwapChainOutput m_NextTexture;
 	WGPUCommandEncoderId m_CmdEncoder;
 	WGPURenderPassId m_RPass;
-	WGPURenderPipelineId m_RenderPipeline;
-	WGPURenderPipelineId m_Render2DPipeline;
-	WGPURenderPipelineId m_Render2DArrayPipeline;
+	WGPUBufferId m_StreamingBuffer;
+	WGPURenderPipelineId m_RenderPipeline[3];
+	WGPURenderPipelineId m_Render2DPipeline[3];
+	WGPURenderPipelineId m_Render2DArrayPipeline[3];
+	WGPURenderPipelineId m_RenderPipelineLines[3];
 	WGPUBindGroupLayoutId m_BindGroup2DLayout;
 	WGPUBindGroupLayoutId m_BindGroup2DArrayLayout;
-	WGPUSamplerId m_Sampler;
-	bool m_RecordingBuffer;
+	WGPUSamplerId m_Sampler[4];
+	unsigned m_ScreenWidth;
+	unsigned m_ScreenHeight;
 	bool m_Ready;
 
 	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
@@ -132,16 +143,26 @@ public:
 	{
 		CInitCommand() : CCommand(CMD_INIT) {}
 		WGPUDeviceId m_Device;
-		WGPUSwapChainId m_SwapChain;
+		WGPUSurfaceId m_Surface;
+		unsigned m_ScreenWidth;
+		unsigned m_ScreenHeight;
 		volatile int *m_pTextureMemoryUsage;
 	};
 
 private:
-	static WGPUTextureFormat TexFormatToWGPUFormat(int TexFormat);
 	static unsigned char Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp);
-	static void *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
+	static unsigned char *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
+	static void ConvertToRGBA(int Width, int Height, int Format, unsigned char **ppData);
 
-	void SetState(const CCommandBuffer::CState &State);
+	WGPURenderPipelineId CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, int PrimType, WGPUBlendDescriptor BlendInfo);
+	WGPUSamplerId CreateSampler(int WrapModeU, int WrapModeV);
+	WGPUBindGroupId GetTexBindGroup(CTextureData *pTex, int WrapModeU, int WrapModeV, bool Array);
+
+	WGPUCommandEncoderId GetCommandEncoder();
+	WGPURenderPassId GetRenderPass(bool Clear = false, CCommandBuffer::CColor ClearColor = {0.0f, 0.0f, 0.0f, 1.0f});
+	void EndRenderPass();
+
+	void SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPassId RPass);
 
 	void Cmd_Init(const CInitCommand *pCommand);
 	void Cmd_Texture_Update(const CCommandBuffer::CTextureUpdateCommand *pCommand);
@@ -157,8 +178,10 @@ public:
 
 	bool RunCommand(const CCommandBuffer::CCommand * pBaseCommand);
 
-	void InitCommandBuffer();
 	void SubmitCommandBuffer();
+
+	void UploadStreamingData(const void *pData, unsigned Size);
+	void FreeStreamingData();
 };
 
 // command processor impelementation, uses the fragments to combine into one processor

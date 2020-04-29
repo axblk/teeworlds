@@ -30,13 +30,13 @@ class CCommandBuffer
 			m_Used = 0;
 		}
 
-		void *Alloc(unsigned Requested)
+		int Alloc(unsigned Requested)
 		{
 			if(Requested + m_Used > m_Size)
-				return 0;
-			void *pPtr = &m_pData[m_Used];
+				return -1;
+			int Offset = m_Used;
 			m_Used += Requested;
-			return pPtr;
+			return Offset;
 		}
 
 		unsigned char *DataPtr() { return m_pData; }
@@ -106,14 +106,13 @@ public:
 		//
 		PRIMTYPE_INVALID = 0,
 		PRIMTYPE_LINES,
-		PRIMTYPE_QUADS,
+		PRIMTYPE_TRIANGLES,
 	};
 
 	enum
 	{
 		BLEND_NONE = 0,
 		BLEND_ALPHA,
-		BLEND_ADDITIVE,
 	};
 
 	struct CPoint { float x, y; };
@@ -177,7 +176,7 @@ public:
 		CState m_State;
 		unsigned m_PrimType;
 		unsigned m_PrimCount;
-		CVertex *m_pVertices; // you should use the command buffer data to allocate vertices for this command
+		int m_Offset; // you should use the command buffer data to allocate vertices for this command
 	};
 
 	struct CScreenshotCommand : public CCommand
@@ -248,9 +247,19 @@ public:
 	{
 	}
 
-	void *AllocData(unsigned WantedSize)
+	int AllocData(unsigned WantedSize)
 	{
 		return m_DataBuffer.Alloc(WantedSize);
+	}
+
+	unsigned char *DataPtr()
+	{
+		return m_DataBuffer.DataPtr();
+	}
+
+	unsigned DataUsed() const
+	{
+		return m_DataBuffer.DataUsed();
 	}
 
 	template<class T>
@@ -260,9 +269,10 @@ public:
 		(void)static_cast<const CCommand *>(&Command);
 
 		// allocate and copy the command into the buffer
-		CCommand *pCmd = (CCommand *)m_CmdBuffer.Alloc(sizeof(Command));
-		if(!pCmd)
+		int Offset = m_CmdBuffer.Alloc(sizeof(Command));
+		if(Offset < 0)
 			return false;
+		CCommand *pCmd = (CCommand *)(&m_CmdBuffer.DataPtr()[Offset]);
 		mem_copy(pCmd, &Command, sizeof(Command));
 		pCmd->m_Size = sizeof(Command);
 		return true;
@@ -371,7 +381,7 @@ class CGraphics_Threaded : public IEngineGraphics
 
 	void FlushVertices();
 	void AddVertices(int Count);
-	void Rotate4(const CCommandBuffer::CPoint &rCenter, CCommandBuffer::CVertex *pPoints);
+	void Rotate6(const CCommandBuffer::CPoint &rCenter, CCommandBuffer::CVertex *pPoints);
 
 	void KickCommandBuffer();
 
@@ -385,7 +395,6 @@ public:
 
 	virtual void BlendNone();
 	virtual void BlendNormal();
-	virtual void BlendAdditive();
 
 	virtual void WrapNormal();
 	virtual void WrapClamp();
