@@ -41,6 +41,8 @@ extern "C" {
 	};
 #endif
 
+struct CScreen { float TL_x, TL_y, BR_x, BR_y; };
+struct CMat4 { float m_Value[16]; };
 
 // basic threaded backend, abstract, missing init and shutdown functions
 class CGraphicsBackend_Threaded : public IGraphicsBackend
@@ -117,16 +119,21 @@ class CCommandProcessorFragment_WGPU
 	WGPUCommandEncoderId m_CmdEncoder;
 	WGPURenderPassId m_RPass;
 	WGPUBufferId m_StreamingBuffer;
+	WGPUBindGroupId m_TransformBindGroup;
 	WGPURenderPipelineId m_RenderPipeline[3];
 	WGPURenderPipelineId m_Render2DPipeline[3];
 	WGPURenderPipelineId m_Render2DArrayPipeline[3];
 	WGPURenderPipelineId m_RenderPipelineLines[3];
+	WGPUBindGroupLayoutId m_BindGroupTransformLayout;
 	WGPUBindGroupLayoutId m_BindGroup2DLayout;
 	WGPUBindGroupLayoutId m_BindGroup2DArrayLayout;
 	WGPUSamplerId m_Sampler[4];
 	unsigned m_ScreenWidth;
 	unsigned m_ScreenHeight;
 	bool m_Ready;
+
+	int m_ScreenCount;
+	CScreen m_LastScreen;
 
 	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
 	volatile int *m_pTextureMemoryUsage;
@@ -180,7 +187,7 @@ public:
 
 	void SubmitCommandBuffer();
 
-	void UploadStreamingData(const void *pData, unsigned Size);
+	void UploadStreamingData(const void *pData, unsigned Size, const CScreen *pScreens, int NumScreens);
 	void FreeStreamingData();
 };
 
