@@ -2,6 +2,10 @@
 
 #include "graphics_threaded.h"
 
+extern "C" {
+	#include <wgpu.h>
+}
+
 #if defined(CONF_PLATFORM_MACOSX)
 	#include <objc/objc-runtime.h>
 
@@ -80,8 +84,8 @@ public:
 	bool RunCommand(const CCommandBuffer::CCommand * pBaseCommand);
 };
 
-// takes care of opengl related rendering
-class CCommandProcessorFragment_OpenGL
+// takes care of wgpu related rendering
+class CCommandProcessorFragment_WGPU
 {
 	class CTexture
 	{
@@ -91,37 +95,49 @@ class CCommandProcessorFragment_OpenGL
 			STATE_EMPTY = 0,
 			STATE_TEX2D = 1,
 			STATE_TEX3D = 2,
-
-			MIN_GL_MAX_3D_TEXTURE_SIZE = 64,																					// GL_MAX_3D_TEXTURE_SIZE must be at least 64 according to the standard
-			MAX_ARRAYSIZE_TEX3D = IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION / MIN_GL_MAX_3D_TEXTURE_SIZE,	// = 4
 		};
-		GLuint m_Tex2D;
-		GLuint m_Tex3D[MAX_ARRAYSIZE_TEX3D];
+		WGPUBindGroupId m_Tex2D;
+		WGPUBindGroupId m_Tex3D;
 		int m_State;
 		int m_Format;
 		int m_MemSize;
 	};
+
+	WGPUDeviceId m_Device;
+	WGPUSwapChainId m_SwapChain;
+	WGPUSwapChainOutput m_NextTexture;
+	WGPUCommandEncoderId m_CmdEncoder;
+	WGPURenderPassId m_RPass;
+	WGPURenderPipelineId m_RenderPipeline;
+	WGPURenderPipelineId m_Render2DPipeline;
+	WGPURenderPipelineId m_Render2DArrayPipeline;
+	WGPUBindGroupLayoutId m_BindGroup2DLayout;
+	WGPUBindGroupLayoutId m_BindGroup2DArrayLayout;
+	WGPUSamplerId m_Sampler;
+	bool m_RecordingBuffer;
+	bool m_Ready;
+
 	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
 	volatile int *m_pTextureMemoryUsage;
 	int m_MaxTexSize;
 	int m_Max3DTexSize;
-	int m_TextureArraySize;
 
 public:
 	enum
 	{
-		CMD_INIT = CCommandBuffer::CMDGROUP_PLATFORM_OPENGL,
+		CMD_INIT = CCommandBuffer::CMDGROUP_PLATFORM_WGPU,
 	};
 
 	struct CInitCommand : public CCommandBuffer::CCommand
 	{
 		CInitCommand() : CCommand(CMD_INIT) {}
+		WGPUDeviceId m_Device;
+		WGPUSwapChainId m_SwapChain;
 		volatile int *m_pTextureMemoryUsage;
-		int *m_pTextureArraySize;
 	};
 
 private:
-	static int TexFormatToOpenGLFormat(int TexFormat);
+	static WGPUTextureFormat TexFormatToWGPUFormat(int TexFormat);
 	static unsigned char Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp);
 	static void *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
 
@@ -133,75 +149,41 @@ private:
 	void Cmd_Texture_Create(const CCommandBuffer::CTextureCreateCommand *pCommand);
 	void Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand);
 	void Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand);
+	void Cmd_Swap(const CCommandBuffer::CSwapCommand *pCommand);
 	void Cmd_Screenshot(const CCommandBuffer::CScreenshotCommand *pCommand);
 
 public:
-	CCommandProcessorFragment_OpenGL();
+	CCommandProcessorFragment_WGPU();
 
 	bool RunCommand(const CCommandBuffer::CCommand * pBaseCommand);
-};
 
-// takes care of sdl related commands
-class CCommandProcessorFragment_SDL
-{
-	// SDL stuff
-	SDL_Window *m_pWindow;
-	SDL_GLContext m_GLContext;
-public:
-	enum
-	{
-		CMD_INIT = CCommandBuffer::CMDGROUP_PLATFORM_SDL,
-		CMD_SHUTDOWN,
-	};
-
-	struct CInitCommand : public CCommandBuffer::CCommand
-	{
-		CInitCommand() : CCommand(CMD_INIT) {}
-		SDL_Window *m_pWindow;
-		SDL_GLContext m_GLContext;
-	};
-
-	struct CShutdownCommand : public CCommandBuffer::CCommand
-	{
-		CShutdownCommand() : CCommand(CMD_SHUTDOWN) {}
-	};
-
-private:
-	void Cmd_Init(const CInitCommand *pCommand);
-	void Cmd_Shutdown(const CShutdownCommand *pCommand);
-	void Cmd_Swap(const CCommandBuffer::CSwapCommand *pCommand);
-	void Cmd_VSync(const CCommandBuffer::CVSyncCommand *pCommand);
-public:
-	CCommandProcessorFragment_SDL();
-
-	bool RunCommand(const CCommandBuffer::CCommand *pBaseCommand);
+	void InitCommandBuffer();
+	void SubmitCommandBuffer();
 };
 
 // command processor impelementation, uses the fragments to combine into one processor
-class CCommandProcessor_SDL_OpenGL : public CGraphicsBackend_Threaded::ICommandProcessor
+class CCommandProcessor_SDL_WGPU : public CGraphicsBackend_Threaded::ICommandProcessor
 {
-	CCommandProcessorFragment_OpenGL m_OpenGL;
-	CCommandProcessorFragment_SDL m_SDL;
+	CCommandProcessorFragment_WGPU m_WGPU;
 	CCommandProcessorFragment_General m_General;
  public:
 	virtual void RunBuffer(CCommandBuffer *pBuffer);
 };
 
-// graphics backend implemented with SDL and OpenGL
-class CGraphicsBackend_SDL_OpenGL : public CGraphicsBackend_Threaded
+// graphics backend implemented with SDL and WGPU
+class CGraphicsBackend_SDL_WGPU : public CGraphicsBackend_Threaded
 {
 	SDL_Window *m_pWindow;
-	SDL_GLContext m_GLContext;
+	//SDL_GLContext m_GLContext;
+	WGPUDeviceId m_Device;
 	ICommandProcessor *m_pProcessor;
 	volatile int m_TextureMemoryUsage;
 	int m_NumScreens;
-	int m_TextureArraySize;
 public:
 	virtual int Init(const char *pName, int *pScreen, int *pWindowWidth, int *pWindowHeight, int *pScreenWidth, int *pScreenHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight);
 	virtual int Shutdown();
 
 	virtual int MemoryUsage() const;
-	virtual int GetTextureArraySize() const { return m_TextureArraySize; }
 
 	virtual int GetNumScreens() const { return m_NumScreens; }
 

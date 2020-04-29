@@ -1657,7 +1657,6 @@ void CMenus::RenderSettingsGraphics(CUIRect MainView)
 	static const int s_GfxScreenHeight = Config()->m_GfxScreenHeight;
 	static const int s_GfxFsaaSamples = Config()->m_GfxFsaaSamples;
 	static const int s_GfxTextureQuality = Config()->m_GfxTextureQuality;
-	static const int s_GfxTextureCompression = Config()->m_GfxTextureCompression;
 
 	CUIRect Label, Button, ScreenLeft, ScreenRight, Texture, BottomView, Background;
 
@@ -1808,15 +1807,6 @@ void CMenus::RenderSettingsGraphics(CUIRect MainView)
 
 	Texture.HSplitTop(Spacing, 0, &Texture);
 	Texture.HSplitTop(ButtonHeight, &Button, &Texture);
-	static int s_ButtonGfxTextureCompression = 0;
-	if(DoButton_CheckBox(&s_ButtonGfxTextureCompression, Localize("Texture Compression"), Config()->m_GfxTextureCompression, &Button))
-	{
-		Config()->m_GfxTextureCompression ^= 1;
-		m_CheckVideoSettings = true;
-	}
-
-	Texture.HSplitTop(Spacing, 0, &Texture);
-	Texture.HSplitTop(ButtonHeight, &Button, &Texture);
 	static int s_ButtonGfxHighDetail = 0;
 	if(DoButton_CheckBox(&s_ButtonGfxHighDetail, Localize("High Detail"), Config()->m_GfxHighDetail, &Button))
 		Config()->m_GfxHighDetail ^= 1;
@@ -1898,7 +1888,6 @@ void CMenus::RenderSettingsGraphics(CUIRect MainView)
 			s_GfxScreenHeight != Config()->m_GfxScreenHeight ||
 			s_GfxFsaaSamples != Config()->m_GfxFsaaSamples ||
 			s_GfxTextureQuality != Config()->m_GfxTextureQuality ||
-			s_GfxTextureCompression != Config()->m_GfxTextureCompression ||
 			(CheckFullscreen && s_GfxFullscreen != Config()->m_GfxFullscreen);
 		m_CheckVideoSettings = false;
 	}
@@ -2093,7 +2082,6 @@ void CMenus::ResetSettingsGraphics()
 	Config()->m_GfxVsync = 1;
 	Config()->m_GfxFsaaSamples = 0;
 	Config()->m_GfxTextureQuality = 1;
-	Config()->m_GfxTextureCompression = 0;
 	Config()->m_GfxHighDetail = 1;
 
 	if(Config()->m_GfxDisplayAllModes)

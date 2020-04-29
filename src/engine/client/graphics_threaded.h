@@ -57,8 +57,7 @@ public:
 	{
 		// commadn groups
 		CMDGROUP_CORE = 0, // commands that everyone has to implement
-		CMDGROUP_PLATFORM_OPENGL = 10000, // commands specific to a platform
-		CMDGROUP_PLATFORM_SDL = 20000,
+		CMDGROUP_PLATFORM_WGPU = 10000, // commands specific to a platform
 
 		//
 		CMD_NOP = CMDGROUP_CORE,
@@ -95,7 +94,7 @@ public:
 		TEXFORMAT_ALPHA,
 
 		TEXFLAG_NOMIPMAPS = 1,
-		TEXFLAG_COMPRESSED = 2,
+//		TEXFLAG_COMPRESSED = 2,
 		TEXFLAG_QUALITY = 4,
 		TEXFLAG_TEXTURE3D = 8,
 		TEXFLAG_TEXTURE2D = 16,
@@ -142,7 +141,6 @@ public:
 		int m_WrapModeU;
 		int m_WrapModeV;
 		int m_Texture;
-		int m_TextureArrayIndex;
 		int m_Dimension;
 		CPoint m_ScreenTL;
 		CPoint m_ScreenBR;
@@ -308,7 +306,6 @@ public:
 	virtual int Shutdown() = 0;
 
 	virtual int MemoryUsage() const = 0;
-	virtual int GetTextureArraySize() const = 0;
 
 	virtual int GetNumScreens() const = 0;
 
@@ -368,7 +365,6 @@ class CGraphics_Threaded : public IEngineGraphics
 
 	CTextureHandle m_InvalidTexture;
 
-	int m_TextureArrayIndex;
 	int m_aTextureIndices[MAX_TEXTURES];
 	int m_FirstFreeTexture;
 	int m_TextureMemoryUsage;
@@ -426,7 +422,6 @@ public:
 	virtual void SetColor(float r, float g, float b, float a);
 	virtual void SetColor4(const vec4 &TopLeft, const vec4 &TopRight, const vec4 &BottomLeft, const vec4 &BottomRight);
 
-	void TilesetFallbackSystem(int TextureIndex);
 	virtual void QuadsSetSubset(float TlU, float TlV, float BrU, float BrV, int TextureIndex = -1);
 	virtual void QuadsSetSubsetFree(
 		float x0, float y0, float x1, float y1,

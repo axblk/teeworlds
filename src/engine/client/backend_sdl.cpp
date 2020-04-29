@@ -1,24 +1,102 @@
 #include <base/detect.h>
-#include "SDL.h"
-#include "SDL_opengl.h"
 
 #include <base/tl/threading.h>
+
+#include "SDL.h"
+#include "SDL_syswm.h"
 
 #include "graphics_threaded.h"
 #include "backend_sdl.h"
 
-#if defined(CONF_FAMILY_WINDOWS)
-	PFNGLTEXIMAGE3DPROC glTexImage3DInternal;
+static const unsigned char s_aVert[] = {
+	0x03, 0x02, 0x23, 0x07, 0x00, 0x00, 0x01, 0x00, 0x07, 0x00, 0x08, 0x00, 0x26, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x06, 0x00, 
+	0x01, 0x00, 0x00, 0x00, 0x47, 0x4C, 0x53, 0x4C, 0x2E, 0x73, 0x74, 0x64, 0x2E, 0x34, 0x35, 0x30, 
+	0x00, 0x00, 0x00, 0x00, 0x0E, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 
+	0x0F, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x6D, 0x61, 0x69, 0x6E, 
+	0x00, 0x00, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, 0x03, 0x00, 0x03, 0x00, 
+	0x02, 0x00, 0x00, 0x00, 0xC2, 0x01, 0x00, 0x00, 0x05, 0x00, 0x04, 0x00, 0x04, 0x00, 0x00, 0x00, 
+	0x6D, 0x61, 0x69, 0x6E, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x06, 0x00, 0x08, 0x00, 0x00, 0x00, 
+	0x67, 0x6C, 0x5F, 0x50, 0x65, 0x72, 0x56, 0x65, 0x72, 0x74, 0x65, 0x78, 0x00, 0x00, 0x00, 0x00, 
+	0x06, 0x00, 0x06, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x67, 0x6C, 0x5F, 0x50, 
+	0x6F, 0x73, 0x69, 0x74, 0x69, 0x6F, 0x6E, 0x00, 0x05, 0x00, 0x03, 0x00, 0x0A, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x06, 0x00, 0x19, 0x00, 0x00, 0x00, 0x67, 0x6C, 0x5F, 0x56, 
+	0x65, 0x72, 0x74, 0x65, 0x78, 0x49, 0x6E, 0x64, 0x65, 0x78, 0x00, 0x00, 0x05, 0x00, 0x05, 0x00, 
+	0x1C, 0x00, 0x00, 0x00, 0x69, 0x6E, 0x64, 0x65, 0x78, 0x61, 0x62, 0x6C, 0x65, 0x00, 0x00, 0x00, 
+	0x48, 0x00, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x00, 0x00, 0x47, 0x00, 0x03, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 
+	0x47, 0x00, 0x04, 0x00, 0x19, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 
+	0x13, 0x00, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x21, 0x00, 0x03, 0x00, 0x03, 0x00, 0x00, 0x00, 
+	0x02, 0x00, 0x00, 0x00, 0x16, 0x00, 0x03, 0x00, 0x06, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 
+	0x17, 0x00, 0x04, 0x00, 0x07, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 
+	0x1E, 0x00, 0x03, 0x00, 0x08, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x20, 0x00, 0x04, 0x00, 
+	0x09, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x3B, 0x00, 0x04, 0x00, 
+	0x09, 0x00, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x15, 0x00, 0x04, 0x00, 
+	0x0B, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x2B, 0x00, 0x04, 0x00, 
+	0x0B, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17, 0x00, 0x04, 0x00, 
+	0x0D, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x15, 0x00, 0x04, 0x00, 
+	0x0E, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2B, 0x00, 0x04, 0x00, 
+	0x0E, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x1C, 0x00, 0x04, 0x00, 
+	0x10, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x2B, 0x00, 0x04, 0x00, 
+	0x06, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2B, 0x00, 0x04, 0x00, 
+	0x06, 0x00, 0x00, 0x00, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xBF, 0x2C, 0x00, 0x05, 0x00, 
+	0x0D, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x12, 0x00, 0x00, 0x00, 
+	0x2B, 0x00, 0x04, 0x00, 0x06, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3F, 
+	0x2C, 0x00, 0x05, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 
+	0x14, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x05, 0x00, 0x0D, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 
+	0x12, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x06, 0x00, 0x10, 0x00, 0x00, 0x00, 
+	0x17, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 
+	0x20, 0x00, 0x04, 0x00, 0x18, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 
+	0x3B, 0x00, 0x04, 0x00, 0x18, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 
+	0x20, 0x00, 0x04, 0x00, 0x1B, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 
+	0x20, 0x00, 0x04, 0x00, 0x1D, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x0D, 0x00, 0x00, 0x00, 
+	0x2B, 0x00, 0x04, 0x00, 0x06, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3F, 
+	0x20, 0x00, 0x04, 0x00, 0x24, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 
+	0x36, 0x00, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+	0x03, 0x00, 0x00, 0x00, 0xF8, 0x00, 0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x3B, 0x00, 0x04, 0x00, 
+	0x1B, 0x00, 0x00, 0x00, 0x1C, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x3D, 0x00, 0x04, 0x00, 
+	0x0B, 0x00, 0x00, 0x00, 0x1A, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, 0x3E, 0x00, 0x03, 0x00, 
+	0x1C, 0x00, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x41, 0x00, 0x05, 0x00, 0x1D, 0x00, 0x00, 0x00, 
+	0x1E, 0x00, 0x00, 0x00, 0x1C, 0x00, 0x00, 0x00, 0x1A, 0x00, 0x00, 0x00, 0x3D, 0x00, 0x04, 0x00, 
+	0x0D, 0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x00, 0x51, 0x00, 0x05, 0x00, 
+	0x06, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+	0x51, 0x00, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00, 0x22, 0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00, 
+	0x01, 0x00, 0x00, 0x00, 0x50, 0x00, 0x07, 0x00, 0x07, 0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 
+	0x21, 0x00, 0x00, 0x00, 0x22, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 
+	0x41, 0x00, 0x05, 0x00, 0x24, 0x00, 0x00, 0x00, 0x25, 0x00, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 
+	0x0C, 0x00, 0x00, 0x00, 0x3E, 0x00, 0x03, 0x00, 0x25, 0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 
+	0xFD, 0x00, 0x01, 0x00, 0x38, 0x00, 0x01, 0x00
+};
 
-#if defined (_MSC_VER)
-	GLAPI void GLAPIENTRY glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid *pixels)
-#else
-	void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid *pixels)
-#endif
-	{
-		glTexImage3DInternal(target, level, internalFormat, width, height, depth, border, format, type, pixels);
-	}
-#endif
+static const unsigned char s_aFrag[] = {
+	0x03, 0x02, 0x23, 0x07, 0x00, 0x00, 0x01, 0x00, 0x07, 0x00, 0x08, 0x00, 0x0D, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x06, 0x00, 
+	0x01, 0x00, 0x00, 0x00, 0x47, 0x4C, 0x53, 0x4C, 0x2E, 0x73, 0x74, 0x64, 0x2E, 0x34, 0x35, 0x30, 
+	0x00, 0x00, 0x00, 0x00, 0x0E, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 
+	0x0F, 0x00, 0x06, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x6D, 0x61, 0x69, 0x6E, 
+	0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x10, 0x00, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00, 
+	0x07, 0x00, 0x00, 0x00, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x00, 0x00, 0xC2, 0x01, 0x00, 0x00, 
+	0x05, 0x00, 0x04, 0x00, 0x04, 0x00, 0x00, 0x00, 0x6D, 0x61, 0x69, 0x6E, 0x00, 0x00, 0x00, 0x00, 
+	0x05, 0x00, 0x05, 0x00, 0x09, 0x00, 0x00, 0x00, 0x6F, 0x75, 0x74, 0x43, 0x6F, 0x6C, 0x6F, 0x72, 
+	0x00, 0x00, 0x00, 0x00, 0x47, 0x00, 0x04, 0x00, 0x09, 0x00, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x00, 0x00, 0x13, 0x00, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x21, 0x00, 0x03, 0x00, 
+	0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x16, 0x00, 0x03, 0x00, 0x06, 0x00, 0x00, 0x00, 
+	0x20, 0x00, 0x00, 0x00, 0x17, 0x00, 0x04, 0x00, 0x07, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 
+	0x04, 0x00, 0x00, 0x00, 0x20, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 
+	0x07, 0x00, 0x00, 0x00, 0x3B, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 
+	0x03, 0x00, 0x00, 0x00, 0x2B, 0x00, 0x04, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x80, 0x3F, 0x2B, 0x00, 0x04, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x07, 0x00, 0x07, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 
+	0x0A, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 
+	0x36, 0x00, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+	0x03, 0x00, 0x00, 0x00, 0xF8, 0x00, 0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x3E, 0x00, 0x03, 0x00, 
+	0x09, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0xFD, 0x00, 0x01, 0x00, 0x38, 0x00, 0x01, 0x00, 
+};
+
+void FequestAdapterCallback(WGPUAdapterId Received, void *pUserdata)
+{
+    *(WGPUAdapterId*)pUserdata = Received;
+}
 
 // ------------ CGraphicsBackend_Threaded
 
@@ -103,17 +181,17 @@ bool CCommandProcessorFragment_General::RunCommand(const CCommandBuffer::CComman
 	return true;
 }
 
-// ------------ CCommandProcessorFragment_OpenGL
+// ------------ CCommandProcessorFragment_WGPU
 
-int CCommandProcessorFragment_OpenGL::TexFormatToOpenGLFormat(int TexFormat)
+WGPUTextureFormat CCommandProcessorFragment_WGPU::TexFormatToWGPUFormat(int TexFormat)
 {
-	if(TexFormat == CCommandBuffer::TEXFORMAT_RGB) return GL_RGB;
-	if(TexFormat == CCommandBuffer::TEXFORMAT_ALPHA) return GL_ALPHA;
-	if(TexFormat == CCommandBuffer::TEXFORMAT_RGBA) return GL_RGBA;
-	return GL_RGBA;
+	//if(TexFormat == CCommandBuffer::TEXFORMAT_RGB) return GL_RGB;
+	if(TexFormat == CCommandBuffer::TEXFORMAT_ALPHA) return WGPUTextureFormat_R8Unorm;
+	if(TexFormat == CCommandBuffer::TEXFORMAT_RGBA) return WGPUTextureFormat_Rgba8Unorm;
+	return WGPUTextureFormat_Rgba8Unorm;
 }
 
-unsigned char CCommandProcessorFragment_OpenGL::Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp)
+unsigned char CCommandProcessorFragment_WGPU::Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp)
 {
 	int Value = 0;
 	for(int x = 0; x < ScaleW; x++)
@@ -122,7 +200,7 @@ unsigned char CCommandProcessorFragment_OpenGL::Sample(int w, int h, const unsig
 	return Value/(ScaleW*ScaleH);
 }
 
-void *CCommandProcessorFragment_OpenGL::Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData)
+void *CCommandProcessorFragment_WGPU::Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData)
 {
 	unsigned char *pTmpData;
 	int ScaleW = Width/NewWidth;
@@ -148,8 +226,9 @@ void *CCommandProcessorFragment_OpenGL::Rescale(int Width, int Height, int NewWi
 	return pTmpData;
 }
 
-void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &State)
+void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &State)
 {
+	/*
 	// clip
 	if(State.m_ClipEnable)
 	{
@@ -174,7 +253,7 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 		else if(State.m_Dimension == 3 && (m_aTextures[State.m_Texture].m_State&CTexture::STATE_TEX3D))
 		{
 			glEnable(GL_TEXTURE_3D);
-			glBindTexture(GL_TEXTURE_3D, m_aTextures[State.m_Texture].m_Tex3D[State.m_TextureArrayIndex]);
+			glBindTexture(GL_TEXTURE_3D, m_aTextures[State.m_Texture].m_Tex3D);
 		}
 		else
 			dbg_msg("render", "invalid texture %d %d %d\n", State.m_Texture, State.m_Dimension, m_aTextures[State.m_Texture].m_State);
@@ -242,12 +321,13 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	glOrtho(State.m_ScreenTL.x, State.m_ScreenBR.x, State.m_ScreenBR.y, State.m_ScreenTL.y, -1.0f, 1.0f);
+	*/
 }
 
-void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
+void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 {
 	// set some default settings
-	glEnable(GL_BLEND);
+	/*glEnable(GL_BLEND);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
 	glMatrixMode(GL_MODELVIEW);
@@ -255,42 +335,300 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 
 	glAlphaFunc(GL_GREATER, 0);
 	glEnable(GL_ALPHA_TEST);
-	glDepthMask(0);
+	glDepthMask(0);*/
 
+	m_Device = pCommand->m_Device;
+	m_SwapChain = pCommand->m_SwapChain;
 	m_pTextureMemoryUsage = pCommand->m_pTextureMemoryUsage;
 	*m_pTextureMemoryUsage = 0;
-	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &m_MaxTexSize);
+
+	WGPUShaderModuleId VertexShader = wgpu_device_create_shader_module(m_Device,
+        &WGPUShaderModuleDescriptor {
+            .code = WGPUU32Array {
+				.bytes = (uint32_t*) s_aVert,
+				.length = sizeof(s_aVert) / 4,
+			},
+        });
+	
+	dbg_msg("wgpu", "created vertex shader");
+
+    WGPUShaderModuleId FragmentShader = wgpu_device_create_shader_module(m_Device,
+        &WGPUShaderModuleDescriptor {
+            .code = WGPUU32Array {
+                .bytes = (uint32_t*) s_aFrag,
+                .length = sizeof(s_aFrag) / 4,
+            },
+        });
+	
+	dbg_msg("wgpu", "created fragment shader");
+
+	WGPUBindGroupLayoutEntry aEntries2D[2] = {
+		{
+			.binding = 0,
+			.visibility = WGPUShaderStage_FRAGMENT,
+			.ty = WGPUBindingType_SampledTexture,
+			.multisampled = false,
+			.view_dimension = WGPUTextureViewDimension_D2,
+			.texture_component_type = WGPUTextureComponentType_Float
+		},
+		{
+			.binding = 1,
+			.visibility = WGPUShaderStage_FRAGMENT,
+			.ty = WGPUBindingType_Sampler,
+		}
+	};
+
+	WGPUBindGroupLayoutEntry aEntries2DArray[2] = {
+		{
+			.binding = 0,
+			.visibility = WGPUShaderStage_FRAGMENT,
+			.ty = WGPUBindingType_SampledTexture,
+			.multisampled = false,
+			.view_dimension = WGPUTextureViewDimension_D2Array,
+			.texture_component_type = WGPUTextureComponentType_Float
+		},
+		{
+			.binding = 1,
+			.visibility = WGPUShaderStage_FRAGMENT,
+			.ty = WGPUBindingType_Sampler,
+		}
+	};
+
+    m_BindGroup2DLayout = wgpu_device_create_bind_group_layout(m_Device,
+        &WGPUBindGroupLayoutDescriptor {
+            .label = "bind group 2D layout",
+            .entries = aEntries2D,
+            .entries_length = 2,
+        });
+	
+	m_BindGroup2DArrayLayout = wgpu_device_create_bind_group_layout(m_Device,
+        &WGPUBindGroupLayoutDescriptor {
+            .label = "bind group 2D array layout",
+            .entries = aEntries2DArray,
+            .entries_length = 2,
+        });
+
+	dbg_msg("wgpu", "created bind group layout");
+
+    WGPUPipelineLayoutId PipelineLayout = wgpu_device_create_pipeline_layout(m_Device,
+        &WGPUPipelineLayoutDescriptor {
+            .bind_group_layouts = NULL,
+            .bind_group_layouts_length = 0,
+        });
+
+	WGPUBindGroupLayoutId aBindGroup2DLayouts[1] = {m_BindGroup2DLayout};
+	WGPUPipelineLayoutId Pipeline2DLayout = wgpu_device_create_pipeline_layout(m_Device,
+        &WGPUPipelineLayoutDescriptor {
+            .bind_group_layouts = aBindGroup2DLayouts,
+            .bind_group_layouts_length = 1,
+        });
+
+	WGPUBindGroupLayoutId aBindGroup2DArrayLayouts[1] = {m_BindGroup2DArrayLayout};
+	WGPUPipelineLayoutId Pipeline2DArrayLayout = wgpu_device_create_pipeline_layout(m_Device,
+        &WGPUPipelineLayoutDescriptor {
+            .bind_group_layouts = {aBindGroup2DArrayLayouts},
+            .bind_group_layouts_length = 1,
+        });
+	
+	dbg_msg("wgpu", "created pipeline layout");
+
+    m_RenderPipeline = wgpu_device_create_render_pipeline(m_Device,
+        &WGPURenderPipelineDescriptor {
+            .layout = PipelineLayout,
+            .vertex_stage =
+                WGPUProgrammableStageDescriptor {
+                    .module = VertexShader,
+                    .entry_point = "main",
+                },
+            .fragment_stage =
+                &WGPUProgrammableStageDescriptor {
+                    .module = FragmentShader,
+                    .entry_point = "main",
+                },
+            .primitive_topology = WGPUPrimitiveTopology_TriangleList,
+            .rasterization_state =
+                &WGPURasterizationStateDescriptor {
+                    .front_face = WGPUFrontFace_Ccw,
+                    .cull_mode = WGPUCullMode_None,
+                    .depth_bias = 0,
+                    .depth_bias_slope_scale = 0.0,
+                    .depth_bias_clamp = 0.0,
+                },
+            .color_states =
+                &WGPUColorStateDescriptor {
+                    .format = WGPUTextureFormat_Bgra8Unorm,
+                    .alpha_blend =
+                        WGPUBlendDescriptor {
+                            .src_factor = WGPUBlendFactor_One,
+                            .dst_factor = WGPUBlendFactor_Zero,
+                            .operation = WGPUBlendOperation_Add,
+                        },
+                    .color_blend =
+                        WGPUBlendDescriptor {
+                            .src_factor = WGPUBlendFactor_One,
+                            .dst_factor = WGPUBlendFactor_Zero,
+                            .operation = WGPUBlendOperation_Add,
+                        },
+                    .write_mask = WGPUColorWrite_ALL,
+                },
+            .color_states_length = 1,
+            .depth_stencil_state = NULL,
+            .vertex_state =
+                WGPUVertexStateDescriptor {
+                    .index_format = WGPUIndexFormat_Uint16,
+                    .vertex_buffers = NULL,
+                    .vertex_buffers_length = 0,
+                },
+            .sample_count = 1,
+        });
+
+    m_Render2DPipeline = wgpu_device_create_render_pipeline(m_Device,
+        &WGPURenderPipelineDescriptor {
+            .layout = Pipeline2DLayout,
+            .vertex_stage =
+                WGPUProgrammableStageDescriptor {
+                    .module = VertexShader,
+                    .entry_point = "main",
+                },
+            .fragment_stage =
+                &WGPUProgrammableStageDescriptor {
+                    .module = FragmentShader,
+                    .entry_point = "main",
+                },
+            .primitive_topology = WGPUPrimitiveTopology_TriangleList,
+            .rasterization_state =
+                &WGPURasterizationStateDescriptor {
+                    .front_face = WGPUFrontFace_Ccw,
+                    .cull_mode = WGPUCullMode_None,
+                    .depth_bias = 0,
+                    .depth_bias_slope_scale = 0.0,
+                    .depth_bias_clamp = 0.0,
+                },
+            .color_states =
+                &WGPUColorStateDescriptor {
+                    .format = WGPUTextureFormat_Bgra8Unorm,
+                    .alpha_blend =
+                        WGPUBlendDescriptor {
+                            .src_factor = WGPUBlendFactor_One,
+                            .dst_factor = WGPUBlendFactor_Zero,
+                            .operation = WGPUBlendOperation_Add,
+                        },
+                    .color_blend =
+                        WGPUBlendDescriptor {
+                            .src_factor = WGPUBlendFactor_One,
+                            .dst_factor = WGPUBlendFactor_Zero,
+                            .operation = WGPUBlendOperation_Add,
+                        },
+                    .write_mask = WGPUColorWrite_ALL,
+                },
+            .color_states_length = 1,
+            .depth_stencil_state = NULL,
+            .vertex_state =
+                WGPUVertexStateDescriptor {
+                    .index_format = WGPUIndexFormat_Uint16,
+                    .vertex_buffers = NULL,
+                    .vertex_buffers_length = 0,
+                },
+            .sample_count = 1,
+        });
+
+	m_Render2DArrayPipeline = wgpu_device_create_render_pipeline(m_Device,
+        &WGPURenderPipelineDescriptor {
+            .layout = Pipeline2DArrayLayout,
+            .vertex_stage =
+                WGPUProgrammableStageDescriptor {
+                    .module = VertexShader,
+                    .entry_point = "main",
+                },
+            .fragment_stage =
+                &WGPUProgrammableStageDescriptor {
+                    .module = FragmentShader,
+                    .entry_point = "main",
+                },
+            .primitive_topology = WGPUPrimitiveTopology_TriangleList,
+            .rasterization_state =
+                &WGPURasterizationStateDescriptor {
+                    .front_face = WGPUFrontFace_Ccw,
+                    .cull_mode = WGPUCullMode_None,
+                    .depth_bias = 0,
+                    .depth_bias_slope_scale = 0.0,
+                    .depth_bias_clamp = 0.0,
+                },
+            .color_states =
+                &WGPUColorStateDescriptor {
+                    .format = WGPUTextureFormat_Bgra8Unorm,
+                    .alpha_blend =
+                        WGPUBlendDescriptor {
+                            .src_factor = WGPUBlendFactor_One,
+                            .dst_factor = WGPUBlendFactor_Zero,
+                            .operation = WGPUBlendOperation_Add,
+                        },
+                    .color_blend =
+                        WGPUBlendDescriptor {
+                            .src_factor = WGPUBlendFactor_One,
+                            .dst_factor = WGPUBlendFactor_Zero,
+                            .operation = WGPUBlendOperation_Add,
+                        },
+                    .write_mask = WGPUColorWrite_ALL,
+                },
+            .color_states_length = 1,
+            .depth_stencil_state = NULL,
+            .vertex_state =
+                WGPUVertexStateDescriptor {
+                    .index_format = WGPUIndexFormat_Uint16,
+                    .vertex_buffers = NULL,
+                    .vertex_buffers_length = 0,
+                },
+            .sample_count = 1,
+        });
+	
+	dbg_msg("wgpu", "created pipeline");
+
+	m_Sampler = wgpu_device_create_sampler(m_Device,
+        &WGPUSamplerDescriptor {
+            .address_mode_u = WGPUAddressMode_ClampToEdge,
+			.address_mode_v = WGPUAddressMode_ClampToEdge,
+			.address_mode_w = WGPUAddressMode_ClampToEdge,
+			.mag_filter = WGPUFilterMode_Linear,
+			.min_filter = WGPUFilterMode_Linear,
+			.mipmap_filter = WGPUFilterMode_Nearest,
+			.lod_min_clamp = -100.f,
+			.lod_max_clamp = 100.0,
+            .compare = WGPUCompareFunction_Undefined,
+        });
+
+	m_NextTexture = wgpu_swap_chain_get_next_texture(m_SwapChain);
+
+	m_Ready = true;
+	
+	/*glGetIntegerv(GL_MAX_TEXTURE_SIZE, &m_MaxTexSize);
 	glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &m_Max3DTexSize);
-	dbg_msg("render", "opengl max texture sizes: %d, %d(3D)", m_MaxTexSize, m_Max3DTexSize);
-	if(m_Max3DTexSize < IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION)
-		dbg_msg("render", "*** warning *** max 3D texture size is too low - using the fallback system");
-	m_TextureArraySize = IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION / min(m_Max3DTexSize, IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION);
-	*pCommand->m_pTextureArraySize = m_TextureArraySize;
+	dbg_msg("render", "opengl max texture sizes: %d, %d(3D)", m_MaxTexSize, m_Max3DTexSize);*/
 }
 
-void CCommandProcessorFragment_OpenGL::Cmd_Texture_Update(const CCommandBuffer::CTextureUpdateCommand *pCommand)
+void CCommandProcessorFragment_WGPU::Cmd_Texture_Update(const CCommandBuffer::CTextureUpdateCommand *pCommand)
 {
-	if(m_aTextures[pCommand->m_Slot].m_State&CTexture::STATE_TEX2D)
+	/*if(m_aTextures[pCommand->m_Slot].m_State&CTexture::STATE_TEX2D)
 	{
 		glBindTexture(GL_TEXTURE_2D, m_aTextures[pCommand->m_Slot].m_Tex2D);
 		glTexSubImage2D(GL_TEXTURE_2D, 0, pCommand->m_X, pCommand->m_Y, pCommand->m_Width, pCommand->m_Height,
-			TexFormatToOpenGLFormat(pCommand->m_Format), GL_UNSIGNED_BYTE, pCommand->m_pData);
+			TexFormatToWGPUFormat(pCommand->m_Format), GL_UNSIGNED_BYTE, pCommand->m_pData);
 	}
-	mem_free(pCommand->m_pData);
+	mem_free(pCommand->m_pData);*/
 }
 
-void CCommandProcessorFragment_OpenGL::Cmd_Texture_Destroy(const CCommandBuffer::CTextureDestroyCommand *pCommand)
+void CCommandProcessorFragment_WGPU::Cmd_Texture_Destroy(const CCommandBuffer::CTextureDestroyCommand *pCommand)
 {
 	if(m_aTextures[pCommand->m_Slot].m_State&CTexture::STATE_TEX2D)
-		glDeleteTextures(1, &m_aTextures[pCommand->m_Slot].m_Tex2D);
+		wgpu_bind_group_destroy(m_aTextures[pCommand->m_Slot].m_Tex2D);
 	if(m_aTextures[pCommand->m_Slot].m_State&CTexture::STATE_TEX3D)
-		glDeleteTextures(m_TextureArraySize, m_aTextures[pCommand->m_Slot].m_Tex3D);
+		wgpu_bind_group_destroy(m_aTextures[pCommand->m_Slot].m_Tex3D);
 	*m_pTextureMemoryUsage -= m_aTextures[pCommand->m_Slot].m_MemSize;
 	m_aTextures[pCommand->m_Slot].m_State = CTexture::STATE_EMPTY;
 	m_aTextures[pCommand->m_Slot].m_MemSize = 0;
 }
 
-void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::CTextureCreateCommand *pCommand)
+void CCommandProcessorFragment_WGPU::Cmd_Texture_Create(const CCommandBuffer::CTextureCreateCommand *pCommand)
 {
 	int Width = pCommand->m_Width;
 	int Height = pCommand->m_Height;
@@ -298,10 +636,10 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 	void *pTexData = pCommand->m_pData;
 
 	// resample if needed
-	if(pCommand->m_Format == CCommandBuffer::TEXFORMAT_RGBA || pCommand->m_Format == CCommandBuffer::TEXFORMAT_RGB)
+	/*if(pCommand->m_Format == CCommandBuffer::TEXFORMAT_RGBA || pCommand->m_Format == CCommandBuffer::TEXFORMAT_RGB)
 	{
 		int MaxTexSize = m_MaxTexSize;
-		if((pCommand->m_Flags&CCommandBuffer::TEXFLAG_TEXTURE3D) && m_Max3DTexSize >= CTexture::MIN_GL_MAX_3D_TEXTURE_SIZE)
+		if(pCommand->m_Flags&CCommandBuffer::TEXFLAG_TEXTURE3D)
 		{
 			if(pCommand->m_Flags&CCommandBuffer::TEXFLAG_TEXTURE2D)
 				MaxTexSize = min(MaxTexSize, m_Max3DTexSize * IGraphics::NUMTILES_DIMENSION);
@@ -330,7 +668,7 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 			mem_free(pTexData);
 			pTexData = pTmpData;
 		}
-	}
+	}*/
 
 	// use premultiplied alpha for rgba textures
 	if(pCommand->m_Format == CCommandBuffer::TEXFORMAT_RGBA)
@@ -347,32 +685,58 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 	m_aTextures[pCommand->m_Slot].m_Format = pCommand->m_Format;
 
 	//
-	int Oglformat = TexFormatToOpenGLFormat(pCommand->m_Format);
-	int StoreOglformat = TexFormatToOpenGLFormat(pCommand->m_StoreFormat);
-
-	if(pCommand->m_Flags&CCommandBuffer::TEXFLAG_COMPRESSED)
-	{
-		switch(StoreOglformat)
-		{
-			case GL_RGB: StoreOglformat = GL_COMPRESSED_RGB_ARB; break;
-			case GL_ALPHA: StoreOglformat = GL_COMPRESSED_ALPHA_ARB; break;
-			case GL_RGBA: StoreOglformat = GL_COMPRESSED_RGBA_ARB; break;
-			default: StoreOglformat = GL_COMPRESSED_RGBA_ARB;
-		}
-	}
+	WGPUTextureFormat WGPUFormat = TexFormatToWGPUFormat(pCommand->m_Format);
 
 	// 2D texture
 	if(pCommand->m_Flags&CCommandBuffer::TEXFLAG_TEXTURE2D)
 	{
-		bool Mipmaps = !(pCommand->m_Flags&CCommandBuffer::TEXFLAG_NOMIPMAPS);
-		glGenTextures(1, &m_aTextures[pCommand->m_Slot].m_Tex2D);
+		//bool Mipmaps = !(pCommand->m_Flags&CCommandBuffer::TEXFLAG_NOMIPMAPS);
+		WGPUTextureId Tex = wgpu_device_create_texture(m_Device, 
+			&WGPUTextureDescriptor {
+				.size = {
+					.width = (unsigned)Width,
+					.height = (unsigned)Height,
+					.depth = (unsigned)Depth,
+				},
+				.array_layer_count = 1,
+				.mip_level_count = 1,
+				.sample_count = 1,
+				.dimension = WGPUTextureDimension_D2,
+				.format = WGPUFormat,
+				.usage = WGPUTextureUsage_SAMPLED | WGPUTextureUsage_COPY_DST,
+			});
+		
+		WGPUTextureViewId TexView = wgpu_texture_create_view(Tex, NULL);
+
+		WGPUBindGroupEntry aEntries[2] = {
+			{
+				.binding = 0,
+				.resource = {
+					.tag = WGPUBindingResource_TextureView,
+					.texture_view = TexView,
+				},
+			},
+			{
+				.binding = 1,
+				.resource = {
+					.tag = WGPUBindingResource_Sampler,
+					.sampler = m_Sampler,
+				},
+			}
+		};
+		m_aTextures[pCommand->m_Slot].m_Tex2D = wgpu_device_create_bind_group(m_Device,
+			&WGPUBindGroupDescriptor {
+				.layout = m_BindGroup2DLayout,
+				.entries = aEntries,
+				.entries_length = 2,
+			});
 		m_aTextures[pCommand->m_Slot].m_State |= CTexture::STATE_TEX2D;
-		glBindTexture(GL_TEXTURE_2D, m_aTextures[pCommand->m_Slot].m_Tex2D);
-		if(!Mipmaps)
+
+		/*if(!Mipmaps)
 		{
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexImage2D(GL_TEXTURE_2D, 0, StoreOglformat, Width, Height, 0, Oglformat, GL_UNSIGNED_BYTE, pTexData);
+			glTexImage2D(GL_TEXTURE_2D, 0, StoreWGPUFormat, Width, Height, 0, WGPUFormat, GL_UNSIGNED_BYTE, pTexData);
 		}
 		else
 		{
@@ -382,7 +746,7 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 			else
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
-			glTexImage2D(GL_TEXTURE_2D, 0, StoreOglformat, Width, Height, 0, Oglformat, GL_UNSIGNED_BYTE, pTexData);
+			glTexImage2D(GL_TEXTURE_2D, 0, StoreWGPUFormat, Width, Height, 0, WGPUFormat, GL_UNSIGNED_BYTE, pTexData);
 		}
 
 		// calculate memory usage
@@ -397,11 +761,11 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 				TexHeight>>=1;
 				m_aTextures[pCommand->m_Slot].m_MemSize += TexWidth*TexHeight*pCommand->m_PixelSize;
 			}
-		}
+		}*/
 	}
 
 	// 3D texture
-	if((pCommand->m_Flags&CCommandBuffer::TEXFLAG_TEXTURE3D) && m_Max3DTexSize >= CTexture::MIN_GL_MAX_3D_TEXTURE_SIZE)
+	/*if((pCommand->m_Flags&CCommandBuffer::TEXFLAG_TEXTURE3D) && m_Max3DTexSize >= CTexture::MIN_GL_MAX_3D_TEXTURE_SIZE)
 	{
 		Width /= IGraphics::NUMTILES_DIMENSION;
 		Height /= IGraphics::NUMTILES_DIMENSION;
@@ -427,35 +791,34 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 		mem_free(pTexData);
 
 		//
-		glGenTextures(m_TextureArraySize, m_aTextures[pCommand->m_Slot].m_Tex3D);
+		glGenTextures(1, m_aTextures[pCommand->m_Slot].m_Tex3D);
 		m_aTextures[pCommand->m_Slot].m_State |= CTexture::STATE_TEX3D;
-		for(int i = 0; i < m_TextureArraySize; ++i)
-		{
-			glBindTexture(GL_TEXTURE_3D, m_aTextures[pCommand->m_Slot].m_Tex3D[i]);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			pTexData = pTmpData+i*(Width*Height*Depth*pCommand->m_PixelSize);
-			glTexImage3D(GL_TEXTURE_3D, 0, StoreOglformat, Width, Height, Depth, 0, Oglformat, GL_UNSIGNED_BYTE, pTexData);
 
-			m_aTextures[pCommand->m_Slot].m_MemSize += Width*Height*pCommand->m_PixelSize;
-		}
+		glBindTexture(GL_TEXTURE_3D, m_aTextures[pCommand->m_Slot].m_Tex3D);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		pTexData = pTmpData;
-	}
+		glTexImage3D(GL_TEXTURE_3D, 0, StoreWGPUFormat, Width, Height, Depth, 0, WGPUFormat, GL_UNSIGNED_BYTE, pTexData);
+
+		m_aTextures[pCommand->m_Slot].m_MemSize += Width*Height*pCommand->m_PixelSize;
+
+		pTexData = pTmpData;
+	}*/
 
 	*m_pTextureMemoryUsage += m_aTextures[pCommand->m_Slot].m_MemSize;
 
 	mem_free(pTexData);
 }
 
-void CCommandProcessorFragment_OpenGL::Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand)
+void CCommandProcessorFragment_WGPU::Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand)
 {
-	glClearColor(pCommand->m_Color.r, pCommand->m_Color.g, pCommand->m_Color.b, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glClearColor(pCommand->m_Color.r, pCommand->m_Color.g, pCommand->m_Color.b, 0.0f);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void CCommandProcessorFragment_OpenGL::Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand)
+void CCommandProcessorFragment_WGPU::Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand)
 {
-	SetState(pCommand->m_State);
+	/*SetState(pCommand->m_State);
 
 	glVertexPointer(2, GL_FLOAT, sizeof(CCommandBuffer::CVertex), (char*)pCommand->m_pVertices);
 	glTexCoordPointer(3, GL_FLOAT, sizeof(CCommandBuffer::CVertex), (char*)pCommand->m_pVertices + sizeof(float)*2);
@@ -474,11 +837,29 @@ void CCommandProcessorFragment_OpenGL::Cmd_Render(const CCommandBuffer::CRenderC
 		break;
 	default:
 		dbg_msg("render", "unknown primtype %d\n", pCommand->m_Cmd);
-	};
+	};*/
 }
 
-void CCommandProcessorFragment_OpenGL::Cmd_Screenshot(const CCommandBuffer::CScreenshotCommand *pCommand)
+void CCommandProcessorFragment_WGPU::Cmd_Swap(const CCommandBuffer::CSwapCommand *pCommand)
 {
+	/*SDL_GL_SwapWindow(m_pWindow);
+
+	if(pCommand->m_Finish)
+		glFinish();*/
+
+	SubmitCommandBuffer();
+
+	wgpu_swap_chain_present(m_SwapChain);
+	//dbg_msg("wgpu", "presented swap chain");
+
+	m_NextTexture = wgpu_swap_chain_get_next_texture(m_SwapChain);
+
+	InitCommandBuffer();
+}
+
+void CCommandProcessorFragment_WGPU::Cmd_Screenshot(const CCommandBuffer::CScreenshotCommand *pCommand)
+{
+	/*
 	// fetch image data
 	GLint aViewport[4] = {0,0,0,0};
 	glGetIntegerv(GL_VIEWPORT, aViewport);
@@ -499,7 +880,7 @@ void CCommandProcessorFragment_OpenGL::Cmd_Screenshot(const CCommandBuffer::CScr
 	glReadPixels(x, y, w, h, GL_RGB, GL_UNSIGNED_BYTE, pPixelData);
 	glPixelStorei(GL_PACK_ALIGNMENT, Alignment);
 
-	// flip the pixel because opengl works from bottom left corner
+	// flip the pixel because WGPU works from bottom left corner
 	for(int ty = 0; ty < h/2; ty++)
 	{
 		mem_copy(pTempRow, pPixelData+ty*w*3, w*3);
@@ -511,16 +892,18 @@ void CCommandProcessorFragment_OpenGL::Cmd_Screenshot(const CCommandBuffer::CScr
 	pCommand->m_pImage->m_Width = w;
 	pCommand->m_pImage->m_Height = h;
 	pCommand->m_pImage->m_Format = CImageInfo::FORMAT_RGB;
-	pCommand->m_pImage->m_pData = pPixelData;
+	pCommand->m_pImage->m_pData = pPixelData;*/
 }
 
-CCommandProcessorFragment_OpenGL::CCommandProcessorFragment_OpenGL()
+CCommandProcessorFragment_WGPU::CCommandProcessorFragment_WGPU()
 {
 	mem_zero(m_aTextures, sizeof(m_aTextures));
 	m_pTextureMemoryUsage = 0;
+	m_RecordingBuffer = false;
+	m_Ready = false;
 }
 
-bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand * pBaseCommand)
+bool CCommandProcessorFragment_WGPU::RunCommand(const CCommandBuffer::CCommand * pBaseCommand)
 {
 	switch(pBaseCommand->m_Cmd)
 	{
@@ -530,6 +913,7 @@ bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand
 	case CCommandBuffer::CMD_TEXTURE_UPDATE: Cmd_Texture_Update(static_cast<const CCommandBuffer::CTextureUpdateCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_CLEAR: Cmd_Clear(static_cast<const CCommandBuffer::CClearCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_RENDER: Cmd_Render(static_cast<const CCommandBuffer::CRenderCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_SWAP: Cmd_Swap(static_cast<const CCommandBuffer::CSwapCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_SCREENSHOT: Cmd_Screenshot(static_cast<const CCommandBuffer::CScreenshotCommand *>(pBaseCommand)); break;
 	default: return false;
 	}
@@ -537,67 +921,70 @@ bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand
 	return true;
 }
 
-
-// ------------ CCommandProcessorFragment_SDL
-
-void CCommandProcessorFragment_SDL::Cmd_Init(const CInitCommand *pCommand)
+void CCommandProcessorFragment_WGPU::InitCommandBuffer()
 {
-	m_GLContext = pCommand->m_GLContext;
-	m_pWindow = pCommand->m_pWindow;
-	SDL_GL_MakeCurrent(m_pWindow, m_GLContext);
+	if(!m_Ready || !m_NextTexture.view_id)
+		return;
+
+    m_CmdEncoder = wgpu_device_create_command_encoder(
+        m_Device, &WGPUCommandEncoderDescriptor {.label = "command encoder"});
+	
+	//dbg_msg("wgpu", "created command encoder");
+
+    WGPURenderPassColorAttachmentDescriptor aColorAttachments[1] = {
+            {
+                .attachment = m_NextTexture.view_id,
+                .load_op = WGPULoadOp_Clear,
+                .store_op = WGPUStoreOp_Store,
+                .clear_color = WGPUColor { .r = 0.0, .g = 0.0, .b = 1.0, .a = 1.0 },
+            },
+        };
+
+    m_RPass = wgpu_command_encoder_begin_render_pass(m_CmdEncoder,
+        &WGPURenderPassDescriptor {
+            .color_attachments = aColorAttachments,
+            .color_attachments_length = 1,
+            .depth_stencil_attachment = NULL,
+        });
+	
+	//dbg_msg("wgpu", "began render pass");
+
+	m_RecordingBuffer = true;
+
+    wgpu_render_pass_set_pipeline(m_RPass, m_RenderPipeline);
+    //wgpu_render_pass_set_bind_group(RPass, 0, BindGroup, NULL, 0);
+    wgpu_render_pass_draw(m_RPass, 3, 1, 0, 0);
+    wgpu_render_pass_end_pass(m_RPass);
+	//dbg_msg("wgpu", "render pass ended");
 }
 
-void CCommandProcessorFragment_SDL::Cmd_Shutdown(const CShutdownCommand *pCommand)
+void CCommandProcessorFragment_WGPU::SubmitCommandBuffer()
 {
-	SDL_GL_MakeCurrent(NULL, NULL);
-}
-
-void CCommandProcessorFragment_SDL::Cmd_Swap(const CCommandBuffer::CSwapCommand *pCommand)
-{
-	SDL_GL_SwapWindow(m_pWindow);
-
-	if(pCommand->m_Finish)
-		glFinish();
-}
-
-void CCommandProcessorFragment_SDL::Cmd_VSync(const CCommandBuffer::CVSyncCommand *pCommand)
-{
-	*pCommand->m_pRetOk = SDL_GL_SetSwapInterval(pCommand->m_VSync) == 0;
-}
-
-CCommandProcessorFragment_SDL::CCommandProcessorFragment_SDL()
-{
-}
-
-bool CCommandProcessorFragment_SDL::RunCommand(const CCommandBuffer::CCommand *pBaseCommand)
-{
-	switch(pBaseCommand->m_Cmd)
+	if(m_RecordingBuffer)
 	{
-	case CCommandBuffer::CMD_SWAP: Cmd_Swap(static_cast<const CCommandBuffer::CSwapCommand *>(pBaseCommand)); break;
-	case CCommandBuffer::CMD_VSYNC: Cmd_VSync(static_cast<const CCommandBuffer::CVSyncCommand *>(pBaseCommand)); break;
-	case CMD_INIT: Cmd_Init(static_cast<const CInitCommand *>(pBaseCommand)); break;
-	case CMD_SHUTDOWN: Cmd_Shutdown(static_cast<const CShutdownCommand *>(pBaseCommand)); break;
-	default: return false;
+		WGPUCommandBufferId CmdBuf =  wgpu_command_encoder_finish(m_CmdEncoder, NULL);
+		//dbg_msg("wgpu", "finished command buffer");
+		WGPUQueueId Queue = wgpu_device_get_default_queue(m_Device);
+		wgpu_queue_submit(Queue, &CmdBuf, 1);
+		//dbg_msg("wgpu", "submitted command buffer");
+		m_RecordingBuffer = false;
 	}
-
-	return true;
 }
 
-// ------------ CCommandProcessor_SDL_OpenGL
 
-void CCommandProcessor_SDL_OpenGL::RunBuffer(CCommandBuffer *pBuffer)
+// ------------ CCommandProcessor_SDL_WGPU
+
+void CCommandProcessor_SDL_WGPU::RunBuffer(CCommandBuffer *pBuffer)
 {
 	unsigned CmdIndex = 0;
+	m_WGPU.InitCommandBuffer();
 	while(1)
 	{
 		const CCommandBuffer::CCommand *pBaseCommand = pBuffer->GetCommand(&CmdIndex);
 		if(pBaseCommand == 0x0)
 			break;
 
-		if(m_OpenGL.RunCommand(pBaseCommand))
-			continue;
-
-		if(m_SDL.RunCommand(pBaseCommand))
+		if(m_WGPU.RunCommand(pBaseCommand))
 			continue;
 
 		if(m_General.RunCommand(pBaseCommand))
@@ -605,11 +992,12 @@ void CCommandProcessor_SDL_OpenGL::RunBuffer(CCommandBuffer *pBuffer)
 
 		dbg_msg("graphics", "unknown command %d", pBaseCommand->m_Cmd);
 	}
+	m_WGPU.SubmitCommandBuffer();
 }
 
-// ------------ CGraphicsBackend_SDL_OpenGL
+// ------------ CGraphicsBackend_SDL_WGPU
 
-int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWindowWidth, int *pWindowHeight, int* pScreenWidth, int* pScreenHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight)
+int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindowWidth, int *pWindowHeight, int* pScreenWidth, int* pScreenHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight)
 {
 	if(!SDL_WasInit(SDL_INIT_VIDEO))
 	{
@@ -653,7 +1041,7 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 	}
 
 	// set flags
-	int SdlFlags = SDL_WINDOW_OPENGL;
+	int SdlFlags = 0;
 	if(Flags&IGraphicsBackend::INITFLAG_HIGHDPI)
 		SdlFlags |= SDL_WINDOW_ALLOW_HIGHDPI;
 	if(Flags&IGraphicsBackend::INITFLAG_RESIZABLE)
@@ -674,7 +1062,7 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 	if(Flags&IGraphicsBackend::INITFLAG_X11XRANDR)
 		SDL_SetHint(SDL_HINT_VIDEO_X11_XRANDR, "1");
 
-	// set gl attributes
+	/*// set gl attributes
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	if(FsaaSamples)
 	{
@@ -685,7 +1073,7 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 	{
 		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
 		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
-	}
+	}*/
 
 	// calculate centered position in windowed mode
 	int OffsetX = 0;
@@ -706,28 +1094,67 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 
 	SDL_GetWindowSize(m_pWindow, pWindowWidth, pWindowHeight);
 
-	// create gl context
-	m_GLContext = SDL_GL_CreateContext(m_pWindow);
-	if(m_GLContext == NULL)
-	{
-		dbg_msg("gfx", "unable to create OpenGL context: %s", SDL_GetError());
-		return -1;
-	}
+	SDL_SysWMinfo WmInfo;
+	SDL_VERSION(&WmInfo.version);
+	SDL_GetWindowWMInfo(m_pWindow, &WmInfo);
+	HWND hwnd = WmInfo.info.win.window;
+
+	WGPUSurfaceId Surface;
 
 	SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
 
 	#if defined(CONF_FAMILY_WINDOWS)
-		glTexImage3DInternal = (PFNGLTEXIMAGE3DPROC) wglGetProcAddress("glTexImage3D");
-		if(glTexImage3DInternal == 0)
-		{
-			dbg_msg("gfx", "glTexImage3D not supported");
-			return -1;
-		}
+	Surface = wgpu_create_surface_from_windows_hwnd(WmInfo.info.win.hinstance, WmInfo.info.win.window);
+	#else
+		#if defined(CONF_PLATFORM_MACOSX)
+		// TODO
+		#else
+		surface = wgpu_create_surface_from_xlib((const void **)WmInfo.info.x11.display, WmInfo.info.x11.window);
+		#endif
 	#endif
 
-	SDL_GL_SetSwapInterval(Flags&IGraphicsBackend::INITFLAG_VSYNC ? 1 : 0);
+	//SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
 
-	SDL_GL_MakeCurrent(NULL, NULL);
+	*pScreenWidth = *pWindowWidth;
+	*pScreenHeight = *pWindowHeight;
+
+	WGPUAdapterId Adapter = { 0 };
+    wgpu_request_adapter_async(
+        &WGPURequestAdapterOptions {
+            .power_preference = WGPUPowerPreference_HighPerformance,
+            .compatible_surface = Surface,
+        },
+        2 | 4 | 8,
+        FequestAdapterCallback,
+        (void *) &Adapter
+    );
+
+	dbg_msg("wgpu", "adapter requested");
+
+    m_Device = wgpu_adapter_request_device(Adapter,
+        &WGPUDeviceDescriptor {
+            .extensions =
+                {
+                    .anisotropic_filtering = false,
+                },
+            .limits =
+                {
+                    .max_bind_groups = 1,
+                },
+        });
+
+	dbg_msg("wgpu", "device requested");
+	
+	WGPUSwapChainId SwapChain = wgpu_device_create_swap_chain(m_Device, Surface,
+        &WGPUSwapChainDescriptor {
+            .usage = WGPUTextureUsage_OUTPUT_ATTACHMENT,
+            .format = WGPUTextureFormat_Bgra8Unorm,
+            .width = (unsigned)*pScreenWidth,
+            .height = (unsigned)*pScreenHeight,
+            .present_mode = WGPUPresentMode_Fifo,
+        });
+	
+	dbg_msg("wgpu", "created swapchain");
 
 	// print sdl version
 	SDL_version Compiled;
@@ -738,19 +1165,16 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 	dbg_msg("sdl", "SDL version %d.%d.%d (dll = %d.%d.%d)", Compiled.major, Compiled.minor, Compiled.patch, Linked.major, Linked.minor, Linked.patch);
 
 	// start the command processor
-	m_pProcessor = new CCommandProcessor_SDL_OpenGL;
+	m_pProcessor = new CCommandProcessor_SDL_WGPU;
 	StartProcessor(m_pProcessor);
 
-	// issue init commands for OpenGL and SDL
+	// issue init commands for WGPU and SDL
 	CCommandBuffer CmdBuffer(1024, 512);
-	CCommandProcessorFragment_SDL::CInitCommand CmdSDL;
-	CmdSDL.m_pWindow = m_pWindow;
-	CmdSDL.m_GLContext = m_GLContext;
-	CmdBuffer.AddCommand(CmdSDL);
-	CCommandProcessorFragment_OpenGL::CInitCommand CmdOpenGL;
-	CmdOpenGL.m_pTextureMemoryUsage = &m_TextureMemoryUsage;
-	CmdOpenGL.m_pTextureArraySize = &m_TextureArraySize;
-	CmdBuffer.AddCommand(CmdOpenGL);
+	CCommandProcessorFragment_WGPU::CInitCommand CmdWGPU;
+	CmdWGPU.m_Device = m_Device;
+	CmdWGPU.m_SwapChain = SwapChain;
+	CmdWGPU.m_pTextureMemoryUsage = &m_TextureMemoryUsage;
+	CmdBuffer.AddCommand(CmdWGPU);
 	RunBuffer(&CmdBuffer);
 	WaitForIdle();
 
@@ -758,42 +1182,36 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 	return 0;
 }
 
-int CGraphicsBackend_SDL_OpenGL::Shutdown()
+int CGraphicsBackend_SDL_WGPU::Shutdown()
 {
-	// issue a shutdown command
-	CCommandBuffer CmdBuffer(1024, 512);
-	CCommandProcessorFragment_SDL::CShutdownCommand Cmd;
-	CmdBuffer.AddCommand(Cmd);
-	RunBuffer(&CmdBuffer);
-	WaitForIdle();
+	// TODO: issue a shutdown command
 
 	// stop and delete the processor
 	StopProcessor();
 	delete m_pProcessor;
 	m_pProcessor = 0;
 
-	SDL_GL_DeleteContext(m_GLContext);
 	SDL_DestroyWindow(m_pWindow);
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 	return 0;
 }
 
-int CGraphicsBackend_SDL_OpenGL::MemoryUsage() const
+int CGraphicsBackend_SDL_WGPU::MemoryUsage() const
 {
 	return m_TextureMemoryUsage;
 }
 
-void CGraphicsBackend_SDL_OpenGL::Minimize()
+void CGraphicsBackend_SDL_WGPU::Minimize()
 {
 	SDL_MinimizeWindow(m_pWindow);
 }
 
-void CGraphicsBackend_SDL_OpenGL::Maximize()
+void CGraphicsBackend_SDL_WGPU::Maximize()
 {
 	SDL_MaximizeWindow(m_pWindow);
 }
 
-bool CGraphicsBackend_SDL_OpenGL::Fullscreen(bool State)
+bool CGraphicsBackend_SDL_WGPU::Fullscreen(bool State)
 {
 #if defined(CONF_PLATFORM_MACOSX)	// Todo SDL: remove this when fixed (game freezes when losing focus in fullscreen)
 	return SDL_SetWindowFullscreen(m_pWindow, State ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) == 0;
@@ -802,12 +1220,12 @@ bool CGraphicsBackend_SDL_OpenGL::Fullscreen(bool State)
 #endif
 }
 
-void CGraphicsBackend_SDL_OpenGL::SetWindowBordered(bool State)
+void CGraphicsBackend_SDL_WGPU::SetWindowBordered(bool State)
 {
 	SDL_SetWindowBordered(m_pWindow, SDL_bool(State));
 }
 
-bool CGraphicsBackend_SDL_OpenGL::SetWindowScreen(int Index)
+bool CGraphicsBackend_SDL_WGPU::SetWindowScreen(int Index)
 {
 	if(Index >= 0 && Index < m_NumScreens)
 	{
@@ -822,12 +1240,12 @@ bool CGraphicsBackend_SDL_OpenGL::SetWindowScreen(int Index)
 	return false;
 }
 
-int CGraphicsBackend_SDL_OpenGL::GetWindowScreen()
+int CGraphicsBackend_SDL_WGPU::GetWindowScreen()
 {
 	return SDL_GetWindowDisplayIndex(m_pWindow);
 }
 
-int CGraphicsBackend_SDL_OpenGL::GetVideoModes(CVideoMode *pModes, int MaxModes, int Screen)
+int CGraphicsBackend_SDL_WGPU::GetVideoModes(CVideoMode *pModes, int MaxModes, int Screen)
 {
 	int NumModes = SDL_GetNumDisplayModes(Screen);
 	if(NumModes < 0)
@@ -871,7 +1289,7 @@ int CGraphicsBackend_SDL_OpenGL::GetVideoModes(CVideoMode *pModes, int MaxModes,
 	return ModesCount;
 }
 
-bool CGraphicsBackend_SDL_OpenGL::GetDesktopResolution(int Index, int *pDesktopWidth, int* pDesktopHeight)
+bool CGraphicsBackend_SDL_WGPU::GetDesktopResolution(int Index, int *pDesktopWidth, int* pDesktopHeight)
 {
 	SDL_DisplayMode DisplayMode;
 	if(SDL_GetDesktopDisplayMode(Index, &DisplayMode))
@@ -882,16 +1300,16 @@ bool CGraphicsBackend_SDL_OpenGL::GetDesktopResolution(int Index, int *pDesktopW
 	return true;
 }
 
-int CGraphicsBackend_SDL_OpenGL::WindowActive()
+int CGraphicsBackend_SDL_WGPU::WindowActive()
 {
 	return SDL_GetWindowFlags(m_pWindow)&SDL_WINDOW_INPUT_FOCUS;
 }
 
-int CGraphicsBackend_SDL_OpenGL::WindowOpen()
+int CGraphicsBackend_SDL_WGPU::WindowOpen()
 {
 	return SDL_GetWindowFlags(m_pWindow)&SDL_WINDOW_SHOWN;
 
 }
 
 
-IGraphicsBackend *CreateGraphicsBackend() { return new CGraphicsBackend_SDL_OpenGL; }
+IGraphicsBackend *CreateGraphicsBackend() { return new CGraphicsBackend_SDL_WGPU; }

@@ -162,7 +162,6 @@ function GenerateMacOSXSettings(settings, conf, arch, compiler)
 	AddDependency(server_exe, serverlaunch)
 
 	-- Client
-	settings.link.frameworks:Add("OpenGL")
 	settings.link.frameworks:Add("AGL")
 	-- FIXME: the SDL config is applied in BuildClient too but is needed here before so the launcher will compile
 	config.sdl:Apply(settings)
@@ -270,7 +269,6 @@ function GenerateWindowsSettings(settings, conf, target_arch, compiler)
 	-- Client
 	settings.link.extrafiles:Add(icons.client)
 	settings.link.extrafiles:Add(manifests.client)
-	settings.link.libs:Add("opengl32")
 	settings.link.libs:Add("winmm")
 	BuildClient(settings)
 
