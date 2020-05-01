@@ -12,6 +12,22 @@
 
 #include "shaders.h"
 
+static void WGPULogFunc(int Level, const char *pMsg)
+{
+	const char *pLevelStr = "";
+	switch(Level)
+	{
+	case WGPULogLevel_Off: pLevelStr = "OFF"; break;
+	case WGPULogLevel_Error: pLevelStr = "ERROR"; break;
+	case WGPULogLevel_Warn: pLevelStr = "WARN"; break;
+	case WGPULogLevel_Info: pLevelStr = "INFO"; break;
+	case WGPULogLevel_Debug: pLevelStr = "DEBUG"; break;
+	case WGPULogLevel_Trace: pLevelStr = "TRACE"; break;
+	}
+
+	dbg_msg("wgpu", "%s: %s", pLevelStr, pMsg);
+}
+
 void FequestAdapterCallback(WGPUAdapterId Received, void *pUserdata)
 {
 	*(WGPUAdapterId*)pUserdata = Received;
@@ -1362,7 +1378,10 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 
 	WGPUSurfaceId Surface;
 
-	SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
+	//SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
+
+	wgpu_set_log_callback(WGPULogFunc);
+	wgpu_set_log_level(WGPULogLevel_Warn);
 
 	#if defined(CONF_FAMILY_WINDOWS)
 	Surface = wgpu_create_surface_from_windows_hwnd(WmInfo.info.win.hinstance, WmInfo.info.win.window);
@@ -1373,8 +1392,6 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 		surface = wgpu_create_surface_from_xlib((const void **)WmInfo.info.x11.display, WmInfo.info.x11.window);
 		#endif
 	#endif
-
-	//SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
 
 	*pScreenWidth = *pWindowWidth;
 	*pScreenHeight = *pWindowHeight;
