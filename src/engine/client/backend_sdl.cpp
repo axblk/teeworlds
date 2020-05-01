@@ -300,14 +300,10 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 	m_pTextureMemoryUsage = pCommand->m_pTextureMemoryUsage;
 	*m_pTextureMemoryUsage = 0;
 
-	m_SwapChain = wgpu_device_create_swap_chain(m_Device, pCommand->m_Surface,
-		&WGPUSwapChainDescriptor {
-			.usage = WGPUTextureUsage_OUTPUT_ATTACHMENT,
-			.format = WGPUTextureFormat_Bgra8Unorm,
-			.width = m_ScreenWidth,
-			.height = m_ScreenHeight,
-			.present_mode = WGPUPresentMode_Immediate,
-		});
+	m_Surface = pCommand->m_Surface;
+
+	// TODO: mailbox mode
+	m_SwapChain = CreateSwapChain(pCommand->m_VSync ? WGPUPresentMode_Fifo : WGPUPresentMode_Immediate);
 	
 	dbg_msg("wgpu", "created swapchain: %llu", m_SwapChain);
 
@@ -508,6 +504,8 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Update(const CCommandBuffer::CT
 		wgpu_buffer_unmap(TmpBuffer);
 
 		//dbg_msg("wgpu", "created buffer: %llu", TmpBuffer);
+
+		EndRenderPass();
 
 		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
 
@@ -829,8 +827,9 @@ void CCommandProcessorFragment_WGPU::Cmd_Clear(const CCommandBuffer::CClearComma
 
 void CCommandProcessorFragment_WGPU::Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand)
 {
-	bool First = m_RPass == 0;
 	WGPURenderPassId RPass = GetRenderPass();
+	if(!RPass)
+		return;
 
 	SetState(pCommand->m_State, pCommand->m_PrimType, RPass);
 
@@ -909,6 +908,12 @@ void CCommandProcessorFragment_WGPU::Cmd_Screenshot(const CCommandBuffer::CScree
 	pCommand->m_pImage->m_pData = pPixelData;*/
 }
 
+void CCommandProcessorFragment_WGPU::Cmd_VSync(const CCommandBuffer::CVSyncCommand *pCommand)
+{
+	// TODO
+	*pCommand->m_pRetOk = false;
+}
+
 CCommandProcessorFragment_WGPU::CCommandProcessorFragment_WGPU()
 {
 	mem_zero(m_aTextures, sizeof(m_aTextures));
@@ -932,10 +937,23 @@ bool CCommandProcessorFragment_WGPU::RunCommand(const CCommandBuffer::CCommand *
 	case CCommandBuffer::CMD_RENDER: Cmd_Render(static_cast<const CCommandBuffer::CRenderCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_SWAP: Cmd_Swap(static_cast<const CCommandBuffer::CSwapCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_SCREENSHOT: Cmd_Screenshot(static_cast<const CCommandBuffer::CScreenshotCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VSYNC: Cmd_VSync(static_cast<const CCommandBuffer::CVSyncCommand *>(pBaseCommand)); break;
 	default: return false;
 	}
 
 	return true;
+}
+
+WGPUSwapChainId CCommandProcessorFragment_WGPU::CreateSwapChain(WGPUPresentMode PresentMode)
+{
+	return wgpu_device_create_swap_chain(m_Device, m_Surface,
+		&WGPUSwapChainDescriptor {
+			.usage = WGPUTextureUsage_OUTPUT_ATTACHMENT,
+			.format = WGPUTextureFormat_Bgra8Unorm,
+			.width = m_ScreenWidth,
+			.height = m_ScreenHeight,
+			.present_mode = PresentMode,
+		});
 }
 
 WGPURenderPipelineId CCommandProcessorFragment_WGPU::CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, int PrimType, WGPUBlendDescriptor BlendInfo)
@@ -1442,6 +1460,7 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 	CmdWGPU.m_Surface = Surface;
 	CmdWGPU.m_ScreenWidth = *pScreenWidth;
 	CmdWGPU.m_ScreenHeight = *pScreenHeight;
+	CmdWGPU.m_VSync = Flags&IGraphicsBackend::INITFLAG_VSYNC;
 	CmdWGPU.m_pTextureMemoryUsage = &m_TextureMemoryUsage;
 	CmdBuffer.AddCommand(CmdWGPU);
 	RunBuffer(&CmdBuffer);

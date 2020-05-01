@@ -114,6 +114,7 @@ class CCommandProcessorFragment_WGPU
 	};
 
 	WGPUDeviceId m_Device;
+	WGPUSurfaceId m_Surface;
 	WGPUSwapChainId m_SwapChain;
 	WGPUSwapChainOutput m_NextTexture;
 	WGPUCommandEncoderId m_CmdEncoder;
@@ -153,6 +154,7 @@ public:
 		WGPUSurfaceId m_Surface;
 		unsigned m_ScreenWidth;
 		unsigned m_ScreenHeight;
+		bool m_VSync;
 		volatile int *m_pTextureMemoryUsage;
 	};
 
@@ -161,6 +163,7 @@ private:
 	static unsigned char *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
 	static void ConvertToRGBA(int Width, int Height, int Format, unsigned char **ppData);
 
+	WGPUSwapChainId CreateSwapChain(WGPUPresentMode PresentMode);
 	WGPURenderPipelineId CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, int PrimType, WGPUBlendDescriptor BlendInfo);
 	WGPUSamplerId CreateSampler(int WrapModeU, int WrapModeV);
 	WGPUBindGroupId GetTexBindGroup(CTextureData *pTex, int WrapModeU, int WrapModeV, bool Array);
@@ -179,6 +182,7 @@ private:
 	void Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand);
 	void Cmd_Swap(const CCommandBuffer::CSwapCommand *pCommand);
 	void Cmd_Screenshot(const CCommandBuffer::CScreenshotCommand *pCommand);
+	void Cmd_VSync(const CCommandBuffer::CVSyncCommand *pCommand);
 
 public:
 	CCommandProcessorFragment_WGPU();
