@@ -1415,6 +1415,7 @@ if(CLIENT)
     serverbrowser_fav.h
     serverbrowser_filter.cpp
     serverbrowser_filter.h
+    shaders.h
     sound.cpp
     sound.h
     text.cpp
