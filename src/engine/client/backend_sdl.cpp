@@ -1437,7 +1437,8 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 				{
 					.max_bind_groups = 2,
 				},
-		});
+		},
+		NULL);
 
 	dbg_msg("wgpu", "device requested");
 
