@@ -1392,24 +1392,47 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 	SDL_SysWMinfo WmInfo;
 	SDL_VERSION(&WmInfo.version);
 	SDL_GetWindowWMInfo(m_pWindow, &WmInfo);
-	HWND hwnd = WmInfo.info.win.window;
 
-	WGPUSurfaceId Surface;
+	WGPUSurfaceId Surface = 0;
 
 	//SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
 
 	wgpu_set_log_callback(WGPULogFunc);
 	wgpu_set_log_level(WGPULogLevel_Warn);
 
-	#if defined(CONF_FAMILY_WINDOWS)
-	Surface = wgpu_create_surface_from_windows_hwnd(WmInfo.info.win.hinstance, WmInfo.info.win.window);
-	#else
-		#if defined(CONF_PLATFORM_MACOSX)
-		// TODO
-		#else
-		surface = wgpu_create_surface_from_xlib((const void **)WmInfo.info.x11.display, WmInfo.info.x11.window);
-		#endif
+	const char *pVideoDriver = SDL_GetCurrentVideoDriver();
+
+	#if defined(SDL_VIDEO_DRIVER_WINDOWS)
+	if(str_comp_nocase(pVideoDriver, "windows") == 0)
+	{
+		Surface = wgpu_create_surface_from_windows_hwnd(WmInfo.info.win.hinstance, WmInfo.info.win.window);
+	}
 	#endif
+	#if defined(SDL_VIDEO_DRIVER_X11)
+	if(str_comp_nocase(pVideoDriver, "x11") == 0)
+	{
+		Surface = wgpu_create_surface_from_xlib((const void **)WmInfo.info.x11.display, WmInfo.info.x11.window);
+	}
+	#endif
+	#if defined(SDL_VIDEO_DRIVER_WAYLAND)
+	if(str_comp_nocase(pVideoDriver, "wayland") == 0)
+	{
+		Surface = wgpu_create_surface_from_wayland(WmInfo.info.wl.surface, WmInfo.info.wl.display);
+	}
+	#endif
+	#if defined(SDL_VIDEO_DRIVER_COCOA)
+	if(str_comp_nocase(pVideoDriver, "cocoa") == 0)
+	{
+		// TODO
+		// Surface = wgpu_create_surface_from_metal_layer(metal_layer);
+	}
+	#endif
+
+	if(Surface == 0)
+	{
+		dbg_msg("gfx", "unsupported video driver: %s", pVideoDriver ? pVideoDriver : "NULL");
+		return -1;
+	}
 
 	*pScreenWidth = *pWindowWidth;
 	*pScreenHeight = *pWindowHeight;
