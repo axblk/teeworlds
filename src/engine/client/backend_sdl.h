@@ -95,6 +95,7 @@ class CCommandProcessorFragment_WGPU
 		WGPUTextureId m_Tex;
 		WGPUTextureViewId m_TexView;
 		WGPUBindGroupId m_BindGroups[4];
+		bool m_LinearMipmaps;
 	};
 
 	class CTexture
@@ -125,10 +126,11 @@ class CCommandProcessorFragment_WGPU
 	WGPURenderPipelineId m_Render2DPipeline[3];
 	WGPURenderPipelineId m_Render2DArrayPipeline[3];
 	WGPURenderPipelineId m_RenderPipelineLines[3];
+	WGPURenderPipelineId m_RenderPipelineMipmap;
 	WGPUBindGroupLayoutId m_BindGroupTransformLayout;
 	WGPUBindGroupLayoutId m_BindGroup2DLayout;
 	WGPUBindGroupLayoutId m_BindGroup2DArrayLayout;
-	WGPUSamplerId m_Sampler[4];
+	WGPUSamplerId m_Sampler[2][2][2];
 	unsigned m_ScreenWidth;
 	unsigned m_ScreenHeight;
 	bool m_Ready;
@@ -163,11 +165,15 @@ private:
 	static unsigned char *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
 	static void ConvertToRGBA(int Width, int Height, int Format, unsigned char **ppData);
 
-	WGPUSwapChainId CreateSwapChain(WGPUPresentMode PresentMode);
-	WGPURenderPipelineId CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, int PrimType, WGPUBlendDescriptor BlendInfo);
-	WGPUSamplerId CreateSampler(int WrapModeU, int WrapModeV);
-	WGPUBindGroupId GetTexBindGroup(CTextureData *pTex, int WrapModeU, int WrapModeV, bool Array);
+	void GenerateMipmapsForLayer(WGPUTextureId Tex, unsigned BaseLayer, unsigned MipLevels);
 
+	WGPUSwapChainId CreateSwapChain(WGPUPresentMode PresentMode);
+	WGPURenderPipelineId CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, WGPUPrimitiveTopology PrimTopology, WGPUBlendDescriptor BlendInfo, bool Mipmap = false);
+	WGPUSamplerId CreateSampler(WGPUAddressMode ModeU, WGPUAddressMode ModeV, bool LinearMipmaps);
+	WGPUBindGroupId CreateTexBindGroup(WGPUTextureViewId TexView, WGPUSamplerId Sampler, bool Array = false);
+	WGPURenderPassId CreateRenderPass(WGPUCommandEncoderId CmdEncoder, WGPUTextureViewId TexView, WGPULoadOp LoadOp, WGPUColor ClearColor);
+
+	WGPUBindGroupId GetTexBindGroup(CTextureData *pTex, int WrapModeU, int WrapModeV, bool Array);
 	WGPUCommandEncoderId GetCommandEncoder();
 	WGPURenderPassId GetRenderPass(bool Clear = false, CCommandBuffer::CColor ClearColor = {0.0f, 0.0f, 0.0f, 1.0f});
 	void EndRenderPass();

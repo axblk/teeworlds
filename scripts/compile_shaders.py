@@ -10,7 +10,9 @@ SHADERS = [
 	("datasrc/shaders/main.vert", "Vert"),
 	("datasrc/shaders/no-tex.frag", "FragNoTex"),
 	("datasrc/shaders/2d.frag", "Frag2D"),
-    ("datasrc/shaders/2d-array.frag", "Frag2DArray")
+    ("datasrc/shaders/2d-array.frag", "Frag2DArray"),
+    ("datasrc/shaders/blit.vert", "VertBlit"),
+    ("datasrc/shaders/blit.frag", "FragBlit")
 ]
 
 OUTPUT = "src/engine/client/shaders.h"
