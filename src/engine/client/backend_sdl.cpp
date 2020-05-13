@@ -175,9 +175,9 @@ void CCommandProcessorFragment_WGPU::ConvertToRGBA(int Width, int Height, int Fo
 		unsigned char *pTmpData = (unsigned char *)mem_alloc(Width*Height*4, 1);
 		for(int i = 0; i < Width * Height; ++i)
 		{
-			pTmpData[i*4+0] = pTexels[i];
-			pTmpData[i*4+1] = pTexels[i];
-			pTmpData[i*4+2] = pTexels[i];
+			pTmpData[i*4+0] = 255;
+			pTmpData[i*4+1] = 255;
+			pTmpData[i*4+2] = 255;
 			pTmpData[i*4+3] = pTexels[i];
 		}
 		mem_free(pTexels);
@@ -852,7 +852,10 @@ void CCommandProcessorFragment_WGPU::Cmd_Swap(const CCommandBuffer::CSwapCommand
 
 	SubmitCommandBuffer();
 
-	wgpu_swap_chain_present(m_SwapChain);
+	if(m_NextTexture.view_id)
+	{
+		wgpu_swap_chain_present(m_SwapChain);
+	}
 
 	m_NextTexture = wgpu_swap_chain_get_next_texture(m_SwapChain);
 }
@@ -1233,7 +1236,8 @@ void CCommandProcessorFragment_WGPU::FreeStreamingData()
 void CCommandProcessor_SDL_WGPU::RunBuffer(CCommandBuffer *pBuffer)
 {
 	unsigned CmdIndex = 0;
-	array<CScreen> Screens;
+	static array<CScreen> Screens;
+	int NumScreens = 0;
 
 	while(1)
 	{
@@ -1250,13 +1254,19 @@ void CCommandProcessor_SDL_WGPU::RunBuffer(CCommandBuffer *pBuffer)
 				pRenderCmd->m_State.m_ScreenBR.x,
 				pRenderCmd->m_State.m_ScreenBR.y
 			};
-			if(Screens.size() == 0 || mem_comp(&Screens[Screens.size()-1], &CurScreen, sizeof(CurScreen)) != 0)
-				Screens.add(CurScreen);
+			if(NumScreens == 0 || mem_comp(&Screens[NumScreens-1], &CurScreen, sizeof(CurScreen)) != 0)
+			{
+				NumScreens++;
+				if(NumScreens > Screens.size())
+					Screens.add(CurScreen);
+				else
+					Screens[NumScreens-1] = CurScreen;
+			}
 		}
 	}
 
 	if(pBuffer->DataUsed() > 0)
-		m_WGPU.UploadStreamingData(pBuffer->DataPtr(), pBuffer->DataUsed(), &Screens[0], Screens.size());
+		m_WGPU.UploadStreamingData(pBuffer->DataPtr(), pBuffer->DataUsed(), &Screens[0], NumScreens);
 	else
 		dbg_msg("", "no streaming data");
 
