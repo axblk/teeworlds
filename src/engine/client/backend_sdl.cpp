@@ -539,19 +539,21 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Update(const CCommandBuffer::CT
 			.height = (unsigned)Height,
 			.depth = 1,
 		};
-		WGPUBufferCopyView BufferCopyView = {
-			.buffer = TmpBuffer,
+		WGPUTextureDataLayout TextureDataLayout = {
 			.offset = 0,
 			.bytes_per_row = Width * Bpp,
 			.rows_per_image = 0
 		};
+		WGPUBufferCopyView BufferCopyView = {
+			.buffer = TmpBuffer,
+			.layout = TextureDataLayout,
+		};
 		WGPUTextureCopyView TextureCopyView = {
 			.texture = pTex->m_Tex2D.m_Tex,
 			.mip_level = 0,
-			.array_layer = 0,
 			.origin = { (unsigned)pCommand->m_X, (unsigned)pCommand->m_Y, 0 }
 		};
-		wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, TexExtent);
+		wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, &TexExtent);
 
 		wgpu_buffer_destroy(TmpBuffer);
 		
@@ -707,19 +709,21 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Create(const CCommandBuffer::CT
 
 		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
 
-		WGPUBufferCopyView BufferCopyView = {
-			.buffer = TmpBuffer,
+		WGPUTextureDataLayout TextureDataLayout = {
 			.offset = 0,
 			.bytes_per_row = Width * Bpp,
 			.rows_per_image = 0
 		};
+		WGPUBufferCopyView BufferCopyView = {
+			.buffer = TmpBuffer,
+			.layout = TextureDataLayout
+		};
 		WGPUTextureCopyView TextureCopyView = {
 			.texture = pTex->m_Tex,
 			.mip_level = 0,
-			.array_layer = 0,
 			.origin = { 0, 0, 0 }
 		};
-		wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, TexExtent);
+		wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, &TexExtent);
 
 		wgpu_buffer_destroy(TmpBuffer);
 		
@@ -820,19 +824,21 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Create(const CCommandBuffer::CT
 
 		for(unsigned i = 0; i < IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION; i++)
 		{
-			WGPUBufferCopyView BufferCopyView = {
-				.buffer = TmpBuffer,
+			WGPUTextureDataLayout TextureDataLayout = {
 				.offset = TileSize * i,
 				.bytes_per_row = TileRowSize,
 				.rows_per_image = 0
 			};
+			WGPUBufferCopyView BufferCopyView = {
+				.buffer = TmpBuffer,
+				.layout = TextureDataLayout
+			};
 			WGPUTextureCopyView TextureCopyView = {
 				.texture = pTex->m_Tex,
 				.mip_level = 0,
-				.array_layer = i,
-				.origin = { 0, 0, 0 }
+				.origin = { 0, 0, i }
 			};
-			wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, TexExtent);
+			wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, &TexExtent);
 		}
 
 		wgpu_buffer_destroy(TmpBuffer);
