@@ -334,7 +334,8 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 	dbg_msg("wgpu", "device requested");
 
 	// TODO: mailbox mode
-	m_SwapChain = CreateSwapChain(pCommand->m_VSync ? WGPUPresentMode_Fifo : WGPUPresentMode_Immediate);
+	m_PresentMode = pCommand->m_VSync ? WGPUPresentMode_Fifo : WGPUPresentMode_Immediate;
+	m_SwapChain = CreateSwapChain(m_PresentMode);
 	
 	dbg_msg("wgpu", "created swapchain: %llu", m_SwapChain);
 
@@ -909,6 +910,12 @@ void CCommandProcessorFragment_WGPU::Cmd_Swap(const CCommandBuffer::CSwapCommand
 		wgpu_swap_chain_present(m_SwapChain);
 	}
 
+	if(m_UpdatePresentMode)
+	{
+		m_SwapChain = CreateSwapChain(m_PresentMode);
+		m_UpdatePresentMode = false;
+	}
+
 	m_NextTexture = wgpu_swap_chain_get_next_texture(m_SwapChain);
 }
 
@@ -952,8 +959,10 @@ void CCommandProcessorFragment_WGPU::Cmd_Screenshot(const CCommandBuffer::CScree
 
 void CCommandProcessorFragment_WGPU::Cmd_VSync(const CCommandBuffer::CVSyncCommand *pCommand)
 {
-	// TODO
-	*pCommand->m_pRetOk = false;
+	m_UpdatePresentMode = true;
+	m_PresentMode = pCommand->m_VSync ? WGPUPresentMode_Fifo : WGPUPresentMode_Immediate;
+	// TODO: check return
+	*pCommand->m_pRetOk = true;
 }
 
 CCommandProcessorFragment_WGPU::CCommandProcessorFragment_WGPU()
@@ -965,6 +974,7 @@ CCommandProcessorFragment_WGPU::CCommandProcessorFragment_WGPU()
 	m_StreamingBuffer = 0;
 	m_TransformBuffer = 0;
 	m_TransformBindGroup = 0;
+	m_UpdatePresentMode = false;
 	m_Ready = false;
 }
 

@@ -117,6 +117,7 @@ class CCommandProcessorFragment_WGPU
 	WGPUDeviceId m_Device;
 	WGPUSurfaceId m_Surface;
 	WGPUSwapChainId m_SwapChain;
+	WGPUPresentMode m_PresentMode;
 	WGPUQueueId m_Queue;
 	WGPUSwapChainOutput m_NextTexture;
 	WGPUCommandEncoderId m_CmdEncoder;
@@ -135,6 +136,7 @@ class CCommandProcessorFragment_WGPU
 	WGPUSamplerId m_Sampler[2][2][2];
 	unsigned m_ScreenWidth;
 	unsigned m_ScreenHeight;
+	bool m_UpdatePresentMode;
 	bool m_Ready;
 
 	int m_ScreenCount;
