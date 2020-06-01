@@ -117,10 +117,12 @@ class CCommandProcessorFragment_WGPU
 	WGPUDeviceId m_Device;
 	WGPUSurfaceId m_Surface;
 	WGPUSwapChainId m_SwapChain;
+	WGPUQueueId m_Queue;
 	WGPUSwapChainOutput m_NextTexture;
 	WGPUCommandEncoderId m_CmdEncoder;
 	WGPURenderPassId m_RPass;
 	WGPUBufferId m_StreamingBuffer;
+	WGPUBufferId m_TransformBuffer;
 	WGPUBindGroupId m_TransformBindGroup;
 	WGPURenderPipelineId m_RenderPipeline[3];
 	WGPURenderPipelineId m_Render2DPipeline[3];
@@ -152,7 +154,6 @@ public:
 	struct CInitCommand : public CCommandBuffer::CCommand
 	{
 		CInitCommand() : CCommand(CMD_INIT) {}
-		WGPUDeviceId m_Device;
 		WGPUSurfaceId m_Surface;
 		unsigned m_ScreenWidth;
 		unsigned m_ScreenHeight;
@@ -198,7 +199,6 @@ public:
 	void SubmitCommandBuffer();
 
 	void UploadStreamingData(const void *pData, unsigned Size, const CScreen *pScreens, int NumScreens);
-	void FreeStreamingData();
 };
 
 // command processor impelementation, uses the fragments to combine into one processor
@@ -215,7 +215,6 @@ class CGraphicsBackend_SDL_WGPU : public CGraphicsBackend_Threaded
 {
 	SDL_Window *m_pWindow;
 	//SDL_GLContext m_GLContext;
-	WGPUDeviceId m_Device;
 	ICommandProcessor *m_pProcessor;
 	volatile int m_TextureMemoryUsage;
 	int m_NumScreens;

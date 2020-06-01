@@ -12,6 +12,9 @@
 
 #include "shaders.h"
 
+#define MATRIX_ALIGNMENT ((sizeof(CMat4) + WGPUBIND_BUFFER_ALIGNMENT - 1) / WGPUBIND_BUFFER_ALIGNMENT * WGPUBIND_BUFFER_ALIGNMENT)
+#define MAX_TRANSFORM_MATRICES 256
+
 static void WGPULogFunc(int Level, const char *pMsg)
 {
 	const char *pLevelStr = "";
@@ -198,6 +201,10 @@ void CCommandProcessorFragment_WGPU::ConvertToRGBA(int Width, int Height, int Fo
 
 void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPassId RPass)
 {
+	// TODO: remove this limit
+	if(m_ScreenCount >= MAX_TRANSFORM_MATRICES)
+		return;
+
 	if(State.m_ClipEnable)
 	{
 		int ClipY = m_ScreenHeight - State.m_ClipH - State.m_ClipY;
@@ -276,8 +283,7 @@ void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &Stat
 		m_ScreenCount++;
 	}
 
-	unsigned DynAlignment = (sizeof(CMat4) + WGPUBIND_BUFFER_ALIGNMENT - 1) / WGPUBIND_BUFFER_ALIGNMENT * WGPUBIND_BUFFER_ALIGNMENT;
-	unsigned Offset = DynAlignment * (m_ScreenCount - 1);
+	unsigned Offset = MATRIX_ALIGNMENT * (m_ScreenCount - 1);
 	wgpu_render_pass_set_bind_group(RPass, 0, m_TransformBindGroup, &Offset, 1);
 }
 
@@ -294,13 +300,38 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 	dbg_msg("render", "opengl max texture sizes: %d, %d(3D)", m_MaxTexSize, m_Max3DTexSize);
 	*/
 
-	m_Device = pCommand->m_Device;
 	m_ScreenWidth = pCommand->m_ScreenWidth;
 	m_ScreenHeight = pCommand->m_ScreenHeight;
 	m_pTextureMemoryUsage = pCommand->m_pTextureMemoryUsage;
 	*m_pTextureMemoryUsage = 0;
 
 	m_Surface = pCommand->m_Surface;
+
+	WGPUAdapterId Adapter = { 0 };
+	WGPURequestAdapterOptions RequestAdapterOptions = {
+		.power_preference = WGPUPowerPreference_HighPerformance,
+		.compatible_surface = m_Surface,
+	};
+	wgpu_request_adapter_async(
+		&RequestAdapterOptions,
+		2, // 2 | 4 | 8,
+		FequestAdapterCallback,
+		(void *) &Adapter
+	);
+
+	dbg_msg("wgpu", "adapter requested");
+
+	WGPUDeviceDescriptor DeviceDesc = {
+		.extensions = {
+			.anisotropic_filtering = false,
+		},
+		.limits = {
+			.max_bind_groups = 2,
+		},
+	};
+	m_Device = wgpu_adapter_request_device(Adapter, &DeviceDesc, NULL);
+
+	dbg_msg("wgpu", "device requested");
 
 	// TODO: mailbox mode
 	m_SwapChain = CreateSwapChain(pCommand->m_VSync ? WGPUPresentMode_Fifo : WGPUPresentMode_Immediate);
@@ -502,6 +533,37 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	m_NextTexture = wgpu_swap_chain_get_next_texture(m_SwapChain);
 
+	m_Queue = wgpu_device_get_default_queue(m_Device);
+
+	WGPUBufferDescriptor BufferDesc = { .size = 2*1024*1024, .usage = WGPUBufferUsage_VERTEX|WGPUBufferUsage_COPY_DST };
+	m_StreamingBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
+
+	BufferDesc = { .size = MATRIX_ALIGNMENT*MAX_TRANSFORM_MATRICES, .usage = WGPUBufferUsage_UNIFORM|WGPUBufferUsage_COPY_DST };
+	m_TransformBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
+
+	WGPUBindGroupEntry aEntries[1] = {
+		{
+			.binding = 0,
+			.resource = {
+				.tag = WGPUBindingResource_Buffer,
+				.buffer = {
+					._0 = {
+						.buffer = m_TransformBuffer,
+						.offset = 0,
+						.size = sizeof(CMat4),
+					}
+				}
+			},
+		}
+	};
+
+	WGPUBindGroupDescriptor BindGroupDesc = {
+		.layout = m_BindGroupTransformLayout,
+		.entries = aEntries,
+		.entries_length = 1,
+	};
+	m_TransformBindGroup = wgpu_device_create_bind_group(m_Device, &BindGroupDesc);
+
 	m_Ready = true;
 }
 
@@ -521,19 +583,6 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Update(const CCommandBuffer::CT
 	{	
 		unsigned MemSize = Width * Height * Bpp;
 
-		uint8_t *pStagingMem;
-		WGPUBufferDescriptor BufferDesc = { .size = MemSize, .usage = WGPUBufferUsage_COPY_SRC };
-		WGPUBufferId TmpBuffer = wgpu_device_create_buffer_mapped(m_Device, &BufferDesc, &pStagingMem);
-
-		mem_copy(pStagingMem, pTexData, MemSize);
-		wgpu_buffer_unmap(TmpBuffer);
-
-		//dbg_msg("wgpu", "created buffer: %llu", TmpBuffer);
-
-		EndRenderPass();
-
-		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
-
 		WGPUExtent3d TexExtent = {
 			.width = (unsigned)Width,
 			.height = (unsigned)Height,
@@ -544,21 +593,12 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Update(const CCommandBuffer::CT
 			.bytes_per_row = Width * Bpp,
 			.rows_per_image = 0
 		};
-		WGPUBufferCopyView BufferCopyView = {
-			.buffer = TmpBuffer,
-			.layout = TextureDataLayout,
-		};
 		WGPUTextureCopyView TextureCopyView = {
 			.texture = pTex->m_Tex2D.m_Tex,
 			.mip_level = 0,
 			.origin = { (unsigned)pCommand->m_X, (unsigned)pCommand->m_Y, 0 }
 		};
-		wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, &TexExtent);
-
-		wgpu_buffer_destroy(TmpBuffer);
-		
-		SubmitCommandBuffer();
-		//dbg_msg("wgpu", "submitted copy command (update)");
+		wgpu_queue_write_texture(m_Queue, &TextureCopyView, pTexData, MemSize, &TextureDataLayout, &TexExtent);
 	}
 	mem_free(pTexData);
 }
@@ -696,42 +736,21 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Create(const CCommandBuffer::CT
 
 		//dbg_msg("wgpu", "created texture: %llu", Tex);
 
-		uint8_t *pStagingMem;
-		WGPUBufferDescriptor BufferCopyDesc = { .size = MemSize, .usage = WGPUBufferUsage_COPY_SRC };
-		WGPUBufferId TmpBuffer = wgpu_device_create_buffer_mapped(m_Device, &BufferCopyDesc, &pStagingMem);
-
-		mem_copy(pStagingMem, pTexData, MemSize);
-		wgpu_buffer_unmap(TmpBuffer);
-
-		//dbg_msg("wgpu", "created buffer: %llu", TmpBuffer);
-
-		EndRenderPass();
-
-		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
-
 		WGPUTextureDataLayout TextureDataLayout = {
 			.offset = 0,
 			.bytes_per_row = Width * Bpp,
 			.rows_per_image = 0
-		};
-		WGPUBufferCopyView BufferCopyView = {
-			.buffer = TmpBuffer,
-			.layout = TextureDataLayout
 		};
 		WGPUTextureCopyView TextureCopyView = {
 			.texture = pTex->m_Tex,
 			.mip_level = 0,
 			.origin = { 0, 0, 0 }
 		};
-		wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, &TexExtent);
-
-		wgpu_buffer_destroy(TmpBuffer);
-		
-		SubmitCommandBuffer();
-		//dbg_msg("wgpu", "submitted copy command");
+		wgpu_queue_write_texture(m_Queue, &TextureCopyView, pTexData, MemSize, &TextureDataLayout, &TexExtent);
 
 		if(MipLevels > 1)
 		{
+			EndRenderPass();
 			GenerateMipmapsForLayer(pTex->m_Tex, 0, MipLevels);
 		}
 	}
@@ -807,47 +826,26 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Create(const CCommandBuffer::CT
 
 		//dbg_msg("wgpu", "created texture: %llu", Tex);
 
-		uint8_t *pStagingMem;
-		WGPUBufferDescriptor BufferDesc ={ .size = MemSize, .usage = WGPUBufferUsage_COPY_SRC };
-		WGPUBufferId TmpBuffer = wgpu_device_create_buffer_mapped(m_Device, &BufferDesc, &pStagingMem);
-
-		mem_copy(pStagingMem, pTexData, MemSize);
-		wgpu_buffer_unmap(TmpBuffer);
-
-		//dbg_msg("wgpu", "created buffer: %llu", TmpBuffer);
-
-		EndRenderPass();
-
-		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
-
 		TexExtent.depth = 1;
 
 		for(unsigned i = 0; i < IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION; i++)
 		{
 			WGPUTextureDataLayout TextureDataLayout = {
-				.offset = TileSize * i,
+				.offset = 0,
 				.bytes_per_row = TileRowSize,
 				.rows_per_image = 0
-			};
-			WGPUBufferCopyView BufferCopyView = {
-				.buffer = TmpBuffer,
-				.layout = TextureDataLayout
 			};
 			WGPUTextureCopyView TextureCopyView = {
 				.texture = pTex->m_Tex,
 				.mip_level = 0,
 				.origin = { 0, 0, i }
 			};
-			wgpu_command_encoder_copy_buffer_to_texture(CmdEncoder, &BufferCopyView, &TextureCopyView, &TexExtent);
+			wgpu_queue_write_texture(m_Queue, &TextureCopyView, pTexData + TileSize * i, TileSize, &TextureDataLayout, &TexExtent);
 		}
-
-		wgpu_buffer_destroy(TmpBuffer);
-		
-		SubmitCommandBuffer();
-		//dbg_msg("wgpu", "submitted copy command");
 
 		if(MipLevels > 1)
 		{
+			EndRenderPass();
 			for(unsigned i = 0; i < IGraphics::NUMTILES_DIMENSION*IGraphics::NUMTILES_DIMENSION; i++)
 			{
 				GenerateMipmapsForLayer(pTex->m_Tex, i, MipLevels);
@@ -888,7 +886,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Render(const CCommandBuffer::CRenderCom
 		dbg_msg("render", "unknown primtype %d\n", pCommand->m_PrimType);
 	};
 
-	if(PrimCount > 0 && m_StreamingBuffer)
+	if(PrimCount > 0)
 	{
 		unsigned DataSize = PrimCount * sizeof(CCommandBuffer::CVertex);
 
@@ -965,6 +963,7 @@ CCommandProcessorFragment_WGPU::CCommandProcessorFragment_WGPU()
 	m_CmdEncoder = 0;
 	m_RPass = 0;
 	m_StreamingBuffer = 0;
+	m_TransformBuffer = 0;
 	m_TransformBindGroup = 0;
 	m_Ready = false;
 }
@@ -1230,8 +1229,7 @@ void CCommandProcessorFragment_WGPU::SubmitCommandBuffer()
 		EndRenderPass();
 		WGPUCommandBufferId CmdBuf = wgpu_command_encoder_finish(m_CmdEncoder, NULL);
 		//dbg_msg("wgpu", "finished command buffer");
-		WGPUQueueId Queue = wgpu_device_get_default_queue(m_Device);
-		wgpu_queue_submit(Queue, &CmdBuf, 1);
+		wgpu_queue_submit(m_Queue, &CmdBuf, 1);
 		//dbg_msg("wgpu", "submitted command buffer");
 		m_CmdEncoder = 0;
 	}
@@ -1239,97 +1237,35 @@ void CCommandProcessorFragment_WGPU::SubmitCommandBuffer()
 
 void CCommandProcessorFragment_WGPU::UploadStreamingData(const void *pData, unsigned Size, const CScreen *pScreens, int NumScreens)
 {
-	if(!m_StreamingBuffer)
+	wgpu_queue_write_buffer(m_Queue, m_StreamingBuffer, 0, (uint8_t*)pData, Size);
+
+	static uint8_t s_aMatrixBuf[MATRIX_ALIGNMENT*MAX_TRANSFORM_MATRICES];
+
+	// TODO: remove this limit
+	NumScreens = min(NumScreens, MAX_TRANSFORM_MATRICES);
+	unsigned MemSize = MATRIX_ALIGNMENT * NumScreens;
+
+	for(int i = 0; i < NumScreens; i++)
 	{
-		uint8_t *pStagingMem;
-		WGPUBufferDescriptor BufferDesc = { .size = Size, .usage = WGPUBufferUsage_VERTEX };
-		m_StreamingBuffer = wgpu_device_create_buffer_mapped(m_Device, &BufferDesc, &pStagingMem);
+		const float Near = -1.0f;
+		const float Far = 1.0f;
 
-		mem_copy(pStagingMem, pData, Size);
-		wgpu_buffer_unmap(m_StreamingBuffer);
+		CMat4 *pOrtho = (CMat4*)(s_aMatrixBuf + MATRIX_ALIGNMENT * i);
 
-		//dbg_msg("wgpu", "uploaded streamig data: %u", Size);
-	}
-	else
-	{
-		dbg_msg("warning", "warning: streaming buffer");
-	}
-
-	if(!m_TransformBindGroup)
-	{
-		// TODO: use push constants instead
-		unsigned DynAlignment = (sizeof(CMat4) + WGPUBIND_BUFFER_ALIGNMENT - 1) / WGPUBIND_BUFFER_ALIGNMENT * WGPUBIND_BUFFER_ALIGNMENT;
-		unsigned MemSize = DynAlignment * NumScreens;
-
-		uint8_t *pStagingMem;
-		WGPUBufferDescriptor BufferDesc = { .size = MemSize, .usage = WGPUBufferUsage_UNIFORM };
-		WGPUBufferId MatrixBuffer = wgpu_device_create_buffer_mapped(m_Device, &BufferDesc, &pStagingMem);
-
-		for(int i = 0; i < NumScreens; i++)
-		{
-			const float Near = -1.0f;
-			const float Far = 1.0f;
-
-			CMat4 Ortho = {
-				2.0f / (pScreens[i].BR_x - pScreens[i].TL_x), 0.0f, 0.0f, 0.0f,
-				0.0f, 2.0f / (pScreens[i].TL_y - pScreens[i].BR_y), 0.0f, 0.0f,
-				0.0f, 0.0f, 2.0f / (Far - Near) , 0.0f,
-				- (pScreens[i].BR_x + pScreens[i].TL_x) / (pScreens[i].BR_x - pScreens[i].TL_x),
-				- (pScreens[i].TL_y + pScreens[i].BR_y) / (pScreens[i].TL_y - pScreens[i].BR_y),
-				- (Far + Near) / (Far - Near), 1.0f,
-			};
-
-			mem_copy(pStagingMem + DynAlignment * i, &Ortho, sizeof(CMat4));
-		}
-		wgpu_buffer_unmap(MatrixBuffer);
-
-		WGPUBindGroupEntry aEntries[1] = {
-			{
-				.binding = 0,
-				.resource = {
-					.tag = WGPUBindingResource_Buffer,
-					.buffer = {
-						._0 = {
-							.buffer = MatrixBuffer,
-							.offset = 0,
-							.size = sizeof(CMat4),
-						}
-					}
-				},
-			}
+		*pOrtho = {
+			2.0f / (pScreens[i].BR_x - pScreens[i].TL_x), 0.0f, 0.0f, 0.0f,
+			0.0f, 2.0f / (pScreens[i].TL_y - pScreens[i].BR_y), 0.0f, 0.0f,
+			0.0f, 0.0f, 2.0f / (Far - Near) , 0.0f,
+			- (pScreens[i].BR_x + pScreens[i].TL_x) / (pScreens[i].BR_x - pScreens[i].TL_x),
+			- (pScreens[i].TL_y + pScreens[i].BR_y) / (pScreens[i].TL_y - pScreens[i].BR_y),
+			- (Far + Near) / (Far - Near), 1.0f,
 		};
-
-		WGPUBindGroupDescriptor BindGroupDesc = {
-			.layout = m_BindGroupTransformLayout,
-			.entries = aEntries,
-			.entries_length = 1,
-		};
-		m_TransformBindGroup = wgpu_device_create_bind_group(m_Device, &BindGroupDesc);
-
-		wgpu_buffer_destroy(MatrixBuffer);
-
-		m_ScreenCount = 0;
-	}
-	else
-	{
-		dbg_msg("warning", "warning: transform buffer");
-	}
-}
-
-void CCommandProcessorFragment_WGPU::FreeStreamingData()
-{
-	if(m_StreamingBuffer)
-	{
-		wgpu_buffer_destroy(m_StreamingBuffer);
-		//dbg_msg("wgpu", "freed streamig data");
-		m_StreamingBuffer = 0;
 	}
 
-	if(m_TransformBindGroup)
-	{
-		wgpu_bind_group_destroy(m_TransformBindGroup);
-		m_TransformBindGroup = 0;
-	}
+	// TODO: use push constants instead
+	wgpu_queue_write_buffer(m_Queue, m_TransformBuffer, 0, s_aMatrixBuf, MemSize);
+
+	m_ScreenCount = 0;
 }
 
 
@@ -1388,7 +1324,6 @@ void CCommandProcessor_SDL_WGPU::RunBuffer(CCommandBuffer *pBuffer)
 		dbg_msg("graphics", "unknown command %d", pBaseCommand->m_Cmd);
 	}
 	m_WGPU.SubmitCommandBuffer();
-	m_WGPU.FreeStreamingData();
 }
 
 // ------------ CGraphicsBackend_SDL_WGPU
@@ -1538,32 +1473,6 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 	*pScreenWidth = *pWindowWidth;
 	*pScreenHeight = *pWindowHeight;
 
-	WGPUAdapterId Adapter = { 0 };
-	WGPURequestAdapterOptions RequestAdapterOptions = {
-		.power_preference = WGPUPowerPreference_HighPerformance,
-		.compatible_surface = Surface,
-	};
-	wgpu_request_adapter_async(
-		&RequestAdapterOptions,
-		2, // 2 | 4 | 8,
-		FequestAdapterCallback,
-		(void *) &Adapter
-	);
-
-	dbg_msg("wgpu", "adapter requested");
-
-	WGPUDeviceDescriptor DeviceDesc = {
-		.extensions = {
-			.anisotropic_filtering = false,
-		},
-		.limits = {
-			.max_bind_groups = 2,
-		},
-	};
-	m_Device = wgpu_adapter_request_device(Adapter, &DeviceDesc, NULL);
-
-	dbg_msg("wgpu", "device requested");
-
 	// print sdl version
 	SDL_version Compiled;
 	SDL_version Linked;
@@ -1579,7 +1488,6 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 	// issue init commands for WGPU and SDL
 	CCommandBuffer CmdBuffer(1024, 512);
 	CCommandProcessorFragment_WGPU::CInitCommand CmdWGPU;
-	CmdWGPU.m_Device = m_Device;
 	CmdWGPU.m_Surface = Surface;
 	CmdWGPU.m_ScreenWidth = *pScreenWidth;
 	CmdWGPU.m_ScreenHeight = *pScreenHeight;
