@@ -340,7 +340,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	WGPUShaderModuleDescriptor ShaderDesc = {
 		.code = WGPUU32Array {
-			.bytes = (uint32_t*) s_aVert,
+			.bytes = s_aVert,
 			.length = sizeof(s_aVert) / 4,
 		},
 	};
@@ -348,7 +348,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	ShaderDesc = {
 		.code = WGPUU32Array {
-			.bytes = (uint32_t*) s_aVertBlit,
+			.bytes = s_aVertBlit,
 			.length = sizeof(s_aVertBlit) / 4,
 		},
 	};
@@ -358,7 +358,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	ShaderDesc = {
 		.code = WGPUU32Array {
-			.bytes = (uint32_t*) s_aFragNoTex,
+			.bytes = s_aFragNoTex,
 			.length = sizeof(s_aFragNoTex) / 4,
 		},
 	};
@@ -366,7 +366,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	ShaderDesc = {
 		.code = WGPUU32Array {
-			.bytes = (uint32_t*) s_aFrag2D,
+			.bytes = s_aFrag2D,
 			.length = sizeof(s_aFrag2D) / 4,
 		},
 	};
@@ -374,7 +374,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	ShaderDesc = {
 		.code = WGPUU32Array {
-			.bytes = (uint32_t*) s_aFrag2DArray,
+			.bytes = s_aFrag2DArray,
 			.length = sizeof(s_aFrag2DArray) / 4,
 		},
 	};
@@ -382,7 +382,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	ShaderDesc = {
 		.code = WGPUU32Array {
-			.bytes = (uint32_t*) s_aFragBlit,
+			.bytes = s_aFragBlit,
 			.length = sizeof(s_aFragBlit) / 4,
 		},
 	};
