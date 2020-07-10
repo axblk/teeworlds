@@ -17,10 +17,30 @@ void CNamePlates::RenderNameplate(
 	int ClientID
 	)
 {
+	CNetObj_Character Prev;
+	CNetObj_Character Player;
+	Prev = *pPrevChar;
+	Player = *pPlayerChar;
+
 	float IntraTick = Client()->IntraGameTick();
 
-	vec2 Position = mix(vec2(pPrevChar->m_X, pPrevChar->m_Y), vec2(pPlayerChar->m_X, pPlayerChar->m_Y), IntraTick);
+	bool PredictPlayer = Config()->m_ClAntiping && Config()->m_ClAntipingPlayers;
+	if(PredictPlayer && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	{
+		if(!m_pClient->m_Snap.m_pLocalCharacter ||
+			(m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
+		{
+		}
+		else
+		{
+			// apply predicted results
+			m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
+			m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
+			IntraTick = Client()->PredIntraGameTick();
+		}
+	}
 
+	vec2 Position = mix(vec2(Prev.m_X, Prev.m_Y), vec2(Player.m_X, Player.m_Y), IntraTick);
 
 	float FontSize = 18.0f + 20.0f * Config()->m_ClNameplatesSize / 100.0f;
 	// render name plate

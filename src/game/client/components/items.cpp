@@ -2,6 +2,7 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <engine/graphics.h>
 #include <engine/demo.h>
+#include <engine/shared/config.h>
 #include <generated/protocol.h>
 #include <generated/client_data.h>
 
@@ -36,10 +37,18 @@ void CItems::RenderProjectile(const CNetObj_Projectile *pCurrent, int ItemID)
 		Speed = m_pClient->m_Tuning.m_GunSpeed;
 	}
 
+	bool LocalIngame = m_pClient->m_Snap.m_pLocalCharacter != 0;
+	bool Predict = Config()->m_ClPredict && Config()->m_ClAntiping && Config()->m_ClAntipingProjectiles;
+
 	static float s_LastGameTickTime = Client()->GameTickTime();
 	if(m_pClient->m_Snap.m_pGameData && !(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_PAUSED))
 		s_LastGameTickTime = Client()->GameTickTime();
-	float Ct = (Client()->PrevGameTick()-pCurrent->m_StartTick)/(float)SERVER_TICK_SPEED + s_LastGameTickTime;
+
+	float Ct;
+	if(Predict && LocalIngame && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+		Ct = ((float)(Client()->PredGameTick() - 1 - pCurrent->m_StartTick) + Client()->PredIntraGameTick())/(float)SERVER_TICK_SPEED;
+	else
+		Ct = (Client()->PrevGameTick()-pCurrent->m_StartTick)/(float)SERVER_TICK_SPEED + s_LastGameTickTime;
 	if(Ct < 0)
 		return; // projectile haven't been shot yet
 
@@ -188,6 +197,18 @@ void CItems::RenderFlag(const CNetObj_Flag *pPrev, const CNetObj_Flag *pCurrent,
 			((pCurrent->m_Team == TEAM_RED && pPrevGameDataFlag->m_FlagCarrierRed != pCurGameDataFlag->m_FlagCarrierRed) ||
 			(pCurrent->m_Team == TEAM_BLUE && pPrevGameDataFlag->m_FlagCarrierBlue != pCurGameDataFlag->m_FlagCarrierBlue)))
 			Pos = vec2(pCurrent->m_X, pCurrent->m_Y);
+
+		if(Config()->m_ClPredict && Config()->m_ClAntiping && Config()->m_ClAntipingPlayers && m_pClient->m_Snap.m_pLocalCharacter)
+		{
+			CGameClient::CClientData *pData = 0;
+			if(pCurrent->m_Team == TEAM_RED && pCurGameDataFlag->m_FlagCarrierRed >= 0)
+				pData = &m_pClient->m_aClients[pCurGameDataFlag->m_FlagCarrierRed]; //.m_Predicted.m_Pos;
+			else if(pCurrent->m_Team == TEAM_BLUE && pCurGameDataFlag->m_FlagCarrierBlue >= 0)
+				pData = &m_pClient->m_aClients[pCurGameDataFlag->m_FlagCarrierBlue];
+
+			if(pData)
+				Pos = mix(pData->m_PrevPredicted.m_Pos, pData->m_Predicted.m_Pos, Client()->PredIntraGameTick());
+		}
 
 		// make sure to use predicted position if we are the carrier
 		if(m_pClient->m_LocalClientID != -1 &&

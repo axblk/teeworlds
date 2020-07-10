@@ -1544,6 +1544,9 @@ void CGameClient::OnPredict()
 			if(!World.m_apCharacters[c])
 				continue;
 
+			if(Tick == Client()->PredGameTick())
+				m_aClients[c].m_PrevPredicted = *World.m_apCharacters[c];
+
 			mem_zero(&World.m_apCharacters[c]->m_Input, sizeof(World.m_apCharacters[c]->m_Input));
 			if(m_LocalClientID == c)
 			{

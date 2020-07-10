@@ -40,8 +40,6 @@ inline float AngularApproach(float Src, float Dst, float Amount)
 void CPlayers::RenderHook(
 	const CNetObj_Character *pPrevChar,
 	const CNetObj_Character *pPlayerChar,
-	const CNetObj_PlayerInfo *pPrevInfo,
-	const CNetObj_PlayerInfo *pPlayerInfo,
 	int ClientID
 	)
 {
@@ -57,9 +55,10 @@ void CPlayers::RenderHook(
 	// set size
 	RenderInfo.m_Size = 64.0f;
 
+	bool PredictPlayer = m_pClient->m_LocalClientID == ClientID || (Config()->m_ClAntiping && Config()->m_ClAntipingPlayers);
 
 	// use preditect players if needed
-	if(m_pClient->m_LocalClientID == ClientID && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	if(PredictPlayer && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
 	{
 		if(!m_pClient->m_Snap.m_pLocalCharacter ||
 			(m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
@@ -68,8 +67,8 @@ void CPlayers::RenderHook(
 		else
 		{
 			// apply predicted results
-			m_pClient->m_PredictedChar.Write(&Player);
-			m_pClient->m_PredictedPrevChar.Write(&Prev);
+			m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
+			m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
 			IntraTick = Client()->PredIntraGameTick();
 		}
 	}
@@ -98,11 +97,20 @@ void CPlayers::RenderHook(
 			}
 			else if(m_pClient->m_LocalClientID == ClientID)
 			{
-				HookPos = mix(vec2(m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Prev.m_X,
-					m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Prev.m_Y),
-					vec2(m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Cur.m_X,
-					m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Cur.m_Y),
-					Client()->IntraGameTick());
+				if(Config()->m_ClPredict && Config()->m_ClAntiping && Config()->m_ClAntipingPlayers)
+				{
+					HookPos = mix(m_pClient->m_aClients[pPlayerChar->m_HookedPlayer].m_PrevPredicted.m_Pos,
+						m_pClient->m_aClients[pPlayerChar->m_HookedPlayer].m_Predicted.m_Pos,
+						Client()->PredIntraGameTick());
+				}
+				else
+				{
+					HookPos = mix(vec2(m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Prev.m_X,
+						m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Prev.m_Y),
+						vec2(m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Cur.m_X,
+						m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Cur.m_Y),
+						Client()->IntraGameTick());
+				}
 			}
 			else
 				HookPos = mix(vec2(pPrevChar->m_HookX, pPrevChar->m_HookY), vec2(pPlayerChar->m_HookX, pPlayerChar->m_HookY), Client()->IntraGameTick());
@@ -141,7 +149,6 @@ void CPlayers::RenderHook(
 void CPlayers::RenderPlayer(
 	const CNetObj_Character *pPrevChar,
 	const CNetObj_Character *pPlayerChar,
-	const CNetObj_PlayerInfo *pPrevInfo,
 	const CNetObj_PlayerInfo *pPlayerInfo,
 	int ClientID
 	)
@@ -195,8 +202,10 @@ void CPlayers::RenderPlayer(
 		g_GameClient.m_aClients[info.cid].angle = angle;*/
 	}
 
+	bool PredictPlayer = m_pClient->m_LocalClientID == ClientID || (Config()->m_ClAntiping && Config()->m_ClAntipingPlayers);
+
 	// use preditect players if needed
-	if(m_pClient->m_LocalClientID == ClientID && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	if(PredictPlayer && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
 	{
 		if(!m_pClient->m_Snap.m_pLocalCharacter ||
 			(m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
@@ -205,8 +214,8 @@ void CPlayers::RenderPlayer(
 		else
 		{
 			// apply predicted results
-			m_pClient->m_PredictedChar.Write(&Player);
-			m_pClient->m_PredictedPrevChar.Write(&Prev);
+			m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
+			m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
 			IntraTick = Client()->PredIntraGameTick();
 		}
 	}
@@ -426,7 +435,7 @@ void CPlayers::RenderPlayer(
 	}
 
 	// render the "shadow" tee
-	if(m_pClient->m_LocalClientID == ClientID && Config()->m_Debug)
+	if(PredictPlayer && Config()->m_Debug)
 	{
 		vec2 GhostPosition = mix(vec2(pPrevChar->m_X, pPrevChar->m_Y), vec2(pPlayerChar->m_X, pPlayerChar->m_Y), Client()->IntraGameTick());
 		CTeeRenderInfo Ghost = RenderInfo;
@@ -530,10 +539,9 @@ void CPlayers::OnRender()
 			if(!m_pClient->m_Snap.m_aCharacters[i].m_Active)
 				continue;
 
-			const void *pPrevInfo = Client()->SnapFindItem(IClient::SNAP_PREV, NETOBJTYPE_PLAYERINFO, i);
 			const void *pInfo = Client()->SnapFindItem(IClient::SNAP_CURRENT, NETOBJTYPE_PLAYERINFO, i);
 
-			if(pPrevInfo && pInfo)
+			if(pInfo)
 			{
 				//
 				bool Local = m_pClient->m_LocalClientID == i;
@@ -547,15 +555,12 @@ void CPlayers::OnRender()
 					RenderHook(
 							&PrevChar,
 							&CurChar,
-							(const CNetObj_PlayerInfo *)pPrevInfo,
-							(const CNetObj_PlayerInfo *)pInfo,
 							i
 						);
 				else
 					RenderPlayer(
 							&PrevChar,
 							&CurChar,
-							(const CNetObj_PlayerInfo *)pPrevInfo,
 							(const CNetObj_PlayerInfo *)pInfo,
 							i
 						);
