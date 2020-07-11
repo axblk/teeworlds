@@ -1502,6 +1502,57 @@ void CGameClient::OnDemoRecSnap()
 	pGameInfo->m_MatchCurrent = m_GameInfo.m_MatchCurrent;
 }
 
+class CTmpProjectile
+{
+public:
+	CGameClient *m_pClient;
+	vec2 m_Pos;
+	vec2 m_Direction;
+	int m_StartTick;
+	int m_LifeSpan;
+	float m_Curvature;
+	float m_Speed;
+
+	CTmpProjectile(CGameClient *pClient, vec2 Pos, vec2 Vel, int Type, int StartTick)
+		: m_pClient(pClient), m_Pos(Pos), m_Direction(Vel), m_StartTick(StartTick)
+	{
+		if(Type == WEAPON_GRENADE)
+		{
+			m_LifeSpan = (int)(m_pClient->Client()->GameTickSpeed() * m_pClient->m_Tuning.m_GrenadeLifetime);
+			m_Curvature = m_pClient->m_Tuning.m_GrenadeCurvature;
+			m_Speed = m_pClient->m_Tuning.m_GrenadeSpeed;
+		}
+		else if(Type == WEAPON_SHOTGUN)
+		{
+			m_LifeSpan = (int)(m_pClient->Client()->GameTickSpeed() * m_pClient->m_Tuning.m_ShotgunLifetime);
+			m_Curvature = m_pClient->m_Tuning.m_ShotgunCurvature;
+			m_Speed = m_pClient->m_Tuning.m_ShotgunSpeed;
+		}
+		else if(Type == WEAPON_GUN)
+		{
+			m_LifeSpan = (int)(m_pClient->Client()->GameTickSpeed() * m_pClient->m_Tuning.m_GunLifetime);
+			m_Curvature = m_pClient->m_Tuning.m_GunCurvature;
+			m_Speed = m_pClient->m_Tuning.m_GunSpeed;
+		}
+	}
+
+	vec2 GetPos(float Time) { return CalcPos(m_Pos, m_Direction, m_Curvature, m_Speed, Time); }
+
+	bool Tick(int Tick)
+	{
+		float Pt = (Tick-m_StartTick-1)/(float)m_pClient->Client()->GameTickSpeed();
+		float Ct = (Tick-m_StartTick)/(float)m_pClient->Client()->GameTickSpeed();
+		vec2 PrevPos = GetPos(Pt);
+		vec2 CurPos = GetPos(Ct);
+		int Collide = m_pClient->Collision()->IntersectLine(PrevPos, CurPos, &CurPos, 0);
+
+		m_LifeSpan--;
+
+		bool Destroy = Collide || m_LifeSpan < 0;
+		return Destroy;
+	}
+};
+
 void CGameClient::OnPredict()
 {
 	// we can't predict without our own id or own character
@@ -1609,6 +1660,40 @@ void CGameClient::OnPredict()
 	}
 
 	m_PredictedTick = Client()->PredGameTick();
+
+	// temporary hack to prevent projectiles from flying through walls
+	if(UsePrediction() && Config()->m_ClAntiping && Config()->m_ClAntipingProjectiles)
+	{
+		int PredictionRange = Client()->PredGameTick() - Client()->GameTick();
+		int Num = Client()->SnapNumItems(IClient::SNAP_CURRENT);
+		for(int i = 0; i < Num; i++)
+		{
+			IClient::CSnapItem Item;
+			const void *pData = Client()->SnapGetItem(IClient::SNAP_CURRENT, i, &Item);
+
+			if(Item.m_Type == NETOBJTYPE_PROJECTILE)
+			{
+				const CNetObj_Projectile *pProj = (const CNetObj_Projectile *)pData;
+
+				vec2 StartPos(pProj->m_X, pProj->m_Y);
+				vec2 StartVel(pProj->m_VelX/100.0f, pProj->m_VelY/100.0f);
+				CTmpProjectile Tmp(this, StartPos, StartVel, pProj->m_Type, pProj->m_StartTick);
+				// make sure to show the projectile for some ticks
+				if(Tmp.m_LifeSpan < PredictionRange + 5)
+					Tmp.m_LifeSpan = PredictionRange + 5;
+				Tmp.m_LifeSpan -= Client()->GameTick() - pProj->m_StartTick;
+
+				for(int Tick = Client()->GameTick()+1; Tick <= Client()->PredGameTick(); Tick++)
+				{
+					if(Tmp.Tick(Tick))
+					{
+						Client()->SnapInvalidateItem(IClient::SNAP_CURRENT, i);
+						break;
+					}
+				}
+			}
+		}
+	}
 }
 
 void CGameClient::OnActivateEditor()
