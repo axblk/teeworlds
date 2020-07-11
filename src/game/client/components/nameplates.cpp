@@ -24,20 +24,11 @@ void CNamePlates::RenderNameplate(
 
 	float IntraTick = Client()->IntraGameTick();
 
-	bool PredictPlayer = Config()->m_ClAntiping && Config()->m_ClAntipingPlayers;
-	if(PredictPlayer && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	if(m_pClient->UsePrediction() && m_pClient->UsePredictedChar(ClientID))
 	{
-		if(!m_pClient->m_Snap.m_pLocalCharacter ||
-			(m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
-		{
-		}
-		else
-		{
-			// apply predicted results
-			m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
-			m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
-			IntraTick = Client()->PredIntraGameTick();
-		}
+		m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
+		m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
+		IntraTick = Client()->PredIntraGameTick();
 	}
 
 	vec2 Position = mix(vec2(Prev.m_X, Prev.m_Y), vec2(Player.m_X, Player.m_Y), IntraTick);

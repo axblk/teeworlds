@@ -37,15 +37,12 @@ void CItems::RenderProjectile(const CNetObj_Projectile *pCurrent, int ItemID)
 		Speed = m_pClient->m_Tuning.m_GunSpeed;
 	}
 
-	bool LocalIngame = m_pClient->m_Snap.m_pLocalCharacter != 0;
-	bool Predict = Config()->m_ClPredict && Config()->m_ClAntiping && Config()->m_ClAntipingProjectiles;
-
 	static float s_LastGameTickTime = Client()->GameTickTime();
 	if(m_pClient->m_Snap.m_pGameData && !(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_PAUSED))
 		s_LastGameTickTime = Client()->GameTickTime();
 
 	float Ct;
-	if(Predict && LocalIngame && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	if(m_pClient->UsePrediction() && Config()->m_ClAntiping && Config()->m_ClAntipingProjectiles)
 		Ct = ((float)(Client()->PredGameTick() - 1 - pCurrent->m_StartTick) + Client()->PredIntraGameTick())/(float)SERVER_TICK_SPEED;
 	else
 		Ct = (Client()->PrevGameTick()-pCurrent->m_StartTick)/(float)SERVER_TICK_SPEED + s_LastGameTickTime;
@@ -198,23 +195,15 @@ void CItems::RenderFlag(const CNetObj_Flag *pPrev, const CNetObj_Flag *pCurrent,
 			(pCurrent->m_Team == TEAM_BLUE && pPrevGameDataFlag->m_FlagCarrierBlue != pCurGameDataFlag->m_FlagCarrierBlue)))
 			Pos = vec2(pCurrent->m_X, pCurrent->m_Y);
 
-		if(Config()->m_ClPredict && Config()->m_ClAntiping && Config()->m_ClAntipingPlayers && m_pClient->m_Snap.m_pLocalCharacter)
-		{
-			CGameClient::CClientData *pData = 0;
-			if(pCurrent->m_Team == TEAM_RED && pCurGameDataFlag->m_FlagCarrierRed >= 0)
-				pData = &m_pClient->m_aClients[pCurGameDataFlag->m_FlagCarrierRed]; //.m_Predicted.m_Pos;
-			else if(pCurrent->m_Team == TEAM_BLUE && pCurGameDataFlag->m_FlagCarrierBlue >= 0)
-				pData = &m_pClient->m_aClients[pCurGameDataFlag->m_FlagCarrierBlue];
+		int FlagCarrier = -1;
+		if(pCurrent->m_Team == TEAM_RED && pCurGameDataFlag->m_FlagCarrierRed >= 0)
+			FlagCarrier = pCurGameDataFlag->m_FlagCarrierRed;
+		else if(pCurrent->m_Team == TEAM_BLUE && pCurGameDataFlag->m_FlagCarrierBlue >= 0)
+			FlagCarrier = pCurGameDataFlag->m_FlagCarrierBlue;
 
-			if(pData)
-				Pos = mix(pData->m_PrevPredicted.m_Pos, pData->m_Predicted.m_Pos, Client()->PredIntraGameTick());
-		}
-
-		// make sure to use predicted position if we are the carrier
-		if(m_pClient->m_LocalClientID != -1 &&
-			((pCurrent->m_Team == TEAM_RED && pCurGameDataFlag->m_FlagCarrierRed == m_pClient->m_LocalClientID) ||
-			(pCurrent->m_Team == TEAM_BLUE && pCurGameDataFlag->m_FlagCarrierBlue == m_pClient->m_LocalClientID)))
-			Pos = m_pClient->m_LocalCharacterPos;
+		// make sure to use predicted position
+		if(FlagCarrier >= 0 && FlagCarrier < MAX_CLIENTS && m_pClient->UsePrediction() && m_pClient->UsePredictedChar(FlagCarrier))
+			Pos = m_pClient->GetCharPos(FlagCarrier, true);
 	}
 
 	IGraphics::CQuadItem QuadItem(Pos.x, Pos.y-Size*0.75f, Size, Size*2);

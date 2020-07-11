@@ -55,22 +55,13 @@ void CPlayers::RenderHook(
 	// set size
 	RenderInfo.m_Size = 64.0f;
 
-	bool PredictPlayer = m_pClient->m_LocalClientID == ClientID || (Config()->m_ClAntiping && Config()->m_ClAntipingPlayers);
-
 	// use preditect players if needed
-	if(PredictPlayer && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	if(m_pClient->UsePrediction() && m_pClient->UsePredictedChar(ClientID))
 	{
-		if(!m_pClient->m_Snap.m_pLocalCharacter ||
-			(m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
-		{
-		}
-		else
-		{
-			// apply predicted results
-			m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
-			m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
-			IntraTick = Client()->PredIntraGameTick();
-		}
+		// apply predicted results
+		m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
+		m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
+		IntraTick = Client()->PredIntraGameTick();
 	}
 
 	vec2 Position = mix(vec2(Prev.m_X, Prev.m_Y), vec2(Player.m_X, Player.m_Y), IntraTick);
@@ -87,33 +78,8 @@ void CPlayers::RenderHook(
 
 		if(pPlayerChar->m_HookedPlayer != -1)
 		{
-			if(m_pClient->m_LocalClientID != -1 && pPlayerChar->m_HookedPlayer == m_pClient->m_LocalClientID)
-			{
-				if(Client()->State() == IClient::STATE_DEMOPLAYBACK) // only use prediction if needed
-					HookPos = vec2(m_pClient->m_LocalCharacterPos.x, m_pClient->m_LocalCharacterPos.y);
-				else
-					HookPos = mix(vec2(m_pClient->m_PredictedPrevChar.m_Pos.x, m_pClient->m_PredictedPrevChar.m_Pos.y),
-						vec2(m_pClient->m_PredictedChar.m_Pos.x, m_pClient->m_PredictedChar.m_Pos.y), Client()->PredIntraGameTick());
-			}
-			else if(m_pClient->m_LocalClientID == ClientID)
-			{
-				if(Config()->m_ClPredict && Config()->m_ClAntiping && Config()->m_ClAntipingPlayers)
-				{
-					HookPos = mix(m_pClient->m_aClients[pPlayerChar->m_HookedPlayer].m_PrevPredicted.m_Pos,
-						m_pClient->m_aClients[pPlayerChar->m_HookedPlayer].m_Predicted.m_Pos,
-						Client()->PredIntraGameTick());
-				}
-				else
-				{
-					HookPos = mix(vec2(m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Prev.m_X,
-						m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Prev.m_Y),
-						vec2(m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Cur.m_X,
-						m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Cur.m_Y),
-						Client()->IntraGameTick());
-				}
-			}
-			else
-				HookPos = mix(vec2(pPrevChar->m_HookX, pPrevChar->m_HookY), vec2(pPlayerChar->m_HookX, pPlayerChar->m_HookY), Client()->IntraGameTick());
+			bool Prediction = m_pClient->UsePrediction() && m_pClient->UsePredictedChar(pPlayerChar->m_HookedPlayer);
+			HookPos = m_pClient->GetCharPos(pPlayerChar->m_HookedPlayer, Prediction);
 		}
 		else
 			HookPos = mix(vec2(Prev.m_HookX, Prev.m_HookY), vec2(Player.m_HookX, Player.m_HookY), IntraTick);
@@ -202,22 +168,14 @@ void CPlayers::RenderPlayer(
 		g_GameClient.m_aClients[info.cid].angle = angle;*/
 	}
 
-	bool PredictPlayer = m_pClient->m_LocalClientID == ClientID || (Config()->m_ClAntiping && Config()->m_ClAntipingPlayers);
+	bool PredictPlayer = m_pClient->UsePrediction() && m_pClient->UsePredictedChar(ClientID);
 
 	// use preditect players if needed
-	if(PredictPlayer && Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	if(PredictPlayer)
 	{
-		if(!m_pClient->m_Snap.m_pLocalCharacter ||
-			(m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
-		{
-		}
-		else
-		{
-			// apply predicted results
-			m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
-			m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
-			IntraTick = Client()->PredIntraGameTick();
-		}
+		m_pClient->m_aClients[ClientID].m_Predicted.Write(&Player);
+		m_pClient->m_aClients[ClientID].m_PrevPredicted.Write(&Prev);
+		IntraTick = Client()->PredIntraGameTick();
 	}
 
 	vec2 Direction = direction(Angle);

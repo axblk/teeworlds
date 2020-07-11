@@ -116,10 +116,6 @@ public:
 
 	vec2 m_LocalCharacterPos;
 
-	// predicted players
-	CCharacterCore m_PredictedPrevChar;
-	CCharacterCore m_PredictedChar;
-
 	struct CPlayerInfoItem
 	{
 		const CNetObj_PlayerInfo *m_pPlayerInfo;
@@ -275,6 +271,10 @@ public:
 	void StartRendering();
 
 	int RacePrecision() const { return m_Snap.m_pGameDataRace ? m_Snap.m_pGameDataRace->m_Precision : 3; }
+
+	bool UsePrediction() const;
+	bool UsePredictedChar(int ClientID) const;
+	vec2 GetCharPos(int ClientID, bool Predicted = false) const;
 
 	//
 	void DoEnterMessage(const char *pName, int ClientID, int Team);

@@ -489,21 +489,9 @@ void CGameClient::OnReset()
 void CGameClient::UpdatePositions()
 {
 	// local character position
-	if(Config()->m_ClPredict && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+	if(m_Snap.m_pLocalCharacter && m_Snap.m_pLocalPrevCharacter)
 	{
-		if(!m_Snap.m_pLocalCharacter ||
-			(m_Snap.m_pGameData && m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
-		{
-			// don't use predicted
-		}
-		else
-			m_LocalCharacterPos = mix(m_PredictedPrevChar.m_Pos, m_PredictedChar.m_Pos, Client()->PredIntraGameTick());
-	}
-	else if(m_Snap.m_pLocalCharacter && m_Snap.m_pLocalPrevCharacter)
-	{
-		m_LocalCharacterPos = mix(
-			vec2(m_Snap.m_pLocalPrevCharacter->m_X, m_Snap.m_pLocalPrevCharacter->m_Y),
-			vec2(m_Snap.m_pLocalCharacter->m_X, m_Snap.m_pLocalCharacter->m_Y), Client()->IntraGameTick());
+		m_LocalCharacterPos = GetCharPos(m_LocalClientID, UsePrediction());
 	}
 
 	// spectator position
@@ -512,10 +500,7 @@ void CGameClient::UpdatePositions()
 		if(Client()->State() == IClient::STATE_DEMOPLAYBACK && DemoPlayer()->GetDemoType() == IDemoPlayer::DEMOTYPE_SERVER &&
 			m_Snap.m_SpecInfo.m_SpectatorID != -1)
 		{
-			m_Snap.m_SpecInfo.m_Position = mix(
-				vec2(m_Snap.m_aCharacters[m_Snap.m_SpecInfo.m_SpectatorID].m_Prev.m_X, m_Snap.m_aCharacters[m_Snap.m_SpecInfo.m_SpectatorID].m_Prev.m_Y),
-				vec2(m_Snap.m_aCharacters[m_Snap.m_SpecInfo.m_SpectatorID].m_Cur.m_X, m_Snap.m_aCharacters[m_Snap.m_SpecInfo.m_SpectatorID].m_Cur.m_Y),
-				Client()->IntraGameTick());
+			m_Snap.m_SpecInfo.m_Position = GetCharPos(m_Snap.m_SpecInfo.m_SpectatorID);
 			m_LocalCharacterPos = m_Snap.m_SpecInfo.m_Position;
 			m_Snap.m_SpecInfo.m_UsePosition = true;
 		}
@@ -581,6 +566,27 @@ void CGameClient::StartRendering()
 		Graphics()->QuadsDrawTL(&QuadItem, 1);
 		Graphics()->QuadsEnd();
 	}
+}
+
+bool CGameClient::UsePrediction() const
+{
+	bool Paused = m_Snap.m_pGameData && m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER);
+	return Config()->m_ClPredict && m_Snap.m_pLocalCharacter && !m_Snap.m_SpecInfo.m_Active
+		&& !Paused && Client()->State() != IClient::STATE_DEMOPLAYBACK;
+}
+
+bool CGameClient::UsePredictedChar(int ClientID) const
+{
+	return ClientID == m_LocalClientID || (Config()->m_ClAntiping && Config()->m_ClAntipingPlayers);
+}
+
+vec2 CGameClient::GetCharPos(int ClientID, bool Predicted) const
+{
+	vec2 Prev = Predicted? m_aClients[ClientID].m_PrevPredicted.m_Pos
+		: vec2(m_Snap.m_aCharacters[ClientID].m_Prev.m_X, m_Snap.m_aCharacters[ClientID].m_Prev.m_Y);
+	vec2 Cur = Predicted ? m_aClients[ClientID].m_Predicted.m_Pos
+		: vec2(m_Snap.m_aCharacters[ClientID].m_Cur.m_X, m_Snap.m_aCharacters[ClientID].m_Cur.m_Y);
+	return mix(Prev, Cur, Predicted ? Client()->PredIntraGameTick() : Client()->IntraGameTick());
 }
 
 void CGameClient::OnRender()
@@ -1498,21 +1504,25 @@ void CGameClient::OnDemoRecSnap()
 
 void CGameClient::OnPredict()
 {
-	// store the previous values so we can detect prediction errors
-	CCharacterCore BeforePrevChar = m_PredictedPrevChar;
-	CCharacterCore BeforeChar = m_PredictedChar;
-
 	// we can't predict without our own id or own character
 	if(m_LocalClientID == -1 || !m_Snap.m_aCharacters[m_LocalClientID].m_Active)
 		return;
 
+	// store the previous values so we can detect prediction errors
+	CCharacterCore BeforePrevChar = m_aClients[m_LocalClientID].m_PrevPredicted;
+	CCharacterCore BeforeChar = m_aClients[m_LocalClientID].m_Predicted;
+
 	// don't predict anything if we are paused or round/game is over
 	if(m_Snap.m_pGameData && m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER))
 	{
-		if(m_Snap.m_pLocalCharacter)
-			m_PredictedChar.Read(m_Snap.m_pLocalCharacter);
-		if(m_Snap.m_pLocalPrevCharacter)
-			m_PredictedPrevChar.Read(m_Snap.m_pLocalPrevCharacter);
+		for(int i = 0; i < MAX_CLIENTS; i++)
+		{
+			if(!m_Snap.m_aCharacters[i].m_Active)
+				continue;
+
+			m_aClients[i].m_PrevPredicted.Read(&m_Snap.m_aCharacters[i].m_Prev);
+			m_aClients[i].m_Predicted.Read(&m_Snap.m_aCharacters[i].m_Cur);
+		}
 		return;
 	}
 
@@ -1534,10 +1544,6 @@ void CGameClient::OnPredict()
 	// predict
 	for(int Tick = Client()->GameTick()+1; Tick <= Client()->PredGameTick(); Tick++)
 	{
-		// fetch the local
-		if(Tick == Client()->PredGameTick() && World.m_apCharacters[m_LocalClientID])
-			m_PredictedPrevChar = *World.m_apCharacters[m_LocalClientID];
-
 		// first calculate where everyone should move
 		for(int c = 0; c < MAX_CLIENTS; c++)
 		{
@@ -1579,9 +1585,6 @@ void CGameClient::OnPredict()
 			if(m_LocalClientID != -1 && World.m_apCharacters[m_LocalClientID])
 				ProcessTriggeredEvents(World.m_apCharacters[m_LocalClientID]->m_TriggeredEvents, World.m_apCharacters[m_LocalClientID]->m_Pos);
 		}
-
-		if(Tick == Client()->PredGameTick() && World.m_apCharacters[m_LocalClientID])
-			m_PredictedChar = *World.m_apCharacters[m_LocalClientID];
 	}
 
 	if(Config()->m_Debug && Config()->m_ClPredict && m_PredictedTick == Client()->PredGameTick())
@@ -1589,8 +1592,8 @@ void CGameClient::OnPredict()
 		CNetObj_CharacterCore Before = {0}, Now = {0}, BeforePrev = {0}, NowPrev = {0};
 		BeforeChar.Write(&Before);
 		BeforePrevChar.Write(&BeforePrev);
-		m_PredictedChar.Write(&Now);
-		m_PredictedPrevChar.Write(&NowPrev);
+		m_aClients[m_LocalClientID].m_Predicted.Write(&Now);
+		m_aClients[m_LocalClientID].m_PrevPredicted.Write(&NowPrev);
 
 		if(mem_comp(&Before, &Now, sizeof(CNetObj_CharacterCore)) != 0)
 		{
