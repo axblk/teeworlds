@@ -9,4 +9,5 @@
 #define CLIENT_VERSION 0x0705
 #define SETTINGS_FILENAME "settings07"
 static const char GAME_RELEASE_VERSION[8] = "0.7.5";
+static const char ANTIPING_RELEASE_VERSION[8] = "0.1.1";
 #endif
