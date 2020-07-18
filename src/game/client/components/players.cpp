@@ -76,7 +76,7 @@ void CPlayers::RenderHook(
 		vec2 Pos = Position;
 		vec2 HookPos;
 
-		if(pPlayerChar->m_HookedPlayer != -1)
+		if(pPlayerChar->m_HookedPlayer != -1 && m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Active)
 		{
 			bool Prediction = m_pClient->UsePrediction() && m_pClient->UsePredictedChar(pPlayerChar->m_HookedPlayer);
 			HookPos = m_pClient->GetCharPos(pPlayerChar->m_HookedPlayer, Prediction);

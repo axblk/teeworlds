@@ -582,7 +582,7 @@ bool CGameClient::UsePredictedChar(int ClientID) const
 
 vec2 CGameClient::GetCharPos(int ClientID, bool Predicted) const
 {
-	vec2 Prev = Predicted? m_aClients[ClientID].m_PrevPredicted.m_Pos
+	vec2 Prev = Predicted ? m_aClients[ClientID].m_PrevPredicted.m_Pos
 		: vec2(m_Snap.m_aCharacters[ClientID].m_Prev.m_X, m_Snap.m_aCharacters[ClientID].m_Prev.m_Y);
 	vec2 Cur = Predicted ? m_aClients[ClientID].m_Predicted.m_Pos
 		: vec2(m_Snap.m_aCharacters[ClientID].m_Cur.m_X, m_Snap.m_aCharacters[ClientID].m_Cur.m_Y);
