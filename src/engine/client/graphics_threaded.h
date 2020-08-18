@@ -140,6 +140,7 @@ public:
 		int m_TextureArrayIndex;
 		int m_Dimension;
 		int m_VertexBuffer;
+		IGraphics::CPoint m_PositionOffset;
 		IGraphics::CPoint m_ScreenTL;
 		IGraphics::CPoint m_ScreenBR;
 
@@ -431,6 +432,8 @@ public:
 	virtual void WrapNormal();
 	virtual void WrapClamp();
 	virtual void WrapMode(int WrapU, int WrapV);
+
+	virtual void SetPositionOffset(float x, float y);
 
 	virtual int MemoryUsage() const;
 	virtual int LastFrameDrawCalls() const { return m_LastFrameDrawCalls; };

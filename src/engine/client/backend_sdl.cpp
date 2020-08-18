@@ -256,6 +256,9 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 	}
 
 	// screen mapping
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glTranslatef(State.m_PositionOffset.x, State.m_PositionOffset.y, 0.0f);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	glOrtho(State.m_ScreenTL.x, State.m_ScreenBR.x, State.m_ScreenBR.y, State.m_ScreenTL.y, -1.0f, 1.0f);
@@ -267,8 +270,6 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 	glEnable(GL_BLEND);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
 
 	glAlphaFunc(GL_GREATER, 0);
 	glEnable(GL_ALPHA_TEST);
