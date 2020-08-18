@@ -22,9 +22,12 @@ CMenus::CScrollRegion::CScrollRegion()
 	m_RequestScrollY = -1;
 	m_ContentScrollOff = vec2(0,0);
 	m_Params = CScrollRegionParams();
+
+	m_TextCache = CTextCache();
+	m_pOldTextCache = 0;
 }
 
-void CMenus::CScrollRegion::Begin(CUIRect* pClipRect, vec2* pOutOffset, CScrollRegionParams* pParams)
+void CMenus::CScrollRegion::Begin(CUIRect* pClipRect, CScrollRegionParams* pParams)
 {
 	if(pParams)
 		m_Params = *pParams;
@@ -51,16 +54,29 @@ void CMenus::CScrollRegion::Begin(CUIRect* pClipRect, vec2* pOutOffset, CScrollR
 	if(m_Params.m_ClipBgColor.a > 0)
 		m_pRenderTools->DrawRoundRect(pClipRect, m_Params.m_ClipBgColor, 4.0f);
 
-	m_pUI->ClipEnable(pClipRect);
+	vec2 OldPositionOffset = m_pUI->GetPositionOffset();
+	CUIRect ClipRect = *pClipRect;
+	ClipRect.x += OldPositionOffset.x;
+	ClipRect.y += OldPositionOffset.y;
+
+	m_pUI->ClipEnable(&ClipRect);
+
+	m_pOldTextCache = m_pTextrender->GetBoundCache();
+	m_pTextrender->BindCache(&m_TextCache);
 
 	m_ClipRect = *pClipRect;
 	m_ContentH = 0;
-	*pOutOffset = m_ContentScrollOff;
+
+	m_pUI->SetPositionOffset(m_pUI->GetPositionOffset() + m_ContentScrollOff);
 }
 
 void CMenus::CScrollRegion::End()
 {
+	m_pTextrender->FlushCache();
+	m_pTextrender->RenderCache(&m_TextCache);
+	m_pUI->SetPositionOffset(m_pUI->GetPositionOffset() - m_ContentScrollOff);
 	m_pUI->ClipDisable();
+	m_pTextrender->BindCache(m_pOldTextCache);
 
 	// only show scrollbar if content overflows
 	if(m_ContentH <= m_ClipRect.h)
@@ -181,17 +197,14 @@ void CMenus::CScrollRegion::End()
 
 void CMenus::CScrollRegion::AddRect(CUIRect Rect)
 {
-	vec2 ContentPos = vec2(m_ClipRect.x, m_ClipRect.y);
-	ContentPos.x += m_ContentScrollOff.x;
-	ContentPos.y += m_ContentScrollOff.y;
 	m_LastAddedRect = Rect;
-	m_ContentH = max(Rect.y + Rect.h - ContentPos.y, m_ContentH);
+	m_ContentH = max(Rect.y + Rect.h - m_ClipRect.y, m_ContentH);
 }
 
 void CMenus::CScrollRegion::ScrollHere(int Option)
 {
 	const float MinHeight = min(m_ClipRect.h, m_LastAddedRect.h);
-	const float TopScroll = m_LastAddedRect.y - (m_ClipRect.y + m_ContentScrollOff.y);
+	const float TopScroll = m_LastAddedRect.y - m_ClipRect.y;
 
 	switch(Option)
 	{
@@ -205,7 +218,7 @@ void CMenus::CScrollRegion::ScrollHere(int Option)
 
 		case CScrollRegion::SCROLLHERE_KEEP_IN_VIEW:
 		default: {
-			const float dy = m_LastAddedRect.y - m_ClipRect.y;
+			const float dy = m_LastAddedRect.y + m_ContentScrollOff.y - m_ClipRect.y;
 
 			if(dy < 0)
 				m_RequestScrollY = TopScroll;
@@ -217,10 +230,10 @@ void CMenus::CScrollRegion::ScrollHere(int Option)
 
 bool CMenus::CScrollRegion::IsRectClipped(const CUIRect& Rect) const
 {
-	return (m_ClipRect.x > (Rect.x + Rect.w)
-		|| (m_ClipRect.x + m_ClipRect.w) < Rect.x
-		|| m_ClipRect.y > (Rect.y + Rect.h)
-		|| (m_ClipRect.y + m_ClipRect.h) < Rect.y);
+	return (m_ClipRect.x > (Rect.x + Rect.w + m_ContentScrollOff.x)
+		|| (m_ClipRect.x + m_ClipRect.w) < (Rect.x + m_ContentScrollOff.x)
+		|| m_ClipRect.y > (Rect.y + Rect.h + m_ContentScrollOff.y)
+		|| (m_ClipRect.y + m_ClipRect.h) < (Rect.y + m_ContentScrollOff.y));
 }
 
 bool CMenus::CScrollRegion::IsScrollbarShown() const

@@ -231,7 +231,6 @@ void CMenus::RenderPlayers(CUIRect MainView)
 
 	// prepare scroll
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
 	ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
@@ -264,9 +263,8 @@ void CMenus::RenderPlayers(CUIRect MainView)
 
 	// scroll, ignore margins
 	MainView.Margin(-5.0f, &MainView);
-	s_ScrollRegion.Begin(&MainView, &ScrollOffset, &ScrollParams);
+	s_ScrollRegion.Begin(&MainView, &ScrollParams);
 	MainView.Margin(5.0f, &MainView);
-	MainView.y += ScrollOffset.y;
 
 	// options
 	static int s_aPlayerIDs[MAX_CLIENTS][2] = {{0}};
@@ -486,9 +484,7 @@ void CMenus::RenderServerInfo(CUIRect MainView)
 	Motd.Margin(5.0f, &Motd);
 
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
-	s_ScrollRegion.Begin(&Motd, &ScrollOffset);
-	Motd.y += ScrollOffset.y;
+	s_ScrollRegion.Begin(&Motd);
 
 	CTextCursor Cursor;
 	TextRender()->SetCursor(&Cursor, Motd.x, Motd.y, ButtonHeight*ms_FontmodHeight*0.8f, TEXTFLAG_RENDER);

@@ -445,7 +445,11 @@ void CHud::RenderFps()
 		m_AverageFPS = (m_AverageFPS*(1.0f-(1.0f/m_AverageFPS))) + (FPS*(1.0f/m_AverageFPS));
 		char aBuf[32];
 		str_format(aBuf, sizeof(aBuf), "%d", (int)m_AverageFPS);
-		TextRender()->Text(0, m_Width-10-TextRender()->TextWidth(0,12,aBuf,-1, -1.0f), 5, 12, aBuf, -1.0f);
+
+		CTextCursor Cursor;
+		TextRender()->SetCursor(&Cursor, m_Width-10-TextRender()->TextWidth(0,12,aBuf,-1, -1.0f), 5, 12, TEXTFLAG_RENDER|TEXTFLAG_NOCACHE);
+		Cursor.m_LineWidth = -1.0f;
+		TextRender()->TextEx(&Cursor, aBuf, -1);
 	}
 }
 
@@ -841,6 +845,9 @@ void CHud::OnRender()
 
 	if(Config()->m_ClShowhud)
 	{
+		static CTextCache s_TextCache;
+		TextRender()->BindCache(&s_TextCache);
+
 		if(m_pClient->m_Snap.m_pLocalCharacter && !(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
 		{
 			RenderHealthAndAmmo(m_pClient->m_Snap.m_pLocalCharacter);
@@ -877,6 +884,9 @@ void CHud::OnRender()
 			RenderConnectionWarning();
 		RenderTeambalanceWarning();
 		RenderVoting();
+
+		TextRender()->FlushCache();
+		TextRender()->RenderCache(&s_TextCache);
 	}
 	RenderCursor();
 }

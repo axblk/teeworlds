@@ -48,6 +48,8 @@ class CUI
 	unsigned m_NumClips;
 	void UpdateClipping();
 
+	vec2 m_PositionOffset;
+
 	class CConfig *m_pConfig;
 	class IGraphics *m_pGraphics;
 	class IInput *m_pInput;
@@ -124,8 +126,13 @@ public:
 	void StartCheck() { m_ActiveItemValid = false; };
 	void FinishCheck() { if(!m_ActiveItemValid) SetActiveItem(0); };
 
-	bool MouseInside(const CUIRect *pRect) const { return pRect->Inside(m_MouseX, m_MouseY); };
-	bool MouseInsideClip() const { return !IsClipped() || MouseInside(ClipArea()); };
+	bool MouseInside(const CUIRect *pRect) const
+	{
+		float MouseX = m_MouseX - m_PositionOffset.x;
+		float MouseY = m_MouseY - m_PositionOffset.y;
+		return pRect->Inside(MouseX, MouseY);
+	};
+	bool MouseInsideClip() const { return !IsClipped() || ClipArea()->Inside(m_MouseX, m_MouseY); };
 	bool MouseHovered(const CUIRect *pRect) const { return MouseInside(pRect) && MouseInsideClip(); };
 	void ConvertCursorMove(float *pX, float *pY, int CursorType) const;
 
@@ -139,6 +146,8 @@ public:
 	void ClipDisable();
 	const CUIRect *ClipArea() const;
 	inline bool IsClipped() const { return m_NumClips > 0; };
+	void SetPositionOffset(vec2 PositionOffset);
+	vec2 GetPositionOffset() const { return m_PositionOffset; };
 
 	bool DoButtonLogic(const void *pID, const CUIRect *pRect, int Button = 0);
 	bool DoPickerLogic(const void *pID, const CUIRect *pRect, float *pX, float *pY);

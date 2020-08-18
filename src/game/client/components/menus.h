@@ -10,6 +10,7 @@
 #include <engine/demo.h>
 #include <engine/contacts.h>
 #include <engine/serverbrowser.h>
+#include <engine/textrender.h>
 
 #include <game/voting.h>
 #include <game/client/component.h>
@@ -92,9 +93,18 @@ public:
 		static CUI *m_pUI;
 		static IInput *m_pInput;
 		static IClient *m_pClient;
+		static ITextRender *m_pTextrender;
 
 	public:
-		static void Init(CMenus *pMenus) { m_pMenus = pMenus; m_pRenderTools = pMenus->RenderTools(); m_pUI = pMenus->UI(); m_pInput = pMenus->Input(); m_pClient = pMenus->Client(); };
+		static void Init(CMenus *pMenus)
+		{
+			m_pMenus = pMenus;
+			m_pRenderTools = pMenus->RenderTools();
+			m_pUI = pMenus->UI();
+			m_pInput = pMenus->Input();
+			m_pClient = pMenus->Client();
+			m_pTextrender = pMenus->TextRender();
+		}
 	};
 
 	class CButtonContainer : public CUIElementBase
@@ -173,10 +183,8 @@ private:
 	Usage:
 		-- Initialization --
 		static CScrollRegion s_ScrollRegion;
-		vec2 ScrollOffset(0, 0);
 		s_ScrollRegion.Begin(&ScrollRegionRect, &ScrollOffset);
 		Content = ScrollRegionRect;
-		Content.y += ScrollOffset.y;
 
 		-- "Register" your content rects --
 		CUIRect Rect;
@@ -213,6 +221,9 @@ private:
 		vec2 m_ContentScrollOff;
 		CScrollRegionParams m_Params;
 
+		CTextCache m_TextCache;
+		CTextCache *m_pOldTextCache;
+
 	public:
 		enum {
 			SCROLLHERE_KEEP_IN_VIEW=0,
@@ -221,7 +232,7 @@ private:
 		};
 
 		CScrollRegion();
-		void Begin(CUIRect* pClipRect, vec2* pOutOffset, CScrollRegionParams* pParams = 0);
+		void Begin(CUIRect* pClipRect, CScrollRegionParams* pParams = 0);
 		void End();
 		void AddRect(CUIRect Rect);
 		void ScrollHere(int Option = CScrollRegion::SCROLLHERE_KEEP_IN_VIEW);
@@ -256,7 +267,6 @@ private:
 		const char *m_pBottomText;
 		float m_FooterHeight;
 		CScrollRegion m_ScrollRegion;
-		vec2 m_ScrollOffset;
 		char m_aFilterString[64];
 		float m_OffsetFilter;
 

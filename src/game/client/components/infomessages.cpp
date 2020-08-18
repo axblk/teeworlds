@@ -152,6 +152,9 @@ void CInfoMessages::OnRender()
 	float StartX = Width*1.5f-10.0f;
 	float y = 20.0f;
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	for(int i = 1; i <= MAX_INFOMSGS; i++)
 	{
 		const CInfoMsg *pInfoMsg = &m_aInfoMsgs[(m_InfoMsgCurrent+i)%MAX_INFOMSGS];
@@ -165,6 +168,9 @@ void CInfoMessages::OnRender()
 
 		y += 46.0f;
 	}
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 }
 
 void CInfoMessages::RenderKillMsg(const CInfoMsg *pInfoMsg, float x, float y) const

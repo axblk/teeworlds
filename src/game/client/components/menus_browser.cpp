@@ -1148,15 +1148,13 @@ void CMenus::RenderServerbrowserServerList(CUIRect View)
 
 	// scrollbar
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
 	ScrollParams.m_Flags = CScrollRegionParams::FLAG_CONTENT_STATIC_WIDTH;
 	ScrollParams.m_SliderMinHeight = 5;
 	ScrollParams.m_ScrollUnit = 60.0f; // 3 rows per scroll
 	View.w += ScrollParams.m_ScrollbarWidth;
-	s_ScrollRegion.Begin(&View, &ScrollOffset, &ScrollParams);
-	View.y += ScrollOffset.y;
+	s_ScrollRegion.Begin(&View, &ScrollParams);
 
 	const char *pAddress = GetServerBrowserAddress();
 	for(int FilterIndex = 0; FilterIndex < m_lFilters.size(); FilterIndex++)
@@ -1519,15 +1517,13 @@ void CMenus::RenderServerbrowserFriendTab(CUIRect View)
 
 	// scrollbar
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
 	ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
 	ScrollParams.m_ScrollbarWidth = 14;
 	ScrollParams.m_ScrollbarMargin = 5;
 	ScrollParams.m_ScrollUnit = 40.0f; // various sized content, 40 units per scroll
-	s_ScrollRegion.Begin(&View, &ScrollOffset, &ScrollParams);
-	View.y += ScrollOffset.y;
+	s_ScrollRegion.Begin(&View, &ScrollParams);
 
 	// show lists
 	// only ~10 buttons will be displayed at once, a sliding window of 20 buttons ought to be enough
@@ -1797,7 +1793,10 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 		RenderTools()->DrawUIRect(&Button, vec4(0.0, 0.0, 0.0, 0.25f), CUI::CORNER_ALL, 2.0f);
 
 		Button.HMargin(2.0f, &Button);
+		CTextCache *pBoundCache = TextRender()->GetBoundCache();
 		UI()->ClipEnable(&Button);
+		static CTextCache s_FilterTextCache;
+		TextRender()->BindCache(&s_FilterTextCache);
 
 		const float Spacing = 2.0f;
 		const float IconWidth = 10.0f;
@@ -1848,7 +1847,10 @@ void CMenus::RenderServerbrowserFilterTab(CUIRect View)
 			Button.VSplitLeft(Spacing, 0, &Button);
 		}
 
+		TextRender()->FlushCache();
+		TextRender()->RenderCache(&s_FilterTextCache);
 		UI()->ClipDisable();
+		TextRender()->BindCache(pBoundCache);
 
 		if(NeedScrollbar)
 		{
@@ -2123,15 +2125,13 @@ void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int 
 	float LineHeight = 20.0f;
 
 	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
 	ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
 	ScrollParams.m_ScrollbarWidth = 5;
 	ScrollParams.m_ScrollbarMargin = 1;
 	ScrollParams.m_ScrollUnit = 60.0f; // 3 players per scroll
-	s_ScrollRegion.Begin(&View, &ScrollOffset, &ScrollParams);
-	View.y += ScrollOffset.y;
+	s_ScrollRegion.Begin(&View, &ScrollParams);
 	if(RowCount > 0)
 	{
 		const float Width = RowWidth * ((pInfo->m_NumClients+RowCount-1) / RowCount);

@@ -745,6 +745,9 @@ void CScoreboard::OnRender()
 	CUIRect Screen = *UI()->Screen();
 	Graphics()->MapScreen(Screen.x, Screen.y, Screen.w, Screen.h);
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	float Width = Screen.w;
 	float y = 85.f;
 	float w = 364.0f;
@@ -785,6 +788,9 @@ void CScoreboard::OnRender()
 			m_TotalRect.h = ScoreboardHeight+SpectatorHeight+3.0f;
 		}
 	}
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 
 	Width = 400*3.0f*Graphics()->ScreenAspect();
 	Graphics()->MapScreen(0, 0, Width, 400*3.0f);

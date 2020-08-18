@@ -209,6 +209,9 @@ void CStats::OnRender()
 
 	Graphics()->MapScreen(0, 0, Width, Height);
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	Graphics()->BlendNormal();
 	{
 		CUIRect Rect = {x-10.f, y-10.f, w, h};
@@ -503,6 +506,9 @@ void CStats::OnRender()
 		}
 		y += LineHeight;
 	}
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 }
 
 void CStats::UpdatePlayTime(int Ticks)

@@ -13,7 +13,6 @@
 
 CMenus::CListBox::CListBox()
 {
-	m_ScrollOffset = vec2(0,0);
 	m_ListBoxUpdateScroll = false;
 	m_aFilterString[0] = '\0';
 	m_OffsetFilter = 0.0f;
@@ -119,11 +118,9 @@ void CMenus::CListBox::DoStart(float RowHeight, int NumItems, int ItemsPerRow, i
 	}
 
 	// setup the scrollbar
-	m_ScrollOffset = vec2(0, 0);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ScrollUnit = m_ListBoxRowHeight * RowsPerScroll;
-	m_ScrollRegion.Begin(&m_ListBoxView, &m_ScrollOffset, &ScrollParams);
-	m_ListBoxView.y += m_ScrollOffset.y;
+	m_ScrollRegion.Begin(&m_ListBoxView, &ScrollParams);
 }
 
 CMenus::CListboxItem CMenus::CListBox::DoNextRow()

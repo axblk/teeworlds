@@ -15,6 +15,12 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+/*
+ * TODO:
+ * fix nested scroll regions
+ * improve cache allocation
+ */
+
 enum
 {
 	MAX_CHARACTERS = 64,

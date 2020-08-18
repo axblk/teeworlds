@@ -778,6 +778,9 @@ void CChat::OnRender()
 	float y = Height-20.0f;
 	float LineWidth = 200.0f;
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	// bool showCommands;
 	float CategoryWidth = 0;
 
@@ -1318,6 +1321,9 @@ void CChat::OnRender()
 	TextRender()->TextOutlineColor(CUI::ms_DefaultTextOutlineColor);
 
 	HandleCommands(x+CategoryWidth, Height - 24.f, 200.0f-CategoryWidth);
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 }
 
 void CChat::Say(int Mode, const char *pLine)

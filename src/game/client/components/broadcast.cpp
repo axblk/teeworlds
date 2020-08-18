@@ -243,7 +243,7 @@ void CBroadcast::DoBroadcast(const char *pText)
 {
 	str_copy(m_aBroadcastText, pText, sizeof(m_aBroadcastText));
 	CTextCursor Cursor;
-	TextRender()->SetCursor(&Cursor, 0, 0, 12.0f, TEXTFLAG_STOP_AT_END);
+	TextRender()->SetCursor(&Cursor, 0, 0, 12.0f, TEXTFLAG_STOP_AT_END|TEXTFLAG_NOCACHE);
 	Cursor.m_LineWidth = 300*Graphics()->ScreenAspect();
 	TextRender()->TextEx(&Cursor, m_aBroadcastText, -1);
 	m_BroadcastRenderOffset = 150*Graphics()->ScreenAspect()-Cursor.m_X/2;
@@ -356,7 +356,7 @@ void CBroadcast::OnMessage(int MsgType, void* pRawMsg)
 
 		if(UserLineCount <= 1) // auto mode
 		{
-			TextRender()->SetCursor(&Cursor, 0, 0, FontSize, 0);
+			TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_NOCACHE);
 			Cursor.m_LineWidth = LineMaxWidth;
 			TextRender()->TextEx(&Cursor, pBroadcastMsg, MsgLen);
 
@@ -371,7 +371,7 @@ void CBroadcast::OnMessage(int MsgType, void* pRawMsg)
 			{
 				const char* RemainingMsg = pBroadcastMsg + CurCharCount;
 
-				TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END);
+				TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END|TEXTFLAG_NOCACHE);
 				Cursor.m_LineWidth = LineMaxWidth;
 
 				TextRender()->TextEx(&Cursor, RemainingMsg, -1);
@@ -384,7 +384,7 @@ void CBroadcast::OnMessage(int MsgType, void* pRawMsg)
 					if(WorldLen > 0 && WorldLen < StrLen)
 					{
 						StrLen -= WorldLen;
-						TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END);
+						TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END|TEXTFLAG_NOCACHE);
 						Cursor.m_LineWidth = LineMaxWidth;
 						TextRender()->TextEx(&Cursor, RemainingMsg, StrLen);
 					}
@@ -404,7 +404,7 @@ void CBroadcast::OnMessage(int MsgType, void* pRawMsg)
 
 			for(int i = 0; i < UserLineCount && m_SrvBroadcastLineCount < MAX_BROADCAST_LINES; i++)
 			{
-				TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END);
+				TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END|TEXTFLAG_NOCACHE);
 				Cursor.m_LineWidth = LineMaxWidth;
 				TextRender()->TextEx(&Cursor, UserLines[i].m_pStrStart, UserLines[i].m_StrLen);
 
@@ -425,6 +425,9 @@ void CBroadcast::OnRender()
 	if(Client()->State() < IClient::STATE_ONLINE)
 		return;
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	// server broadcast
 	RenderServerBroadcast();
 
@@ -441,5 +444,8 @@ void CBroadcast::OnRender()
 		Cursor.m_LineWidth = 300*Graphics()->ScreenAspect()-m_BroadcastRenderOffset;
 		TextRender()->TextEx(&Cursor, m_aBroadcastText, -1);
 	}
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 }
 

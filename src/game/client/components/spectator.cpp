@@ -196,6 +196,9 @@ void CSpectator::OnRender()
 
 	Graphics()->MapScreen(0, 0, Width, Height);
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	CUIRect Rect = {Width/2.0f-300.0f*ScaleX, Height/2.0f-300.0f, 600.0f*ScaleX, 600.0f};
 	Graphics()->BlendNormal();
 	RenderTools()->DrawRoundRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.3f), 20.0f);
@@ -340,6 +343,9 @@ void CSpectator::OnRender()
 		y += LineHeight;
 	}
 	TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 
 	// draw cursor
 	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_CURSOR].m_Id);

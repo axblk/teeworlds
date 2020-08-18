@@ -419,6 +419,8 @@ int CEditor::DoEditBox(void *pID, const CUIRect *pRect, char *pStr, unsigned Str
 			while(w-*Offset < 0.0f);
 		}
 	}
+	CTextCache *pBoundCache = TextRender()->GetBoundCache();
+	TextRender()->BindCache(0);
 	UI()->ClipEnable(pRect);
 	Textbox.x -= *Offset;
 
@@ -436,6 +438,7 @@ int CEditor::DoEditBox(void *pID, const CUIRect *pRect, char *pStr, unsigned Str
 			UI()->DoLabel(&Textbox, "|", FontSize, CUI::ALIGN_LEFT);
 	}
 	UI()->ClipDisable();
+	TextRender()->BindCache(pBoundCache);
 
 	return ReturnValue;
 }
@@ -3081,6 +3084,9 @@ void CEditor::RenderFileDialog()
 	CUIRect Preview;
 	float Width = View.w, Height = View.h;
 
+	static CTextCache s_FileDialogTextCache;
+	TextRender()->BindCache(&s_FileDialogTextCache);
+
 	RenderTools()->DrawUIRect(&View, vec4(0,0,0,0.25f), 0, 0);
 	View.VMargin(150.0f, &View);
 	View.HMargin(50.0f, &View);
@@ -3264,11 +3270,19 @@ void CEditor::RenderFileDialog()
 	// set clipping
 	UI()->ClipEnable(&View);
 
+	static CTextCache s_FileListTextCache;
+	TextRender()->BindCache(&s_FileListTextCache);
+
 	for(int i = 0; i < m_FileList.size(); i++)
 		AddFileDialogEntry(i, &View);
+	
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_FileListTextCache);
 
 	// disable clipping again
 	UI()->ClipDisable();
+
+	TextRender()->BindCache(&s_FileDialogTextCache);
 
 	// the buttons
 	static int s_OkButton = 0;
@@ -3366,6 +3380,9 @@ void CEditor::RenderFileDialog()
 			UI()->SetActiveItem(0);
 		}
 	}
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_FileDialogTextCache);
 }
 
 void CEditor::FilelistPopulate(int StorageType)
@@ -3450,6 +3467,10 @@ void CEditor::RenderStatusbar(CUIRect View)
 
 	if(m_pTooltip)
 	{
+		static CTextCache s_TooltipTextCache;
+		CTextCache *pOldTextCache = TextRender()->GetBoundCache();
+		TextRender()->BindCache(&s_TooltipTextCache);
+
 		if(ms_pUiGotContext && ms_pUiGotContext == UI()->HotItem())
 		{
 			char aBuf[512];
@@ -3458,6 +3479,11 @@ void CEditor::RenderStatusbar(CUIRect View)
 		}
 		else
 			UI()->DoLabel(&View, m_pTooltip, 10.0f, CUI::ALIGN_LEFT);
+
+		TextRender()->FlushCache();
+		TextRender()->RenderCache(&s_TooltipTextCache);
+
+		TextRender()->BindCache(pOldTextCache);
 	}
 }
 
@@ -4210,6 +4236,9 @@ void CEditor::Render()
 	m_ZoomLevel = clamp(m_ZoomLevel, 50, 2000);
 	m_WorldZoom = m_ZoomLevel/100.0f;
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	if(m_GuiActive)
 	{
 		float Brightness = 0.25f;
@@ -4254,26 +4283,11 @@ void CEditor::Render()
 			RenderEnvelopeEditor(EnvelopeEditor);
 	}
 
-	if(m_Dialog == DIALOG_FILE)
-	{
-		static int s_NullUiTarget = 0;
-		UI()->SetHotItem(&s_NullUiTarget);
-		RenderFileDialog();
-	}
-
-	if(m_PopupEventActivated)
-	{
-		static int s_PopupID = 0;
-		UiInvokePopupMenu(&s_PopupID, 0, Width/2.0f-200.0f, Height/2.0f-100.0f, 400.0f, 200.0f, PopupEvent);
-		m_PopupEventActivated = false;
-		m_PopupEventWasActivated = true;
-	}
-
-
-	UiDoPopupMenu();
-
 	if(m_GuiActive)
 		RenderStatusbar(StatusBar);
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 
 	// todo: fix this
 	if(Config()->m_EdShowkeys)
@@ -4294,6 +4308,24 @@ void CEditor::Render()
 			}
 		}
 	}
+
+	if(m_Dialog == DIALOG_FILE)
+	{
+		static int s_NullUiTarget = 0;
+		UI()->SetHotItem(&s_NullUiTarget);
+		RenderFileDialog();
+	}
+
+	if(m_PopupEventActivated)
+	{
+		static int s_PopupID = 0;
+		UiInvokePopupMenu(&s_PopupID, 0, Width/2.0f-200.0f, Height/2.0f-100.0f, 400.0f, 200.0f, PopupEvent);
+		m_PopupEventActivated = false;
+		m_PopupEventWasActivated = true;
+	}
+
+
+	UiDoPopupMenu();
 
 	if(m_ShowMousePointer)
 	{

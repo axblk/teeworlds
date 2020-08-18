@@ -455,7 +455,12 @@ void CGameConsole::OnRender()
 		float FontSize = 10.0f;
 		float RowHeight = FontSize*1.25f;
 		float x = 3;
-		float y = ConsoleHeight - RowHeight - 5.0f;
+		float y = - RowHeight - 5.0f;
+
+		Graphics()->SetPositionOffset(0.f, ConsoleHeight);
+
+		static CTextCache s_TextCache;
+		TextRender()->BindCache(&s_TextCache);
 
 		CRenderInfo Info;
 		Info.m_pSelf = this;
@@ -558,7 +563,7 @@ void CGameConsole::OnRender()
 				OffsetY += pEntry->m_YOffset;
 
 				//	next page when lines reach the top
-				if(y-OffsetY <= RowHeight)
+				if(y+ConsoleHeight-OffsetY <= RowHeight)
 					break;
 
 				//	just render output from actual backlog page (render bottom up)
@@ -591,6 +596,15 @@ void CGameConsole::OnRender()
 			}
 		}
 
+
+		TextRender()->FlushCache();
+		TextRender()->RenderCache(&s_TextCache);
+
+		Graphics()->SetPositionOffset(0.f, 0.f);
+
+		static CTextCache s_StaticTextCache;
+		TextRender()->BindCache(&s_StaticTextCache);
+
 		// render page
 		char aBuf[128];
 		str_format(aBuf, sizeof(aBuf), Localize("-Page %d-"), pConsole->m_BacklogActPage+1);
@@ -600,6 +614,9 @@ void CGameConsole::OnRender()
 		str_format(aBuf, sizeof(aBuf), "v%s", GAME_RELEASE_VERSION);
 		float Width = TextRender()->TextWidth(0, FontSize, aBuf, -1, -1.0f);
 		TextRender()->Text(0, Screen.w-Width-10.0f, 0.0f, FontSize, aBuf, -1.0f);
+
+		TextRender()->FlushCache();
+		TextRender()->RenderCache(&s_StaticTextCache);
 	}
 }
 

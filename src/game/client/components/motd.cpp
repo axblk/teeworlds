@@ -50,6 +50,9 @@ void CMotd::OnRender()
 	Graphics()->BlendNormal();
 	RenderTools()->DrawRoundRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.5f), 30.0f);
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	Rect.Margin(30.0f, &Rect);
 	float TextSize = 32.0f;
 	CTextCursor Cursor;
@@ -57,6 +60,9 @@ void CMotd::OnRender()
 	Cursor.m_LineWidth = Rect.w;
 	Cursor.m_MaxLines = ceil(Rect.h/TextSize);
 	TextRender()->TextEx(&Cursor, m_aServerMotd, -1);
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 }
 
 void CMotd::OnMessage(int MsgType, void *pRawMsg)

@@ -42,6 +42,7 @@ CRenderTools *CMenus::CUIElementBase::m_pRenderTools = 0;
 CUI *CMenus::CUIElementBase::m_pUI = 0;
 IInput *CMenus::CUIElementBase::m_pInput = 0;
 IClient *CMenus::CUIElementBase::m_pClient = 0;
+ITextRender *CMenus::CUIElementBase::m_pTextrender = 0;
 
 CMenus::CMenus()
 {
@@ -481,6 +482,9 @@ bool CMenus::DoEditBox(void *pID, const CUIRect *pRect, char *pStr, unsigned Str
 			while(w-*pOffset < 0.0f);
 		}
 	}
+
+	CTextCache *pBoundCache = TextRender()->GetBoundCache();
+	TextRender()->BindCache(0);
 	UI()->ClipEnable(pRect);
 	Textbox.x -= *pOffset;
 
@@ -502,6 +506,7 @@ bool CMenus::DoEditBox(void *pID, const CUIRect *pRect, char *pStr, unsigned Str
 		}
 	}
 	UI()->ClipDisable();
+	TextRender()->BindCache(pBoundCache);
 
 	return Changed;
 }
@@ -1431,6 +1436,9 @@ int CMenus::Render()
 	CUIRect Screen = *UI()->Screen();
 	Graphics()->MapScreen(Screen.x, Screen.y, Screen.w, Screen.h);
 
+	static CTextCache s_TextCache;
+	TextRender()->BindCache(&s_TextCache);
+
 	static int s_InitTick = 5;
 	if(s_InitTick > 0)
 	{
@@ -2021,6 +2029,9 @@ int CMenus::Render()
 		if(m_Popup == POPUP_NONE)
 			UI()->SetActiveItem(0);
 	}
+
+	TextRender()->FlushCache();
+	TextRender()->RenderCache(&s_TextCache);
 
 	return 0;
 }

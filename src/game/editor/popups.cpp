@@ -10,6 +10,7 @@
 #include <engine/keys.h>
 #include <engine/storage.h>
 #include <engine/client.h>
+#include <engine/textrender.h>
 
 #include "editor.h"
 
@@ -18,6 +19,7 @@
 static struct
 {
 	CUIRect m_Rect;
+	CTextCache m_TextCache;
 	void *m_pId;
 	int (*m_pfnFunc)(CEditor *pEditor, CUIRect Rect);
 	int m_IsMenu;
@@ -76,11 +78,16 @@ void CEditor::UiDoPopupMenu()
 		RenderTools()->DrawUIRect(&r, vec4(0,0,0,0.75f), Corners, 3.0f);
 		r.Margin(4.0f, &r);
 
+		TextRender()->BindCache(&s_UiPopups[i].m_TextCache);
+
 		if(s_UiPopups[i].m_pfnFunc(this, r))
 		{
 			g_UiNumPopups--;
 			UI()->SetActiveItem(0);
 		}
+
+		TextRender()->FlushCache();
+		TextRender()->RenderCache(&s_UiPopups[i].m_TextCache);
 
 		if(Input()->KeyPress(KEY_ESCAPE))
 		{

@@ -25,6 +25,7 @@ CUI::CUI()
 	m_pActiveItem = 0;
 	m_pLastActiveItem = 0;
 	m_pBecommingHotItem = 0;
+	m_PositionOffset = vec2(0.f, 0.f);
 
 	m_MouseX = 0;
 	m_MouseY = 0;
@@ -119,6 +120,12 @@ void CUI::ClipEnable(const CUIRect *pRect)
 	}
 	m_NumClips++;
 	UpdateClipping();
+}
+
+void CUI::SetPositionOffset(vec2 PositionOffset)
+{
+	m_PositionOffset = PositionOffset;
+	Graphics()->SetPositionOffset(PositionOffset.x, PositionOffset.y);
 }
 
 void CUI::ClipDisable()
@@ -369,10 +376,11 @@ bool CUI::DoPickerLogic(const void *pID, const CUIRect *pRect, float *pX, float 
 	if(!CheckActiveItem(pID))
 		return false;
 
+	vec2 Mouse = vec2(m_MouseX, m_MouseY) - m_PositionOffset;
 	if(pX)
-		*pX = clamp(m_MouseX - pRect->x, 0.0f, pRect->w);
+		*pX = clamp(Mouse.x - pRect->x, 0.0f, pRect->w);
 	if(pY)
-		*pY = clamp(m_MouseY - pRect->y, 0.0f, pRect->h);
+		*pY = clamp(Mouse.y - pRect->y, 0.0f, pRect->h);
 
 	return true;
 }
