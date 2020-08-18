@@ -457,9 +457,9 @@ void CCommandProcessorFragment_OpenGL::Cmd_Render(const CCommandBuffer::CRenderC
 {
 	SetState(pCommand->m_State);
 
-	glVertexPointer(2, GL_FLOAT, sizeof(CCommandBuffer::CVertex), (char*)pCommand->m_pVertices);
-	glTexCoordPointer(3, GL_FLOAT, sizeof(CCommandBuffer::CVertex), (char*)pCommand->m_pVertices + sizeof(float)*2);
-	glColorPointer(4, GL_FLOAT, sizeof(CCommandBuffer::CVertex), (char*)pCommand->m_pVertices + sizeof(float)*5);
+	glVertexPointer(2, GL_FLOAT, sizeof(IGraphics::CVertex), (char*)pCommand->m_pVertices);
+	glTexCoordPointer(3, GL_FLOAT, sizeof(IGraphics::CVertex), (char*)pCommand->m_pVertices + sizeof(float)*2);
+	glColorPointer(4, GL_FLOAT, sizeof(IGraphics::CVertex), (char*)pCommand->m_pVertices + sizeof(float)*5);
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 	glEnableClientState(GL_COLOR_ARRAY);

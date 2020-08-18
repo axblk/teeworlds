@@ -117,17 +117,6 @@ public:
 		BLEND_ADDITIVE,
 	};
 
-	struct CPoint { float x, y; };
-	struct CTexCoord { float u, v, i; };
-	struct CColor { float r, g, b, a; };
-
-	struct CVertex
-	{
-		CPoint m_Pos;
-		CTexCoord m_Tex;
-		CColor m_Color;
-	};
-
 	struct CCommand
 	{
 	public:
@@ -144,8 +133,8 @@ public:
 		int m_Texture;
 		int m_TextureArrayIndex;
 		int m_Dimension;
-		CPoint m_ScreenTL;
-		CPoint m_ScreenBR;
+		IGraphics::CPoint m_ScreenTL;
+		IGraphics::CPoint m_ScreenBR;
 
 		// clip
 		bool m_ClipEnable;
@@ -158,7 +147,7 @@ public:
 	struct CClearCommand : public CCommand
 	{
 		CClearCommand() : CCommand(CMD_CLEAR) {}
-		CColor m_Color;
+		IGraphics::CColor m_Color;
 	};
 
 	struct CSignalCommand : public CCommand
@@ -179,7 +168,7 @@ public:
 		CState m_State;
 		unsigned m_PrimType;
 		unsigned m_PrimCount;
-		CVertex *m_pVertices; // you should use the command buffer data to allocate vertices for this command
+		IGraphics::CVertex *m_pVertices; // you should use the command buffer data to allocate vertices for this command
 	};
 
 	struct CScreenshotCommand : public CCommand
@@ -353,11 +342,11 @@ class CGraphics_Threaded : public IEngineGraphics
 	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 
-	CCommandBuffer::CVertex m_aVertices[MAX_VERTICES];
+	IGraphics::CVertex m_aVertices[MAX_VERTICES];
 	int m_NumVertices;
 
-	CCommandBuffer::CColor m_aColor[4];
-	CCommandBuffer::CTexCoord m_aTexture[4];
+	IGraphics::CColor m_aColor[4];
+	IGraphics::CTexCoord m_aTexture[4];
 
 	bool m_RenderEnable;
 
@@ -375,7 +364,7 @@ class CGraphics_Threaded : public IEngineGraphics
 
 	void FlushVertices();
 	void AddVertices(int Count);
-	void Rotate4(const CCommandBuffer::CPoint &rCenter, CCommandBuffer::CVertex *pPoints);
+	void Rotate4(const IGraphics::CPoint &rCenter, IGraphics::CVertex *pPoints);
 
 	void KickCommandBuffer();
 
@@ -417,6 +406,12 @@ public:
 	virtual void TextureSet(CTextureHandle TextureID);
 
 	virtual void Clear(float r, float g, float b);
+
+	void RenderVertices(const IGraphics::CVertex *pVertices, int PrimCount, unsigned PrimType);
+	virtual void RenderQuads(const IGraphics::CVertex *pVertices, int PrimCount)
+	{
+		RenderVertices(pVertices, PrimCount, CCommandBuffer::PRIMTYPE_QUADS);
+	}
 
 	virtual void QuadsBegin();
 	virtual void QuadsEnd();
