@@ -5,6 +5,7 @@
 
 #include <stdarg.h>
 
+#include <base/color.h>
 #include <base/math.h>
 #include <base/system.h>
 
@@ -778,6 +779,12 @@ void CClient::Render()
 	}
 	else
 	{
+		if(!Config()->m_ClShowQuads)
+		{
+			vec3 bg = HslToRgb(vec3(Config()->m_ClBackgroundHue / 255.0f, Config()->m_ClBackgroundSat / 255.0f, Config()->m_ClBackgroundLht / 255.0f));
+			Graphics()->Clear(bg.r, bg.g, bg.b);
+		}
+
 		GameClient()->OnRender();
 	}
 	DebugRender();
