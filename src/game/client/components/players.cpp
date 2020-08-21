@@ -76,10 +76,10 @@ void CPlayers::RenderHook(
 		vec2 Pos = Position;
 		vec2 HookPos;
 
-		if(pPlayerChar->m_HookedPlayer != -1 && m_pClient->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Active)
+		if(Player.m_HookedPlayer != -1 && m_pClient->m_Snap.m_aCharacters[Player.m_HookedPlayer].m_Active)
 		{
-			bool Prediction = m_pClient->UsePrediction() && m_pClient->UsePredictedChar(pPlayerChar->m_HookedPlayer);
-			HookPos = m_pClient->GetCharPos(pPlayerChar->m_HookedPlayer, Prediction);
+			bool Prediction = m_pClient->UsePrediction() && m_pClient->UsePredictedChar(Player.m_HookedPlayer);
+			HookPos = m_pClient->GetCharPos(Player.m_HookedPlayer, Prediction);
 		}
 		else
 			HookPos = mix(vec2(Prev.m_HookX, Prev.m_HookY), vec2(Player.m_HookX, Player.m_HookY), IntraTick);
