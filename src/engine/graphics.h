@@ -81,6 +81,17 @@ public:
 		WRAP_CLAMP,
 	};
 
+	struct CPoint { float x, y; };
+	struct CTexCoord { float u, v, i; };
+	struct CColor { float r, g, b, a; };
+
+	struct CVertex
+	{
+		CPoint m_Pos;
+		CTexCoord m_Tex;
+		CColor m_Color;
+	};
+
 	class CTextureHandle
 	{
 		friend class IGraphics;
@@ -136,6 +147,8 @@ public:
 	virtual void LinesBegin() = 0;
 	virtual void LinesEnd() = 0;
 	virtual void LinesDraw(const CLineItem *pArray, int Num) = 0;
+
+	virtual void RenderTriangles(const CVertex *pVertices, int PrimCount) = 0;
 
 	virtual void QuadsBegin() = 0;
 	virtual void QuadsEnd() = 0;

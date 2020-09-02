@@ -42,57 +42,10 @@ void CGraphics_Threaded::FlushVertices()
 	int NumVerts = m_NumVertices;
 	m_NumVertices = 0;
 
-	CCommandBuffer::CRenderCommand Cmd;
-	Cmd.m_State = m_State;
-
 	if(m_Drawing == DRAWING_QUADS)
-	{
-		Cmd.m_PrimType = CCommandBuffer::PRIMTYPE_TRIANGLES;
-		Cmd.m_PrimCount = NumVerts/3;
-	}
+		RenderVertices(m_aVertices, NumVerts/3, CCommandBuffer::PRIMTYPE_TRIANGLES);
 	else if(m_Drawing == DRAWING_LINES)
-	{
-		Cmd.m_PrimType = CCommandBuffer::PRIMTYPE_LINES;
-		Cmd.m_PrimCount = NumVerts/2;
-	}
-	else
-		return;
-
-	Cmd.m_Offset = m_pCommandBuffer->AllocData(sizeof(CCommandBuffer::CVertex)*NumVerts);
-	if(Cmd.m_Offset < 0)
-	{
-		// kick command buffer and try again
-		KickCommandBuffer();
-
-		Cmd.m_Offset = m_pCommandBuffer->AllocData(sizeof(CCommandBuffer::CVertex)*NumVerts);
-		if(Cmd.m_Offset < 0)
-		{
-			dbg_msg("graphics", "failed to allocate data for vertices");
-			return;
-		}
-	}
-
-	// check if we have enough free memory in the commandbuffer
-	if(!m_pCommandBuffer->AddCommand(Cmd))
-	{
-		// kick command buffer and try again
-		KickCommandBuffer();
-
-		Cmd.m_Offset = m_pCommandBuffer->AllocData(sizeof(CCommandBuffer::CVertex)*NumVerts);
-		if(Cmd.m_Offset < 0)
-		{
-			dbg_msg("graphics", "failed to allocate data for vertices");
-			return;
-		}
-
-		if(!m_pCommandBuffer->AddCommand(Cmd))
-		{
-			dbg_msg("graphics", "failed to allocate memory for render command");
-			return;
-		}
-	}
-
-	mem_copy(&m_pCommandBuffer->DataPtr()[Cmd.m_Offset], m_aVertices, sizeof(CCommandBuffer::CVertex)*NumVerts);
+		RenderVertices(m_aVertices, NumVerts/2, CCommandBuffer::PRIMTYPE_LINES);
 }
 
 void CGraphics_Threaded::AddVertices(int Count)
@@ -102,7 +55,7 @@ void CGraphics_Threaded::AddVertices(int Count)
 		FlushVertices();
 }
 
-void CGraphics_Threaded::Rotate6(const CCommandBuffer::CPoint &rCenter, CCommandBuffer::CVertex *pPoints)
+void CGraphics_Threaded::Rotate6(const IGraphics::CPoint &rCenter, IGraphics::CVertex *pPoints)
 {
 	float c = cosf(m_Rotation);
 	float s = sinf(m_Rotation);
@@ -609,7 +562,7 @@ void CGraphics_Threaded::QuadsDraw(CQuadItem *pArray, int Num)
 
 void CGraphics_Threaded::QuadsDrawTL(const CQuadItem *pArray, int Num)
 {
-	CCommandBuffer::CPoint Center;
+	IGraphics::CPoint Center;
 
 	dbg_assert(m_Drawing == DRAWING_QUADS, "called Graphics()->QuadsDrawTL without begin");
 
@@ -657,6 +610,61 @@ void CGraphics_Threaded::QuadsDrawTL(const CQuadItem *pArray, int Num)
 	}
 
 	AddVertices(6*Num);
+}
+
+void CGraphics_Threaded::RenderVertices(const IGraphics::CVertex *pVertices, int PrimCount, unsigned PrimType)
+{
+	if(PrimCount == 0)
+		return;
+
+	CCommandBuffer::CRenderCommand Cmd;
+	Cmd.m_State = m_State;
+	Cmd.m_PrimType = PrimType;
+	Cmd.m_PrimCount = PrimCount;
+
+	int NumVertices;
+	if(PrimType == CCommandBuffer::PRIMTYPE_TRIANGLES)
+		NumVertices = PrimCount*4;
+	else if(PrimType == CCommandBuffer::PRIMTYPE_LINES)
+		NumVertices = PrimCount*2;
+	else
+		return;
+
+	Cmd.m_Offset = m_pCommandBuffer->AllocData(sizeof(IGraphics::CVertex)*NumVertices);
+	if(Cmd.m_Offset < 0)
+	{
+		// kick command buffer and try again
+		KickCommandBuffer();
+
+		Cmd.m_Offset = m_pCommandBuffer->AllocData(sizeof(IGraphics::CVertex)*NumVertices);
+		if(Cmd.m_Offset < 0)
+		{
+			dbg_msg("graphics", "failed to allocate data for vertices");
+			return;
+		}
+	}
+
+	// check if we have enough free memory in the commandbuffer
+	if(!m_pCommandBuffer->AddCommand(Cmd))
+	{
+		// kick command buffer and try again
+		KickCommandBuffer();
+
+		Cmd.m_Offset = m_pCommandBuffer->AllocData(sizeof(IGraphics::CVertex)*NumVertices);
+		if(Cmd.m_Offset < 0)
+		{
+			dbg_msg("graphics", "failed to allocate data for vertices");
+			return;
+		}
+
+		if(!m_pCommandBuffer->AddCommand(Cmd))
+		{
+			dbg_msg("graphics", "failed to allocate memory for render command");
+			return;
+		}
+	}
+
+	mem_copy(&m_pCommandBuffer->DataPtr()[Cmd.m_Offset], pVertices, sizeof(IGraphics::CVertex)*NumVertices);
 }
 
 void CGraphics_Threaded::QuadsDrawFreeform(const CFreeformItem *pArray, int Num)

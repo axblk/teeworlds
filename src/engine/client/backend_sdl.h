@@ -179,7 +179,7 @@ private:
 
 	WGPUBindGroupId GetTexBindGroup(CTextureData *pTex, int WrapModeU, int WrapModeV, bool Array);
 	WGPUCommandEncoderId GetCommandEncoder();
-	WGPURenderPassId GetRenderPass(bool Clear = false, CCommandBuffer::CColor ClearColor = {0.0f, 0.0f, 0.0f, 1.0f});
+	WGPURenderPassId GetRenderPass(bool Clear = false, IGraphics::CColor ClearColor = {0.0f, 0.0f, 0.0f, 1.0f});
 	void EndRenderPass();
 
 	void SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPassId RPass);

@@ -838,7 +838,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Render(const CCommandBuffer::CRenderCom
 
 	if(PrimCount > 0)
 	{
-		unsigned DataSize = PrimCount * sizeof(CCommandBuffer::CVertex);
+		unsigned DataSize = PrimCount * sizeof(IGraphics::CVertex);
 
 		wgpu_render_pass_set_vertex_buffer(RPass, 0, m_StreamingBuffer, pCommand->m_Offset, DataSize);
 		wgpu_render_pass_draw(RPass, PrimCount, 1, 0, 0);
@@ -1055,7 +1055,7 @@ WGPURenderPipelineId CCommandProcessorFragment_WGPU::CreateRenderPipeline(WGPUPi
 	};
 
 	WGPUVertexBufferLayoutDescriptor VertexBufferLayoutDesc = {
-		.array_stride = sizeof(CCommandBuffer::CVertex),
+		.array_stride = sizeof(IGraphics::CVertex),
 		.step_mode = WGPUInputStepMode_Vertex,
 		.attributes = aVertexAttributes,
 		.attributes_length = 3,
@@ -1162,7 +1162,7 @@ WGPUCommandEncoderId CCommandProcessorFragment_WGPU::GetCommandEncoder()
 	return m_CmdEncoder;
 }
 
-WGPURenderPassId CCommandProcessorFragment_WGPU::GetRenderPass(bool Clear, CCommandBuffer::CColor ClearColor)
+WGPURenderPassId CCommandProcessorFragment_WGPU::GetRenderPass(bool Clear, IGraphics::CColor ClearColor)
 {
 	if(!m_RPass && m_NextTexture.view_id)
 	{
