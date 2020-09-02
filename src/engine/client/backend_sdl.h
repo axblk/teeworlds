@@ -171,6 +171,7 @@ private:
 	void GenerateMipmapsForLayer(WGPUTextureId Tex, unsigned BaseLayer, unsigned MipLevels);
 
 	WGPUSwapChainId CreateSwapChain(WGPUPresentMode PresentMode);
+	WGPUShaderModuleId CreateShaderModule(const uint32_t *pBytes, uintptr_t Length);
 	WGPURenderPipelineId CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, WGPUPrimitiveTopology PrimTopology, WGPUBlendDescriptor BlendInfo, bool Mipmap = false);
 	WGPUSamplerId CreateSampler(WGPUAddressMode ModeU, WGPUAddressMode ModeV, bool LinearMipmaps);
 	WGPUBindGroupId CreateTexBindGroup(WGPUTextureViewId TexView, WGPUSamplerId Sampler, bool Array = false);

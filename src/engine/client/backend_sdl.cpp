@@ -315,21 +315,17 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 	wgpu_request_adapter_async(
 		&RequestAdapterOptions,
 		2, // 2 | 4 | 8,
+		false,
 		FequestAdapterCallback,
 		(void *) &Adapter
 	);
 
 	dbg_msg("wgpu", "adapter requested");
 
-	WGPUDeviceDescriptor DeviceDesc = {
-		.extensions = {
-			.anisotropic_filtering = false,
-		},
-		.limits = {
-			.max_bind_groups = 2,
-		},
+	WGPUCLimits Limits = {
+		.max_bind_groups = 2,
 	};
-	m_Device = wgpu_adapter_request_device(Adapter, &DeviceDesc, NULL);
+	m_Device = wgpu_adapter_request_device(Adapter, 0, &Limits, false, NULL);
 
 	dbg_msg("wgpu", "device requested");
 
@@ -339,55 +335,15 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 	
 	dbg_msg("wgpu", "created swapchain: %llu", m_SwapChain);
 
-	WGPUShaderModuleDescriptor ShaderDesc = {
-		.code = WGPUU32Array {
-			.bytes = s_aVert,
-			.length = sizeof(s_aVert) / 4,
-		},
-	};
-	WGPUShaderModuleId VertexShader = wgpu_device_create_shader_module(m_Device, &ShaderDesc);
-
-	ShaderDesc = {
-		.code = WGPUU32Array {
-			.bytes = s_aVertBlit,
-			.length = sizeof(s_aVertBlit) / 4,
-		},
-	};
-	WGPUShaderModuleId VertexShaderBlit = wgpu_device_create_shader_module(m_Device, &ShaderDesc);
+	WGPUShaderModuleId VertexShader = CreateShaderModule(s_aVert, sizeof(s_aVert) / 4);
+	WGPUShaderModuleId VertexShaderBlit = CreateShaderModule(s_aVertBlit, sizeof(s_aVertBlit) / 4);
 
 	dbg_msg("wgpu", "created vertex shaders");
 
-	ShaderDesc = {
-		.code = WGPUU32Array {
-			.bytes = s_aFragNoTex,
-			.length = sizeof(s_aFragNoTex) / 4,
-		},
-	};
-	WGPUShaderModuleId FragmentShader = wgpu_device_create_shader_module(m_Device, &ShaderDesc);
-
-	ShaderDesc = {
-		.code = WGPUU32Array {
-			.bytes = s_aFrag2D,
-			.length = sizeof(s_aFrag2D) / 4,
-		},
-	};
-	WGPUShaderModuleId FragmentShader2D = wgpu_device_create_shader_module(m_Device, &ShaderDesc);
-
-	ShaderDesc = {
-		.code = WGPUU32Array {
-			.bytes = s_aFrag2DArray,
-			.length = sizeof(s_aFrag2DArray) / 4,
-		},
-	};
-	WGPUShaderModuleId FragmentShader2DArray = wgpu_device_create_shader_module(m_Device, &ShaderDesc);
-
-	ShaderDesc = {
-		.code = WGPUU32Array {
-			.bytes = s_aFragBlit,
-			.length = sizeof(s_aFragBlit) / 4,
-		},
-	};
-	WGPUShaderModuleId FragmentShaderBlit = wgpu_device_create_shader_module(m_Device, &ShaderDesc);
+	WGPUShaderModuleId FragmentShader = CreateShaderModule(s_aFragNoTex, sizeof(s_aFragNoTex) / 4);
+	WGPUShaderModuleId FragmentShader2D = CreateShaderModule(s_aFrag2D, sizeof(s_aFrag2D) / 4);
+	WGPUShaderModuleId FragmentShader2DArray = CreateShaderModule(s_aFrag2DArray, sizeof(s_aFrag2DArray) / 4);
+	WGPUShaderModuleId FragmentShaderBlit = CreateShaderModule(s_aFragBlit, sizeof(s_aFragBlit) / 4);
 
 	dbg_msg("wgpu", "created fragment shaders");
 
@@ -545,16 +501,9 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 	WGPUBindGroupEntry aEntries[1] = {
 		{
 			.binding = 0,
-			.resource = {
-				.tag = WGPUBindingResource_Buffer,
-				.buffer = {
-					._0 = {
-						.buffer = m_TransformBuffer,
-						.offset = 0,
-						.size = sizeof(CMat4),
-					}
-				}
-			},
+			.buffer = m_TransformBuffer,
+			.offset = 0,
+			.size = sizeof(CMat4),
 		}
 	};
 
@@ -1050,6 +999,17 @@ WGPUSwapChainId CCommandProcessorFragment_WGPU::CreateSwapChain(WGPUPresentMode 
 	return wgpu_device_create_swap_chain(m_Device, m_Surface, &SwapChainDesc);
 }
 
+WGPUShaderModuleId CCommandProcessorFragment_WGPU::CreateShaderModule(const uint32_t *pBytes, uintptr_t Length)
+{
+	WGPUShaderModuleDescriptor ShaderDesc = {
+		.code = WGPUU32Array {
+			.bytes = pBytes,
+			.length = Length,
+		},
+	};
+	return wgpu_device_create_shader_module(m_Device, &ShaderDesc);
+}
+
 WGPURenderPipelineId CCommandProcessorFragment_WGPU::CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, WGPUPrimitiveTopology PrimTopology, WGPUBlendDescriptor BlendInfo, bool Mipmap)
 {
 	WGPUVertexAttributeDescriptor aVertexAttributes[3] = {
@@ -1144,17 +1104,11 @@ WGPUBindGroupId CCommandProcessorFragment_WGPU::CreateTexBindGroup(WGPUTextureVi
 	WGPUBindGroupEntry aEntries[2] = {
 		{
 			.binding = 0,
-			.resource = {
-				.tag = WGPUBindingResource_TextureView,
-				.texture_view = { TexView }
-			},
+			.texture_view = { TexView }
 		},
 		{
 			.binding = 1,
-			.resource = {
-				.tag = WGPUBindingResource_Sampler,
-				.sampler = { Sampler },
-			},
+			.sampler = { Sampler },
 		}
 	};
 	WGPUBindGroupDescriptor BindGroupDesc = {
