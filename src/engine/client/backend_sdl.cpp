@@ -384,6 +384,9 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 		0, 0, 0, 1.0f
 	};
 
+	Mat4[3] += Mat4[0] * State.m_PositionOffset.x;
+	Mat4[7] += Mat4[5] * State.m_PositionOffset.y;
+
 	glUniformMatrix4fv(pPrograms[RenderMode]->m_TransformLoc, 1, true, Mat4);
 }
 
