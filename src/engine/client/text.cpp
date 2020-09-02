@@ -2,21 +2,18 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <base/system.h>
 #include <base/math.h>
+#include <base/tl/array.h>
 #include <base/tl/sorted_array.h>
+#include <base/tl/string.h>
 
 #include <engine/graphics.h>
 #include <engine/textrender.h>
 
-#ifdef CONF_FAMILY_WINDOWS
-	#include <windows.h>
-#endif
+#include <engine/shared/config.h>
 
 // ft2 texture
 #include <ft2build.h>
 #include FT_FREETYPE_H
-
-static int s_aFontSizes[] = {8,9,10,11,12,13,14,15,16,17,18,19,20,36,64};
-#define NUM_FONT_SIZES (sizeof(s_aFontSizes)/sizeof(int))
 
 enum
 {
@@ -471,6 +468,83 @@ public:
 	inline int QuadsPerChar() const { return m_Type == TEXTTYPE_SIMPLE ? 1 : 2; }
 };
 
+class CCacheEntry
+{
+public:
+	enum
+	{
+		STATE_UNMODIFIED=0,
+		STATE_MODIFIED_SAME_LENGTH,
+		STATE_MODIFIED
+	};
+
+	string m_Text;
+	int m_Length;
+	CTextCursor m_CursorIn;
+	CTextCursor m_CursorOut;
+	CTextParams m_Params;
+	int m_NumQuads;
+	int m_State;
+
+	inline bool Compare(const CTextCursor *pCursor, const char *pText, int Length, const CTextParams *pParams)
+	{
+		return m_Length == Length &&
+			mem_comp(&m_CursorIn, pCursor, sizeof(CTextCursor)) == 0 &&
+			str_comp(m_Text.cstr(), pText) == 0 &&
+			mem_comp(&m_Params, pParams, sizeof(CTextParams)) == 0;
+	}
+};
+
+class CSizeCache
+{
+public:
+	IGraphics *m_pGraphics;
+
+	IGraphics::CVertexBufferHandle m_VertexBuffer;
+	array<CCacheEntry> m_lEntries;
+	int m_ActiveEntriesCounter;
+	int m_NumCachedEntries;
+	int m_NumQuads;
+	int64 m_LastFullUpdate;
+
+	virtual ~CSizeCache();
+};
+
+CSizeCache::~CSizeCache()
+{
+	if(m_pGraphics)
+		m_pGraphics->UnloadVertexBuffer(&m_VertexBuffer);
+}
+
+CTextCache::CTextCache(int UsageHint) : m_pFont(0), m_UsageHint(UsageHint)
+{
+	for(unsigned i = 0; i < NUM_FONT_SIZES; i++)
+		m_apSizeCaches[i] = 0;
+}
+
+CTextCache::~CTextCache()
+{
+	Clear();
+}
+
+CSizeCache *CTextCache::InitSize(int Index, IGraphics *pGraphics)
+{
+	m_apSizeCaches[Index] = new CSizeCache();
+	m_apSizeCaches[Index]->m_lEntries.hint_size(10);
+	m_apSizeCaches[Index]->m_pGraphics = pGraphics;
+	return m_apSizeCaches[Index];
+}
+
+void CTextCache::Clear()
+{
+	m_pFont = 0;
+	for(unsigned i = 0; i < NUM_FONT_SIZES; i++)
+	{
+		delete m_apSizeCaches[i];
+		m_apSizeCaches[i] = 0;
+	}
+}
+
 inline void FillQuad(IGraphics::CVertex *pVert, float x, float y, float w, float h, const float aUvs[4], IGraphics::CColor Color)
 {
 	pVert[0].m_Pos.x = x;
@@ -503,6 +577,7 @@ class CTextRender : public IEngineTextRender
 	static IGraphics::CVertex ms_aTextVertices[VERTEX_BUFFER_SIZE];
 
 	IGraphics *m_pGraphics;
+	CConfig *m_pConfig;
 	IGraphics *Graphics() { return m_pGraphics; }
 
 	IGraphics::CColor m_TextColor;
@@ -511,6 +586,7 @@ class CTextRender : public IEngineTextRender
 	int64 m_CurTime;
 
 	CFont *m_pDefaultFont;
+	CTextCache *m_pBoundCache;
 
 	FT_Library m_FTLibrary;
 
@@ -735,13 +811,168 @@ class CTextRender : public IEngineTextRender
 		if(!pFont)
 			return;
 
-		int NumQuads = TextDeferredRenderEx(pCursor, pText, Length, pParams, ms_aTextVertices, VERTEX_BUFFER_QUADS);
+		CCacheEntry *pEntry = 0;
+		if(!(pCursor->m_Flags&TEXTFLAG_NOCACHE))
+			pEntry = GetCacheEntry(SizeIndex, pCursor, pText, Length, pParams);
+		if(pEntry && pEntry->m_State == CCacheEntry::STATE_UNMODIFIED)
+		{
+			// valid entry
+			*pCursor = pEntry->m_CursorOut;
+			return;
+		}
 
-		if(pCursor->m_Flags&TEXTFLAG_RENDER)
+		IGraphics::CVertex *pBuffer = pEntry ? 0 : ms_aTextVertices;
+		int NumQuads = TextDeferredRenderEx(pCursor, pText, Length, pParams, pBuffer, VERTEX_BUFFER_QUADS);
+
+		if(pEntry)
+		{
+			pEntry->m_CursorOut = *pCursor;
+			if(pEntry->m_NumQuads == NumQuads)
+			{
+				if(pEntry->m_NumQuads == 0) // nothing to update
+					pEntry->m_State = CCacheEntry::STATE_UNMODIFIED;
+				else
+					pEntry->m_State = CCacheEntry::STATE_MODIFIED_SAME_LENGTH;
+			}
+			pEntry->m_NumQuads = NumQuads;
+		}
+		else if(pCursor->m_Flags&TEXTFLAG_RENDER)
 		{
 			Graphics()->TextureSet(pFont->GetSizeByIndex(SizeIndex)->GetTexture());
 			Graphics()->RenderQuads(ms_aTextVertices, NumQuads);
 		}
+	}
+
+	void CheckCacheGraphicsState(CTextCache *pCache, CFont *pFont, bool Init = false)
+	{
+		float aScreen[4];
+		Graphics()->GetScreen(&aScreen[0], &aScreen[1], &aScreen[2], &aScreen[3]);
+
+		if(Init && !pCache->m_pFont)
+		{
+			pCache->m_pFont = pFont;
+			mem_copy(pCache->m_aScreen, aScreen, sizeof(aScreen));
+		}
+
+		dbg_assert(pCache->m_pFont == pFont, "changed font while text cache was active");
+		dbg_assert(mem_comp(pCache->m_aScreen, aScreen, sizeof(aScreen)) == 0, "changed screen while text cache was active");
+	}
+
+	CCacheEntry *GetCacheEntry(int SizeIndex, const CTextCursor *pCursor, const char *pText, int Length, const CTextParams *pParams)
+	{
+		if(!m_pBoundCache)
+			return 0;
+
+		CheckCacheGraphicsState(m_pBoundCache, GetFont(pCursor), true);
+
+		CSizeCache *pSizeCache = m_pBoundCache->m_apSizeCaches[SizeIndex];
+		if(!pSizeCache)
+			pSizeCache = m_pBoundCache->InitSize(SizeIndex, Graphics());
+
+		bool Valid = false;
+		if(pSizeCache->m_ActiveEntriesCounter >= pSizeCache->m_lEntries.size())
+			pSizeCache->m_lEntries.add(CCacheEntry());
+
+		CCacheEntry *pEntry = &pSizeCache->m_lEntries[pSizeCache->m_ActiveEntriesCounter];
+		bool NewEntry = pSizeCache->m_ActiveEntriesCounter >= pSizeCache->m_NumCachedEntries;
+		if(!NewEntry && pEntry->Compare(pCursor, pText, Length, pParams))
+			Valid = true;
+
+		if(!Valid)
+		{
+			pEntry->m_CursorIn = *pCursor;
+			pEntry->m_Text = pText;
+			pEntry->m_Length = Length;
+			pEntry->m_Params = *pParams;
+			pEntry->m_State = CCacheEntry::STATE_MODIFIED;
+
+			if(NewEntry)
+				pEntry->m_NumQuads = 0;
+		}
+
+		pSizeCache->m_ActiveEntriesCounter++;
+		return pEntry;
+	}
+
+	void UpdateCacheEntriesRange(CSizeCache *pSizeCache, int *pQuadsOffset, int Start, int End)
+	{
+		int ChunkStart = Start;
+		while(ChunkStart < End)
+		{
+			int ChunkNumQuads = 0;
+			for(int i = ChunkStart; i < End; i++)
+			{
+				CCacheEntry *pEntry = &pSizeCache->m_lEntries[i];
+				pEntry->m_State = CCacheEntry::STATE_UNMODIFIED;
+				CTextCursor Cursor = pEntry->m_CursorIn;
+				if(ChunkNumQuads + pEntry->m_NumQuads > VERTEX_BUFFER_QUADS)
+					break;
+
+				int EntryNumQuads = TextDeferredRenderEx(&Cursor, pEntry->m_Text, pEntry->m_Length,
+					&pEntry->m_Params, ms_aTextVertices + ChunkNumQuads * VERTICES_PER_QUAD, VERTEX_BUFFER_QUADS - ChunkNumQuads);
+				ChunkNumQuads += EntryNumQuads;
+				dbg_assert(EntryNumQuads == pEntry->m_NumQuads, "cache entry quad number changed");
+				ChunkStart++;
+			}
+
+			Graphics()->LoadVertexBufferSub(&pSizeCache->m_VertexBuffer, *pQuadsOffset * VERTICES_PER_QUAD, ChunkNumQuads * VERTICES_PER_QUAD, ms_aTextVertices);
+			*pQuadsOffset += ChunkNumQuads;
+		}
+
+		//dbg_msg("text/cache", "updated %d entries: %d - %d of %d", End - Start, Start, End, pSizeCache->m_ActiveEntriesCounter);
+	}
+
+	void UpdateAllCacheEntries(CSizeCache *pSizeCache, int FirstToUpdate, int SizeIndex)
+	{
+		int NumQuads = 0;
+		for(int i = 0; i < FirstToUpdate; i++)
+			NumQuads += pSizeCache->m_lEntries[i].m_NumQuads;
+		
+		UpdateCacheEntriesRange(pSizeCache, &NumQuads, FirstToUpdate, pSizeCache->m_ActiveEntriesCounter);
+
+		pSizeCache->m_NumCachedEntries = pSizeCache->m_ActiveEntriesCounter;
+		if(FirstToUpdate == 0)
+			pSizeCache->m_LastFullUpdate = time_get();
+
+		dbg_assert(NumQuads == pSizeCache->m_NumQuads, "cache quad number changed");
+		//dbg_msg("text/cache", "updated all entries (%d)", SizeIndex);
+	}
+
+	void UpdateModifiedCacheEntries(CSizeCache *pSizeCache, int SizeIndex)
+	{
+		int NumQuads = 0;
+		int Updated = 0;
+		int RangeStart = -1;
+		int QuadsOffset = 0;
+
+		for(int i = 0; i < pSizeCache->m_ActiveEntriesCounter; i++)
+		{
+			CCacheEntry *pEntry = &pSizeCache->m_lEntries[i];
+			if(pEntry->m_NumQuads == 0)
+				continue;
+
+			if(RangeStart == -1 && pEntry->m_State != CCacheEntry::STATE_UNMODIFIED)
+			{
+				RangeStart = i;
+				QuadsOffset = NumQuads;
+			}
+			else if(RangeStart != -1 && pEntry->m_State == CCacheEntry::STATE_UNMODIFIED)
+			{
+				UpdateCacheEntriesRange(pSizeCache, &QuadsOffset, RangeStart, i);
+				Updated++;
+				RangeStart = -1;
+			}
+
+			NumQuads += pEntry->m_NumQuads;
+		}
+
+		if(RangeStart != -1)
+		{
+			UpdateCacheEntriesRange(pSizeCache, &QuadsOffset, RangeStart, pSizeCache->m_ActiveEntriesCounter);
+			Updated++;
+		}
+
+		//dbg_msg("text/cache", "updated %d ranges (%d)", Updated, SizeIndex);
 	}
 
 public:
@@ -760,6 +991,7 @@ public:
 		m_TextOutlineColor.a = 0.3f;
 
 		m_pDefaultFont = 0;
+		m_pBoundCache = 0;
 		m_FTLibrary = 0;
 	}
 
@@ -775,6 +1007,7 @@ public:
 	virtual void Init()
 	{
 		m_pGraphics = Kernel()->RequestInterface<IGraphics>();
+		m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
 		FT_Init_FreeType(&m_FTLibrary);
 	}
 
@@ -914,6 +1147,93 @@ public:
 		pFont->RenderSetup(ActualSize);
 		const CFontChar *pChr = pSizeData->GetChar(' ', m_CurTime);
 		return CursorY + pChr->m_OffsetY*Size + pChr->m_Height*Size;
+	}
+
+	virtual void BindCache(CTextCache *pCache)
+	{
+		m_pBoundCache = m_pConfig->m_GfxTextCache ? pCache : 0;
+	}
+
+	virtual CTextCache *GetBoundCache()
+	{
+		return m_pBoundCache;
+	}
+
+	virtual void FlushCache()
+	{
+		CTextCache *pCache = m_pBoundCache;
+		m_pBoundCache = 0;
+
+		if(!pCache || !pCache->m_pFont)
+			return;
+
+		CheckCacheGraphicsState(pCache, pCache->m_pFont);
+
+		for(unsigned i = 0; i < NUM_FONT_SIZES; i++)
+		{
+			CSizeCache *pSizeCache = pCache->m_apSizeCaches[i];
+			if(!pSizeCache)
+				continue;
+
+			int FirstToUpdate = -1;
+			bool UpdateAll = false;
+
+			pSizeCache->m_NumQuads = 0;
+			for(int j = 0; j < pSizeCache->m_ActiveEntriesCounter; j++)
+			{
+				pSizeCache->m_NumQuads += pSizeCache->m_lEntries[j].m_NumQuads;
+				if(pSizeCache->m_lEntries[j].m_State != CCacheEntry::STATE_UNMODIFIED && FirstToUpdate == -1)
+					FirstToUpdate = j;
+				if(pSizeCache->m_lEntries[j].m_State == CCacheEntry::STATE_MODIFIED)
+					UpdateAll = true;
+			}
+
+			if(pSizeCache->m_LastFullUpdate <= pCache->m_pFont->GetSizeByIndex(i)->LastCharsModified())
+			{
+				FirstToUpdate = 0;
+				UpdateAll = true;
+			}
+
+			if(FirstToUpdate != -1 && pSizeCache->m_NumQuads > 0)
+			{
+				int NumVertices = pSizeCache->m_NumQuads * VERTICES_PER_QUAD;
+				if(!pSizeCache->m_VertexBuffer.IsValid())
+				{
+					pSizeCache->m_VertexBuffer = Graphics()->LoadVertexBuffer(NumVertices, 0, pCache->m_UsageHint);
+					FirstToUpdate = 0;
+					UpdateAll = true;
+				}
+				else if(pSizeCache->m_VertexBuffer.NumVertices() < NumVertices)
+				{
+					Graphics()->LoadVertexBufferSub(&pSizeCache->m_VertexBuffer, 0, NumVertices, 0, true);
+					FirstToUpdate = 0;
+					UpdateAll = true;
+				}
+
+				if(UpdateAll)
+					UpdateAllCacheEntries(pSizeCache, FirstToUpdate, i);
+				else
+					UpdateModifiedCacheEntries(pSizeCache, i);
+			}
+
+			pSizeCache->m_ActiveEntriesCounter = 0;
+		}
+	}
+
+	void RenderCache(const CTextCache *pCache) const
+	{
+		if(!m_pConfig->m_GfxTextCache || !pCache->m_pFont)
+			return;
+
+		for(unsigned i = 0; i < NUM_FONT_SIZES; i++)
+		{
+			const CSizeCache *pSizeCache = pCache->m_apSizeCaches[i];
+			if(pSizeCache && pSizeCache->m_NumQuads > 0)
+			{
+				m_pGraphics->TextureSet(pCache->m_pFont->GetSizeByIndex(i)->GetTexture());
+				m_pGraphics->RenderQuadsVertexBuffer(pSizeCache->m_VertexBuffer, 0, pSizeCache->m_NumQuads);
+			}
+		}
 	}
 };
 

@@ -10,10 +10,30 @@ enum
 {
 	TEXTFLAG_RENDER=1,
 	TEXTFLAG_ALLOW_NEWLINE=2,
-	TEXTFLAG_STOP_AT_END=4
+	TEXTFLAG_STOP_AT_END=4,
+	TEXTFLAG_NOCACHE=8,
 };
 
+static int s_aFontSizes[] = {8,9,10,11,12,13,14,15,16,17,18,19,20,36,64};
+#define NUM_FONT_SIZES (sizeof(s_aFontSizes)/sizeof(int))
+
 class CFont;
+class CSizeCache;
+
+class CTextCache
+{
+public:
+	CFont *m_pFont;
+	CSizeCache *m_apSizeCaches[NUM_FONT_SIZES];
+	float m_aScreen[4];
+	int m_UsageHint;
+
+	CTextCache(int UsageHint = IGraphics::VERTEX_BUFFER_DYNAMIC);
+	~CTextCache();
+
+	CSizeCache *InitSize(int Index, class IGraphics *pGraphics);
+	void Clear();
+};
 
 class CTextCursor
 {
@@ -41,6 +61,11 @@ public:
 
 	virtual CFont *LoadFont(const char *pFilename) = 0;
 	virtual void SetDefaultFont(CFont *pFont) = 0;
+
+	virtual void BindCache(CTextCache *pCache) = 0;
+	virtual CTextCache *GetBoundCache() = 0;
+	virtual void FlushCache() = 0;
+	virtual void RenderCache(const CTextCache *pCache) const = 0;
 
 	//
 	virtual void TextEx(CTextCursor *pCursor, const char *pText, int Length) = 0;
