@@ -202,7 +202,7 @@ void CCommandProcessorFragment_WGPU::ConvertToRGBA(int Width, int Height, int Fo
 void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPassId RPass)
 {
 	// TODO: remove this limit
-	if(m_ScreenCount >= MAX_TRANSFORM_MATRICES)
+	if(m_MVPCount >= MAX_TRANSFORM_MATRICES)
 		return;
 
 	if(State.m_ClipEnable)
@@ -271,19 +271,21 @@ void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &Stat
 		wgpu_render_pass_set_bind_group(RPass, 1, TexBindGroup, NULL, 0);
 	}
 
-	CScreen CurScreen = {
+	CMVPData CurMVP = {
 		State.m_ScreenTL.x,
 		State.m_ScreenTL.y,
 		State.m_ScreenBR.x,
-		State.m_ScreenBR.y
+		State.m_ScreenBR.y,
+		State.m_PositionOffset.x,
+		State.m_PositionOffset.y
 	};
-	if(m_ScreenCount == 0 || mem_comp(&m_LastScreen, &CurScreen, sizeof(CScreen)) != 0)
+	if(m_MVPCount == 0 || mem_comp(&m_LastMVP, &CurMVP, sizeof(CMVPData)) != 0)
 	{
-		mem_copy(&m_LastScreen, &CurScreen, sizeof(CScreen));
-		m_ScreenCount++;
+		mem_copy(&m_LastMVP, &CurMVP, sizeof(CMVPData));
+		m_MVPCount++;
 	}
 
-	unsigned Offset = MATRIX_ALIGNMENT * (m_ScreenCount - 1);
+	unsigned Offset = MATRIX_ALIGNMENT * (m_MVPCount - 1);
 	wgpu_render_pass_set_bind_group(RPass, 0, m_TransformBindGroup, &Offset, 1);
 }
 
@@ -1268,37 +1270,40 @@ void CCommandProcessorFragment_WGPU::SubmitCommandBuffer()
 	}
 }
 
-void CCommandProcessorFragment_WGPU::UploadStreamingData(const void *pData, unsigned Size, const CScreen *pScreens, int NumScreens)
+void CCommandProcessorFragment_WGPU::UploadStreamingData(const void *pData, unsigned Size, const CMVPData *pMVPData, int NumMVP)
 {
 	wgpu_queue_write_buffer(m_Queue, m_StreamingBuffer, 0, (uint8_t*)pData, Size);
 
 	static uint8_t s_aMatrixBuf[MATRIX_ALIGNMENT*MAX_TRANSFORM_MATRICES];
 
 	// TODO: remove this limit
-	NumScreens = min(NumScreens, MAX_TRANSFORM_MATRICES);
-	unsigned MemSize = MATRIX_ALIGNMENT * NumScreens;
+	NumMVP = min(NumMVP, MAX_TRANSFORM_MATRICES);
+	unsigned MemSize = MATRIX_ALIGNMENT * NumMVP;
 
-	for(int i = 0; i < NumScreens; i++)
+	for(int i = 0; i < NumMVP; i++)
 	{
 		const float Near = -1.0f;
 		const float Far = 1.0f;
 
-		CMat4 *pOrtho = (CMat4*)(s_aMatrixBuf + MATRIX_ALIGNMENT * i);
+		CMat4 *pMVPMat = (CMat4*)(s_aMatrixBuf + MATRIX_ALIGNMENT * i);
 
-		*pOrtho = {
-			2.0f / (pScreens[i].BR_x - pScreens[i].TL_x), 0.0f, 0.0f, 0.0f,
-			0.0f, 2.0f / (pScreens[i].TL_y - pScreens[i].BR_y), 0.0f, 0.0f,
+		*pMVPMat = {
+			2.0f / (pMVPData[i].BR_x - pMVPData[i].TL_x), 0.0f, 0.0f, 0.0f,
+			0.0f, 2.0f / (pMVPData[i].TL_y - pMVPData[i].BR_y), 0.0f, 0.0f,
 			0.0f, 0.0f, 2.0f / (Far - Near) , 0.0f,
-			- (pScreens[i].BR_x + pScreens[i].TL_x) / (pScreens[i].BR_x - pScreens[i].TL_x),
-			- (pScreens[i].TL_y + pScreens[i].BR_y) / (pScreens[i].TL_y - pScreens[i].BR_y),
+			- (pMVPData[i].BR_x + pMVPData[i].TL_x) / (pMVPData[i].BR_x - pMVPData[i].TL_x),
+			- (pMVPData[i].TL_y + pMVPData[i].BR_y) / (pMVPData[i].TL_y - pMVPData[i].BR_y),
 			- (Far + Near) / (Far - Near), 1.0f,
 		};
+
+		pMVPMat->m_Values[12] += pMVPMat->m_Values[0] * pMVPData[i].m_PositionOffset_x;
+		pMVPMat->m_Values[13] += pMVPMat->m_Values[5] * pMVPData[i].m_PositionOffset_y;
 	}
 
 	// TODO: use push constants instead
 	wgpu_queue_write_buffer(m_Queue, m_TransformBuffer, 0, s_aMatrixBuf, MemSize);
 
-	m_ScreenCount = 0;
+	m_MVPCount = 0;
 }
 
 
@@ -1307,8 +1312,8 @@ void CCommandProcessorFragment_WGPU::UploadStreamingData(const void *pData, unsi
 void CCommandProcessor_SDL_WGPU::RunBuffer(CCommandBuffer *pBuffer)
 {
 	unsigned CmdIndex = 0;
-	static array<CScreen> s_Screens;
-	int NumScreens = 0;
+	static array<CMVPData> s_MVPData;
+	int NumMVP = 0;
 
 	while(1)
 	{
@@ -1319,25 +1324,27 @@ void CCommandProcessor_SDL_WGPU::RunBuffer(CCommandBuffer *pBuffer)
 		if(pBaseCommand->m_Cmd == CCommandBuffer::CMD_RENDER)
 		{
 			const CCommandBuffer::CRenderCommand *pRenderCmd = static_cast<const CCommandBuffer::CRenderCommand *>(pBaseCommand);
-			CScreen CurScreen = {
+			CMVPData CurMVP = {
 				pRenderCmd->m_State.m_ScreenTL.x,
 				pRenderCmd->m_State.m_ScreenTL.y,
 				pRenderCmd->m_State.m_ScreenBR.x,
-				pRenderCmd->m_State.m_ScreenBR.y
+				pRenderCmd->m_State.m_ScreenBR.y,
+				pRenderCmd->m_State.m_PositionOffset.x,
+				pRenderCmd->m_State.m_PositionOffset.y
 			};
-			if(NumScreens == 0 || mem_comp(&s_Screens[NumScreens-1], &CurScreen, sizeof(CurScreen)) != 0)
+			if(NumMVP == 0 || mem_comp(&s_MVPData[NumMVP-1], &CurMVP, sizeof(CurMVP)) != 0)
 			{
-				NumScreens++;
-				if(NumScreens > s_Screens.size())
-					s_Screens.add(CurScreen);
+				NumMVP++;
+				if(NumMVP > s_MVPData.size())
+					s_MVPData.add(CurMVP);
 				else
-					s_Screens[NumScreens-1] = CurScreen;
+					s_MVPData[NumMVP-1] = CurMVP;
 			}
 		}
 	}
 
 	if(pBuffer->DataUsed() > 0)
-		m_WGPU.UploadStreamingData(pBuffer->DataPtr(), pBuffer->DataUsed(), &s_Screens[0], NumScreens);
+		m_WGPU.UploadStreamingData(pBuffer->DataPtr(), pBuffer->DataUsed(), &s_MVPData[0], NumMVP);
 	else
 		dbg_msg("", "no streaming data");
 

@@ -41,8 +41,8 @@ extern "C" {
 	};
 #endif
 
-struct CScreen { float TL_x, TL_y, BR_x, BR_y; };
-struct CMat4 { float m_Value[16]; };
+struct CMVPData { float TL_x, TL_y, BR_x, BR_y, m_PositionOffset_x, m_PositionOffset_y; };
+struct CMat4 { float m_Values[16]; };
 
 // basic threaded backend, abstract, missing init and shutdown functions
 class CGraphicsBackend_Threaded : public IGraphicsBackend
@@ -146,8 +146,8 @@ class CCommandProcessorFragment_WGPU
 	bool m_UpdatePresentMode;
 	bool m_Ready;
 
-	int m_ScreenCount;
-	CScreen m_LastScreen;
+	int m_MVPCount;
+	CMVPData m_LastMVP;
 
 	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
 	CVertexBuffer m_aVertexBuffers[CCommandBuffer::MAX_VERTEX_BUFFERS];
@@ -214,7 +214,7 @@ public:
 
 	void SubmitCommandBuffer();
 
-	void UploadStreamingData(const void *pData, unsigned Size, const CScreen *pScreens, int NumScreens);
+	void UploadStreamingData(const void *pData, unsigned Size, const CMVPData *pMVPData, int NumMVP);
 };
 
 // command processor impelementation, uses the fragments to combine into one processor

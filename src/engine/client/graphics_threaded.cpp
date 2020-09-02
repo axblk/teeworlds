@@ -87,6 +87,8 @@ CGraphics_Threaded::CGraphics_Threaded()
 	m_State.m_WrapModeU = WRAP_REPEAT;
 	m_State.m_WrapModeV = WRAP_REPEAT;
 	m_State.m_VertexBuffer = -1;
+	m_State.m_PositionOffset.x = 0.0f;
+	m_State.m_PositionOffset.y = 0.0f;
 
 	m_CurrentCommandBuffer = 0;
 	m_pCommandBuffer = 0x0;
@@ -158,6 +160,12 @@ void CGraphics_Threaded::WrapMode(int WrapU, int WrapV)
 {
 	m_State.m_WrapModeU = WrapU;
 	m_State.m_WrapModeV = WrapV;
+}
+
+void CGraphics_Threaded::SetPositionOffset(float x, float y)
+{
+	m_State.m_PositionOffset.x = x;
+	m_State.m_PositionOffset.y = y;
 }
 
 int CGraphics_Threaded::MemoryUsage() const
