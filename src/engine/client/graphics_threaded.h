@@ -399,6 +399,9 @@ class CGraphics_Threaded : public IEngineGraphics
 
 	bool m_RenderEnable;
 
+	int m_DrawCallCounter;
+	int m_LastFrameDrawCalls;
+
 	float m_Rotation;
 	int m_Drawing;
 	bool m_DoScreenshot;
@@ -434,6 +437,7 @@ public:
 	virtual void WrapMode(int WrapU, int WrapV);
 
 	virtual int MemoryUsage() const;
+	virtual int LastFrameDrawCalls() const { return m_LastFrameDrawCalls; };
 
 	virtual void MapScreen(float TopLeftX, float TopLeftY, float BottomRightX, float BottomRightY);
 	virtual void GetScreen(float *pTopLeftX, float *pTopLeftY, float *pBottomRightX, float *pBottomRightY);

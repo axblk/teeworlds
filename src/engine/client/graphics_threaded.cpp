@@ -103,6 +103,9 @@ CGraphics_Threaded::CGraphics_Threaded()
 
 	m_RenderEnable = true;
 	m_DoScreenshot = false;
+
+	m_DrawCallCounter = 0;
+	m_LastFrameDrawCalls = 0;
 }
 
 void CGraphics_Threaded::ClipEnable(int x, int y, int w, int h)
@@ -767,6 +770,8 @@ void CGraphics_Threaded::RenderVertexBuffer(IGraphics::CVertexBufferHandle Verte
 	Cmd.m_State.m_VertexBuffer = VertexBuffer.Id();
 
 	m_pCommandBuffer->AddCommand(Cmd);
+
+	m_DrawCallCounter++;
 }
 
 void CGraphics_Threaded::RenderVertices(const IGraphics::CVertex *pVertices, int PrimCount, unsigned PrimType)
@@ -823,6 +828,8 @@ void CGraphics_Threaded::RenderVertices(const IGraphics::CVertex *pVertices, int
 	}
 
 	mem_copy(&m_pCommandBuffer->DataPtr()[Cmd.m_Offset], pVertices, sizeof(IGraphics::CVertex)*NumVertices);
+
+	m_DrawCallCounter++;
 }
 
 void CGraphics_Threaded::QuadsDrawFreeform(const CFreeformItem *pArray, int Num)
@@ -1128,6 +1135,9 @@ void CGraphics_Threaded::Swap()
 
 	// kick the command buffer
 	KickCommandBuffer();
+
+	m_LastFrameDrawCalls = m_DrawCallCounter;
+	m_DrawCallCounter = 0;
 }
 
 bool CGraphics_Threaded::SetVSync(bool State)
