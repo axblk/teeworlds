@@ -101,6 +101,18 @@ class CCommandProcessorFragment_OpenGL
 		int m_Format;
 		int m_MemSize;
 	};
+
+	class CVertexBuffer
+	{
+	public:
+		GLuint m_VertexBuffer;
+		GLuint m_VertexArrayObject;
+		int m_Usage;
+		int m_MemSize;
+
+		void InitVAO();
+	};
+
 	class CShaderProgram
 	{
 	public:
@@ -111,7 +123,9 @@ class CCommandProcessorFragment_OpenGL
 		bool Create(GLuint VertexShader, GLuint FragmentShader, const char *pName);
 	};
 	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
+	CVertexBuffer m_aVertexBuffers[CCommandBuffer::MAX_VERTEX_BUFFERS];
 	volatile int *m_pTextureMemoryUsage;
+	volatile int *m_pVertexBufferMemoryUsage;
 	int m_MaxTexSize;
 	int m_Max3DTexSize;
 	int m_MaxArrayTexLayers;
@@ -128,7 +142,9 @@ class CCommandProcessorFragment_OpenGL
 	CShaderProgram m_2DTexProgram;
 	CShaderProgram m_2DTexArrayProgram;
 
-	GLuint m_StreamingBuffer;
+	CVertexBuffer m_StreamingBuffer;
+
+	const char *m_pCurDataBuffer;
 
 public:
 	enum
@@ -140,11 +156,13 @@ public:
 	{
 		CInitCommand() : CCommand(CMD_INIT) {}
 		volatile int *m_pTextureMemoryUsage;
+		volatile int *m_pVertexBufferMemoryUsage;
 		int *m_pTextureArraySize;
 	};
 
 private:
 	static int TexFormatToOpenGLFormat(int TexFormat);
+	static int VertexBufferUsageToOpenGLUsage(int Usage);
 	static unsigned char Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp);
 	static unsigned char *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
 
@@ -154,6 +172,9 @@ private:
 	void Cmd_Texture_Update(const CCommandBuffer::CTextureUpdateCommand *pCommand);
 	void Cmd_Texture_Destroy(const CCommandBuffer::CTextureDestroyCommand *pCommand);
 	void Cmd_Texture_Create(const CCommandBuffer::CTextureCreateCommand *pCommand);
+	void Cmd_VertexBuffer_Update(const CCommandBuffer::CVertexBufferUpdateCommand *pCommand);
+	void Cmd_VertexBuffer_Destroy(const CCommandBuffer::CVertexBufferDestroyCommand *pCommand);
+	void Cmd_VertexBuffer_Create(const CCommandBuffer::CVertexBufferCreateCommand *pCommand);
 	void Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand);
 	void Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand);
 	void Cmd_Screenshot(const CCommandBuffer::CScreenshotCommand *pCommand);
@@ -219,6 +240,7 @@ class CGraphicsBackend_SDL_OpenGL : public CGraphicsBackend_Threaded
 	SDL_GLContext m_GLContext;
 	ICommandProcessor *m_pProcessor;
 	volatile int m_TextureMemoryUsage;
+	volatile int m_VertexBufferMemoryUsage;
 	int m_NumScreens;
 	int m_TextureArraySize;
 public:

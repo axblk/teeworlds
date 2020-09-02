@@ -211,6 +211,14 @@ int CCommandProcessorFragment_OpenGL::TexFormatToOpenGLFormat(int TexFormat)
 	return GL_RGBA;
 }
 
+int CCommandProcessorFragment_OpenGL::VertexBufferUsageToOpenGLUsage(int Usage)
+{
+	if(Usage == IGraphics::VERTEX_BUFFER_STATIC) return GL_STATIC_DRAW;
+	if(Usage == IGraphics::VERTEX_BUFFER_DYNAMIC) return GL_DYNAMIC_DRAW;
+	if(Usage == IGraphics::VERTEX_BUFFER_STREAM) return GL_STREAM_DRAW;
+	return GL_DYNAMIC_DRAW;
+}
+
 unsigned char CCommandProcessorFragment_OpenGL::Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp)
 {
 	int Value = 0;
@@ -290,6 +298,24 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 
 	glUniform1i(pPrograms[RenderMode]->m_TextureLoc, 0);
 
+	// vertex buffer
+	const CVertexBuffer *pVertexBuffer = &m_StreamingBuffer;
+	if(State.m_VertexBuffer >= 0 && State.m_VertexBuffer < CCommandBuffer::MAX_VERTEX_BUFFERS)
+		pVertexBuffer = &m_aVertexBuffers[State.m_VertexBuffer];
+
+	if(IsLegacyGL())
+	{
+		glBindBuffer(GL_ARRAY_BUFFER, pVertexBuffer->m_VertexBuffer);
+
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), 0);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 2));
+		glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 5));
+	}
+	else
+	{
+		glBindVertexArray(pVertexBuffer->m_VertexArrayObject);
+	}
+
 	// blend
 	switch(State.m_BlendMode)
 	{
@@ -361,6 +387,24 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 	glUniformMatrix4fv(pPrograms[RenderMode]->m_TransformLoc, 1, true, Mat4);
 }
 
+void CCommandProcessorFragment_OpenGL::CVertexBuffer::InitVAO()
+{
+	glGenVertexArrays(1, &m_VertexArrayObject);
+	glBindVertexArray(m_VertexArrayObject);
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_VertexBuffer);
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
+
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), 0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 2));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 5));
+
+	glBindVertexArray(0);
+}
+
 static bool CheckShader(GLuint Shader, const char *pName)
 {
 	GLint Status = 0;
@@ -430,7 +474,9 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 	glDepthMask(GL_FALSE);
 
 	m_pTextureMemoryUsage = pCommand->m_pTextureMemoryUsage;
+	m_pVertexBufferMemoryUsage = pCommand->m_pVertexBufferMemoryUsage;
 	*m_pTextureMemoryUsage = 0;
+	*m_pVertexBufferMemoryUsage = 0;
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &m_MaxTexSize);
 	if(IsLegacyGL())
 	{
@@ -483,23 +529,18 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 	glDeleteShader(Fragment2DTexShader);
 	glDeleteShader(Fragment3DTexShader);
 
-	if(!IsLegacyGL())
+	glGenBuffers(1, &m_StreamingBuffer.m_VertexBuffer);
+
+	if(IsLegacyGL())
 	{
-		GLuint VertexArray;
-		glGenVertexArrays(1, &VertexArray);
-		glBindVertexArray(VertexArray);
+		glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(1);
+		glEnableVertexAttribArray(2);
 	}
-
-	glGenBuffers(1, &m_StreamingBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, m_StreamingBuffer);
-
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
-
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), 0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 2));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 5));
+	else
+	{
+		m_StreamingBuffer.InitVAO();
+	}
 }
 
 static void ConvertTexture(int Width, int Height, int Format, unsigned char **ppData)
@@ -711,6 +752,47 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 	mem_free(pTexData);
 }
 
+void CCommandProcessorFragment_OpenGL::Cmd_VertexBuffer_Create(const CCommandBuffer::CVertexBufferCreateCommand *pCommand)
+{
+	// TODO: do not upload data twice (streaming buffer)
+	const char *pData = (pCommand->m_DataOffset < 0) ? NULL : &m_pCurDataBuffer[pCommand->m_DataOffset];
+	glGenBuffers(1, &m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	if(!IsLegacyGL())
+		m_aVertexBuffers[pCommand->m_Slot].InitVAO();
+	glBindBuffer(GL_ARRAY_BUFFER, m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, pCommand->m_Size, pData, VertexBufferUsageToOpenGLUsage(pCommand->m_Usage));
+	m_aVertexBuffers[pCommand->m_Slot].m_MemSize = pCommand->m_Size;
+	m_aVertexBuffers[pCommand->m_Slot].m_Usage = pCommand->m_Usage;
+
+	*m_pVertexBufferMemoryUsage += pCommand->m_Size;
+}
+
+void CCommandProcessorFragment_OpenGL::Cmd_VertexBuffer_Update(const CCommandBuffer::CVertexBufferUpdateCommand *pCommand)
+{
+	// TODO: do not upload data twice (streaming buffer)
+	const char *pData = pCommand->m_DataOffset < 0 ? NULL : &m_pCurDataBuffer[pCommand->m_DataOffset];
+	glBindBuffer(GL_ARRAY_BUFFER, m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	if(pCommand->m_Recreate)
+	{
+		glBufferData(GL_ARRAY_BUFFER, pCommand->m_Size, pData, VertexBufferUsageToOpenGLUsage(m_aVertexBuffers[pCommand->m_Slot].m_Usage));
+		*m_pVertexBufferMemoryUsage += pCommand->m_Size - m_aVertexBuffers[pCommand->m_Slot].m_MemSize;
+		m_aVertexBuffers[pCommand->m_Slot].m_MemSize = pCommand->m_Size;
+	}
+	else
+	{
+		glBufferSubData(GL_ARRAY_BUFFER, pCommand->m_Offset, pCommand->m_Size, pData);
+	}
+}
+
+void CCommandProcessorFragment_OpenGL::Cmd_VertexBuffer_Destroy(const CCommandBuffer::CVertexBufferDestroyCommand *pCommand)
+{
+	glDeleteBuffers(1, &m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	if(!IsLegacyGL())
+		glDeleteVertexArrays(1, &m_aVertexBuffers[pCommand->m_Slot].m_VertexArrayObject);
+	*m_pVertexBufferMemoryUsage -= m_aVertexBuffers[pCommand->m_Slot].m_MemSize;
+	m_aVertexBuffers[pCommand->m_Slot].m_MemSize = 0;
+}
+
 void CCommandProcessorFragment_OpenGL::Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand)
 {
 	glClearColor(pCommand->m_Color.r, pCommand->m_Color.g, pCommand->m_Color.b, 0.0f);
@@ -776,7 +858,9 @@ void CCommandProcessorFragment_OpenGL::Cmd_Screenshot(const CCommandBuffer::CScr
 CCommandProcessorFragment_OpenGL::CCommandProcessorFragment_OpenGL()
 {
 	mem_zero(m_aTextures, sizeof(m_aTextures));
+	mem_zero(m_aVertexBuffers, sizeof(m_aVertexBuffers));
 	m_pTextureMemoryUsage = 0;
+	m_pVertexBufferMemoryUsage = 0;
 }
 
 bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand * pBaseCommand)
@@ -787,6 +871,9 @@ bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand
 	case CCommandBuffer::CMD_TEXTURE_CREATE: Cmd_Texture_Create(static_cast<const CCommandBuffer::CTextureCreateCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_TEXTURE_DESTROY: Cmd_Texture_Destroy(static_cast<const CCommandBuffer::CTextureDestroyCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_TEXTURE_UPDATE: Cmd_Texture_Update(static_cast<const CCommandBuffer::CTextureUpdateCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_CREATE: Cmd_VertexBuffer_Create(static_cast<const CCommandBuffer::CVertexBufferCreateCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_DESTROY: Cmd_VertexBuffer_Destroy(static_cast<const CCommandBuffer::CVertexBufferDestroyCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_UPDATE: Cmd_VertexBuffer_Update(static_cast<const CCommandBuffer::CVertexBufferUpdateCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_CLEAR: Cmd_Clear(static_cast<const CCommandBuffer::CClearCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_RENDER: Cmd_Render(static_cast<const CCommandBuffer::CRenderCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_SCREENSHOT: Cmd_Screenshot(static_cast<const CCommandBuffer::CScreenshotCommand *>(pBaseCommand)); break;
@@ -798,8 +885,13 @@ bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand
 
 void CCommandProcessorFragment_OpenGL::UploadStreamingData(const void *pData, unsigned Size)
 {
-	glBufferData(GL_ARRAY_BUFFER, 2 * 1024 * 1024, NULL, GL_STREAM_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, Size, pData);
+	m_pCurDataBuffer = (const char*)pData;
+	if(Size)
+	{
+		glBindBuffer(GL_ARRAY_BUFFER, m_StreamingBuffer.m_VertexBuffer);
+		glBufferData(GL_ARRAY_BUFFER, 2 * 1024 * 1024, NULL, GL_STREAM_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, Size, pData);
+	}
 }
 
 // ------------ CCommandProcessorFragment_SDL
@@ -853,8 +945,7 @@ void CCommandProcessor_SDL_OpenGL::RunBuffer(CCommandBuffer *pBuffer)
 {
 	unsigned CmdIndex = 0;
 
-	if(pBuffer->DataUsed() > 0)
-		m_OpenGL.UploadStreamingData(pBuffer->DataPtr(), pBuffer->DataUsed());
+	m_OpenGL.UploadStreamingData(pBuffer->DataPtr(), pBuffer->DataUsed());
 
 	while(1)
 	{
@@ -1020,6 +1111,7 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 	CmdBuffer.AddCommand(CmdSDL);
 	CCommandProcessorFragment_OpenGL::CInitCommand CmdOpenGL;
 	CmdOpenGL.m_pTextureMemoryUsage = &m_TextureMemoryUsage;
+	CmdOpenGL.m_pVertexBufferMemoryUsage = &m_VertexBufferMemoryUsage;
 	CmdOpenGL.m_pTextureArraySize = &m_TextureArraySize;
 	CmdBuffer.AddCommand(CmdOpenGL);
 	RunBuffer(&CmdBuffer);
@@ -1051,7 +1143,7 @@ int CGraphicsBackend_SDL_OpenGL::Shutdown()
 
 int CGraphicsBackend_SDL_OpenGL::MemoryUsage() const
 {
-	return m_TextureMemoryUsage;
+	return m_TextureMemoryUsage + m_VertexBufferMemoryUsage;
 }
 
 void CGraphicsBackend_SDL_OpenGL::Minimize()

@@ -51,6 +51,7 @@ public:
 	enum
 	{
 		MAX_TEXTURES=1024*4,
+		MAX_VERTEX_BUFFERS=1024*4,
 	};
 
 	enum
@@ -73,6 +74,11 @@ public:
 		CMD_TEXTURE_CREATE,
 		CMD_TEXTURE_DESTROY,
 		CMD_TEXTURE_UPDATE,
+
+		// vertex buffer commands
+		CMD_VERTEX_BUFFER_CREATE,
+		CMD_VERTEX_BUFFER_DESTROY,
+		CMD_VERTEX_BUFFER_UPDATE,
 
 		// rendering
 		CMD_CLEAR,
@@ -132,6 +138,7 @@ public:
 		int m_WrapModeV;
 		int m_Texture;
 		int m_Dimension;
+		int m_VertexBuffer;
 		IGraphics::CPoint m_ScreenTL;
 		IGraphics::CPoint m_ScreenBR;
 
@@ -229,6 +236,40 @@ public:
 		CTextureDestroyCommand() : CCommand(CMD_TEXTURE_DESTROY) {}
 
 		// texture information
+		int m_Slot;
+	};
+
+	struct CVertexBufferCreateCommand : public CCommand
+	{
+		CVertexBufferCreateCommand() : CCommand(CMD_VERTEX_BUFFER_CREATE) {}
+
+		// vertex buffer information
+		int m_Slot;
+
+		int m_Usage;
+		int m_Size;
+		int m_DataOffset;
+	};
+
+	struct CVertexBufferUpdateCommand : public CCommand
+	{
+		CVertexBufferUpdateCommand() : CCommand(CMD_VERTEX_BUFFER_UPDATE) {}
+
+		// vertex buffer information
+		int m_Slot;
+
+		int m_Offset;
+		int m_Size;
+		bool m_Recreate;
+		int m_DataOffset;
+	};
+
+
+	struct CVertexBufferDestroyCommand : public CCommand
+	{
+		CVertexBufferDestroyCommand() : CCommand(CMD_VERTEX_BUFFER_DESTROY) {}
+
+		// vertex buffer information
 		int m_Slot;
 	};
 
@@ -334,6 +375,7 @@ class CGraphics_Threaded : public IEngineGraphics
 
 		MAX_VERTICES = 32*1024,
 		MAX_TEXTURES = 1024*4,
+		MAX_VERTEX_BUFFERS = 1024*4,
 
 		DRAWING_QUADS=1,
 		DRAWING_LINES=2
@@ -368,11 +410,13 @@ class CGraphics_Threaded : public IEngineGraphics
 
 	int m_aTextureIndices[MAX_TEXTURES];
 	int m_FirstFreeTexture;
-	int m_TextureMemoryUsage;
+
+	int m_aVertexBufferIndices[MAX_VERTEX_BUFFERS];
+	int m_FirstFreeVertexBuffer;
 
 	void FlushVertices();
 	void AddVertices(int Count);
-	void Rotate6(const IGraphics::CPoint &rCenter, IGraphics::CVertex *pPoints);
+	void Rotate6(const CPoint &rCenter, CVertex *pPoints);
 
 	void KickCommandBuffer();
 
@@ -409,6 +453,10 @@ public:
 	virtual IGraphics::CTextureHandle LoadTexture(const char *pFilename, int StorageType, int StoreFormat, int Flags);
 	virtual int LoadPNG(CImageInfo *pImg, const char *pFilename, int StorageType);
 
+	virtual int UnloadVertexBuffer(CVertexBufferHandle *pVertexBuffer);
+	virtual CVertexBufferHandle LoadVertexBuffer(int NumVertices, const IGraphics::CVertex *pVertices, int Usage);
+	virtual int LoadVertexBufferSub(CVertexBufferHandle *pVertexBuffer, int Offset, int NumVertices, const IGraphics::CVertex *pVertices, bool Recreate);
+
 	void ScreenshotDirect(const char *pFilename);
 
 	virtual void TextureSet(CTextureHandle TextureID);
@@ -419,6 +467,11 @@ public:
 	virtual void RenderTriangles(const IGraphics::CVertex *pVertices, int PrimCount)
 	{
 		RenderVertices(pVertices, PrimCount, CCommandBuffer::PRIMTYPE_TRIANGLES);
+	}
+	void RenderVertexBuffer(IGraphics::CVertexBufferHandle VertexBuffer, int Offset, int PrimCount, unsigned PrimType);
+	virtual void RenderTrianglesVertexBuffer(IGraphics::CVertexBufferHandle VertexBuffer, int Offset, int PrimCount)
+	{
+		RenderVertexBuffer(VertexBuffer, Offset, PrimCount, CCommandBuffer::PRIMTYPE_TRIANGLES);
 	}
 
 	virtual void QuadsBegin();
