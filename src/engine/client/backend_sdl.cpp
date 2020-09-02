@@ -497,9 +497,9 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
 
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(CCommandBuffer::CVertex), 0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(CCommandBuffer::CVertex), (void*)(sizeof(float) * 2));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(CCommandBuffer::CVertex), (void*)(sizeof(float) * 5));
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), 0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 2));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(IGraphics::CVertex), (void*)(sizeof(float) * 5));
 }
 
 static void ConvertTexture(int Width, int Height, int Format, unsigned char **ppData)
@@ -721,7 +721,7 @@ void CCommandProcessorFragment_OpenGL::Cmd_Render(const CCommandBuffer::CRenderC
 {
 	SetState(pCommand->m_State);
 
-	int First = pCommand->m_Offset / sizeof(CCommandBuffer::CVertex);
+	int First = pCommand->m_Offset / sizeof(IGraphics::CVertex);
 
 	switch(pCommand->m_PrimType)
 	{
