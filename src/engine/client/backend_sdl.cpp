@@ -9,16 +9,19 @@
 
 #if defined(CONF_FAMILY_WINDOWS)
 	PFNGLTEXIMAGE3DPROC glTexImage3DInternal;
+	#define glTexImage3D glTexImage3DInternal
+#endif
 
-#if defined (_MSC_VER)
-	GLAPI void GLAPIENTRY glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid *pixels)
-#else
-	void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid *pixels)
-#endif
-	{
-		glTexImage3DInternal(target, level, internalFormat, width, height, depth, border, format, type, pixels);
-	}
-#endif
+PFNGLBINDBUFFERPROC glBindBufferInternal;
+#define glBindBuffer glBindBufferInternal
+PFNGLGENBUFFERSPROC glGenBuffersInternal;
+#define glGenBuffers glGenBuffersInternal
+PFNGLBUFFERDATAPROC glBufferDataInternal;
+#define glBufferData glBufferDataInternal
+PFNGLBUFFERSUBDATAPROC glBufferSubDataInternal;
+#define glBufferSubData glBufferSubDataInternal
+PFNGLDELETEBUFFERSPROC glDeleteBuffersInternal;
+#define glDeleteBuffers glDeleteBuffersInternal
 
 // ------------ CGraphicsBackend_Threaded
 
@@ -113,6 +116,14 @@ int CCommandProcessorFragment_OpenGL::TexFormatToOpenGLFormat(int TexFormat)
 	return GL_RGBA;
 }
 
+int CCommandProcessorFragment_OpenGL::VertexBufferUsageToOpenGLUsage(int Usage)
+{
+	if(Usage == IGraphics::VERTEX_BUFFER_STATIC) return GL_STATIC_DRAW;
+	if(Usage == IGraphics::VERTEX_BUFFER_DYNAMIC) return GL_DYNAMIC_DRAW;
+	if(Usage == IGraphics::VERTEX_BUFFER_STREAM) return GL_STREAM_DRAW;
+	return GL_DYNAMIC_DRAW;
+}
+
 unsigned char CCommandProcessorFragment_OpenGL::Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp)
 {
 	int Value = 0;
@@ -184,6 +195,12 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 		else
 			SrcBlendMode = GL_SRC_ALPHA;
 	}
+
+	// vertex buffer
+	if(State.m_VertexBuffer >= 0 && State.m_VertexBuffer < CCommandBuffer::MAX_VERTEX_BUFFERS)
+		glBindBuffer(GL_ARRAY_BUFFER, m_aVertexBuffers[State.m_VertexBuffer].m_VertexBuffer);
+	else
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	// blend
 	switch(State.m_BlendMode)
@@ -258,7 +275,9 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 	glDepthMask(0);
 
 	m_pTextureMemoryUsage = pCommand->m_pTextureMemoryUsage;
+	m_pVertexBufferMemoryUsage = pCommand->m_pVertexBufferMemoryUsage;
 	*m_pTextureMemoryUsage = 0;
+	*m_pVertexBufferMemoryUsage = 0;
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &m_MaxTexSize);
 	glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &m_Max3DTexSize);
 	dbg_msg("render", "opengl max texture sizes: %d, %d(3D)", m_MaxTexSize, m_Max3DTexSize);
@@ -354,10 +373,10 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 	{
 		switch(StoreOglformat)
 		{
-			case GL_RGB: StoreOglformat = GL_COMPRESSED_RGB_ARB; break;
-			case GL_ALPHA: StoreOglformat = GL_COMPRESSED_ALPHA_ARB; break;
-			case GL_RGBA: StoreOglformat = GL_COMPRESSED_RGBA_ARB; break;
-			default: StoreOglformat = GL_COMPRESSED_RGBA_ARB;
+			case GL_RGB: StoreOglformat = GL_COMPRESSED_RGB; break;
+			case GL_ALPHA: StoreOglformat = GL_COMPRESSED_ALPHA; break;
+			case GL_RGBA: StoreOglformat = GL_COMPRESSED_RGBA; break;
+			default: StoreOglformat = GL_COMPRESSED_RGBA;
 		}
 	}
 
@@ -447,6 +466,39 @@ void CCommandProcessorFragment_OpenGL::Cmd_Texture_Create(const CCommandBuffer::
 	mem_free(pTexData);
 }
 
+void CCommandProcessorFragment_OpenGL::Cmd_VertexBuffer_Create(const CCommandBuffer::CVertexBufferCreateCommand *pCommand)
+{
+	glGenBuffers(1, &m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, pCommand->m_Size, pCommand->m_pData, VertexBufferUsageToOpenGLUsage(pCommand->m_Usage));
+	m_aVertexBuffers[pCommand->m_Slot].m_MemSize = pCommand->m_Size;
+	m_aVertexBuffers[pCommand->m_Slot].m_Usage = pCommand->m_Usage;
+
+	*m_pVertexBufferMemoryUsage += pCommand->m_Size;
+}
+
+void CCommandProcessorFragment_OpenGL::Cmd_VertexBuffer_Update(const CCommandBuffer::CVertexBufferUpdateCommand *pCommand)
+{
+	glBindBuffer(GL_ARRAY_BUFFER, m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	if(pCommand->m_Recreate)
+	{
+		glBufferData(GL_ARRAY_BUFFER, pCommand->m_Size, pCommand->m_pData, VertexBufferUsageToOpenGLUsage(m_aVertexBuffers[pCommand->m_Slot].m_Usage));
+		*m_pVertexBufferMemoryUsage += pCommand->m_Size - m_aVertexBuffers[pCommand->m_Slot].m_MemSize;
+		m_aVertexBuffers[pCommand->m_Slot].m_MemSize = pCommand->m_Size;
+	}
+	else
+	{
+		glBufferSubData(GL_ARRAY_BUFFER, pCommand->m_Offset, pCommand->m_Size, pCommand->m_pData);
+	}
+}
+
+void CCommandProcessorFragment_OpenGL::Cmd_VertexBuffer_Destroy(const CCommandBuffer::CVertexBufferDestroyCommand *pCommand)
+{
+	glDeleteBuffers(1, &m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	*m_pVertexBufferMemoryUsage -= m_aVertexBuffers[pCommand->m_Slot].m_MemSize;
+	m_aVertexBuffers[pCommand->m_Slot].m_MemSize = 0;
+}
+
 void CCommandProcessorFragment_OpenGL::Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand)
 {
 	glClearColor(pCommand->m_Color.r, pCommand->m_Color.g, pCommand->m_Color.b, 0.0f);
@@ -467,10 +519,10 @@ void CCommandProcessorFragment_OpenGL::Cmd_Render(const CCommandBuffer::CRenderC
 	switch(pCommand->m_PrimType)
 	{
 	case CCommandBuffer::PRIMTYPE_QUADS:
-		glDrawArrays(GL_QUADS, 0, pCommand->m_PrimCount*4);
+		glDrawArrays(GL_QUADS, pCommand->m_Offset, pCommand->m_PrimCount*4);
 		break;
 	case CCommandBuffer::PRIMTYPE_LINES:
-		glDrawArrays(GL_LINES, 0, pCommand->m_PrimCount*2);
+		glDrawArrays(GL_LINES, pCommand->m_Offset, pCommand->m_PrimCount*2);
 		break;
 	default:
 		dbg_msg("render", "unknown primtype %d\n", pCommand->m_Cmd);
@@ -517,7 +569,9 @@ void CCommandProcessorFragment_OpenGL::Cmd_Screenshot(const CCommandBuffer::CScr
 CCommandProcessorFragment_OpenGL::CCommandProcessorFragment_OpenGL()
 {
 	mem_zero(m_aTextures, sizeof(m_aTextures));
+	mem_zero(m_aVertexBuffers, sizeof(m_aVertexBuffers));
 	m_pTextureMemoryUsage = 0;
+	m_pVertexBufferMemoryUsage = 0;
 }
 
 bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand * pBaseCommand)
@@ -528,6 +582,9 @@ bool CCommandProcessorFragment_OpenGL::RunCommand(const CCommandBuffer::CCommand
 	case CCommandBuffer::CMD_TEXTURE_CREATE: Cmd_Texture_Create(static_cast<const CCommandBuffer::CTextureCreateCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_TEXTURE_DESTROY: Cmd_Texture_Destroy(static_cast<const CCommandBuffer::CTextureDestroyCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_TEXTURE_UPDATE: Cmd_Texture_Update(static_cast<const CCommandBuffer::CTextureUpdateCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_CREATE: Cmd_VertexBuffer_Create(static_cast<const CCommandBuffer::CVertexBufferCreateCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_DESTROY: Cmd_VertexBuffer_Destroy(static_cast<const CCommandBuffer::CVertexBufferDestroyCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_UPDATE: Cmd_VertexBuffer_Update(static_cast<const CCommandBuffer::CVertexBufferUpdateCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_CLEAR: Cmd_Clear(static_cast<const CCommandBuffer::CClearCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_RENDER: Cmd_Render(static_cast<const CCommandBuffer::CRenderCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_SCREENSHOT: Cmd_Screenshot(static_cast<const CCommandBuffer::CScreenshotCommand *>(pBaseCommand)); break;
@@ -716,14 +773,28 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 
 	SDL_GL_GetDrawableSize(m_pWindow, pScreenWidth, pScreenHeight); // drawable size may differ in high dpi mode
 
+	glBindBufferInternal = (PFNGLBINDBUFFERPROC) SDL_GL_GetProcAddress("glBindBuffer");
+	glGenBuffersInternal = (PFNGLGENBUFFERSPROC) SDL_GL_GetProcAddress("glGenBuffers");
+	glBufferDataInternal = (PFNGLBUFFERDATAPROC) SDL_GL_GetProcAddress("glBufferData");
+	glBufferSubDataInternal = (PFNGLBUFFERSUBDATAPROC) SDL_GL_GetProcAddress("glBufferSubData");
+	glDeleteBuffersInternal = (PFNGLDELETEBUFFERSPROC) SDL_GL_GetProcAddress("glDeleteBuffers");
+
+	bool GLLoadFailed = glBindBufferInternal == 0 ||
+		glGenBuffersInternal == 0 ||
+		glBufferDataInternal == 0 ||
+		glBufferSubDataInternal == 0 ||
+		glDeleteBuffersInternal == 0;
+
 	#if defined(CONF_FAMILY_WINDOWS)
-		glTexImage3DInternal = (PFNGLTEXIMAGE3DPROC) wglGetProcAddress("glTexImage3D");
-		if(glTexImage3DInternal == 0)
-		{
-			dbg_msg("gfx", "glTexImage3D not supported");
-			return -1;
-		}
+	glTexImage3DInternal = (PFNGLTEXIMAGE3DPROC) SDL_GL_GetProcAddress("glTexImage3D");
+	GLLoadFailed = GLLoadFailed || glTexImage3DInternal == 0;
 	#endif
+
+	if(GLLoadFailed)
+	{
+		dbg_msg("gfx", "failed to load opengl functions");
+		return -1;
+	}
 
 	SDL_GL_SetSwapInterval(Flags&IGraphicsBackend::INITFLAG_VSYNC ? 1 : 0);
 
@@ -749,6 +820,7 @@ int CGraphicsBackend_SDL_OpenGL::Init(const char *pName, int *pScreen, int *pWin
 	CmdBuffer.AddCommand(CmdSDL);
 	CCommandProcessorFragment_OpenGL::CInitCommand CmdOpenGL;
 	CmdOpenGL.m_pTextureMemoryUsage = &m_TextureMemoryUsage;
+	CmdOpenGL.m_pVertexBufferMemoryUsage = &m_VertexBufferMemoryUsage;
 	CmdOpenGL.m_pTextureArraySize = &m_TextureArraySize;
 	CmdBuffer.AddCommand(CmdOpenGL);
 	RunBuffer(&CmdBuffer);
@@ -780,7 +852,7 @@ int CGraphicsBackend_SDL_OpenGL::Shutdown()
 
 int CGraphicsBackend_SDL_OpenGL::MemoryUsage() const
 {
-	return m_TextureMemoryUsage;
+	return m_TextureMemoryUsage + m_VertexBufferMemoryUsage;
 }
 
 void CGraphicsBackend_SDL_OpenGL::Minimize()
