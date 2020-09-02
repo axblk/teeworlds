@@ -1836,6 +1836,7 @@ void CClient::InitInterfaces()
 	m_pConfigManager = Kernel()->RequestInterface<IConfigManager>();
 	m_pConfig = m_pConfigManager->Values();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
+	m_pEngineTextRender = Kernel()->RequestInterface<IEngineTextRender>();
 
 	//
 	m_ServerBrowser.Init(&m_ContactClient, m_pGameClient->NetVersion());
@@ -1987,7 +1988,7 @@ void CClient::Run()
 	}
 
 	// init font rendering
-	Kernel()->RequestInterface<IEngineTextRender>()->Init();
+	m_pEngineTextRender->Init();
 
 	// init the input
 	Input()->Init();
@@ -2121,6 +2122,8 @@ void CClient::Run()
 				if(m_RenderFrameTime > m_RenderFrameTimeHigh)
 					m_RenderFrameTimeHigh = m_RenderFrameTime;
 				m_FpsGraph.Add(1.0f/m_RenderFrameTime, 1,1,1);
+
+				m_pEngineTextRender->UpdateTime(Now);
 
 				m_LastRenderTime = Now;
 

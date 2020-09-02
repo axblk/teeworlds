@@ -66,6 +66,7 @@ class CClient : public IClient, public CDemoPlayer::IListener
 	IConsole *m_pConsole;
 	IStorage *m_pStorage;
 	IEngineMasterServer *m_pMasterServer;
+	IEngineTextRender *m_pEngineTextRender;
 
 	enum
 	{

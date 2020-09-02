@@ -39,15 +39,14 @@ class ITextRender : public IInterface
 public:
 	virtual void SetCursor(CTextCursor *pCursor, float x, float y, float FontSize, int Flags) = 0;
 
-	virtual int LoadFont(const char *pFilename) = 0;
+	virtual CFont *LoadFont(const char *pFilename) = 0;
+	virtual void SetDefaultFont(CFont *pFont) = 0;
 
 	//
 	virtual void TextEx(CTextCursor *pCursor, const char *pText, int Length) = 0;
-	virtual void TextDeferredRenderEx(CTextCursor *pCursor, const char *pText, int Length,
-		struct CQuadChar* aQuadChar, int QuadCharMaxCount, int* out_pQuadCharCount,
-		IGraphics::CTextureHandle* pFontTexture) = 0;
+	virtual void TextSimple(CTextCursor *pCursor, const char *pText, int Length, vec4 TextColor) = 0;
 	virtual void TextShadowed(CTextCursor *pCursor, const char *pText, int Length, vec2 ShadowOffset,
-		vec4 ShadowColor, vec4 TextColor_) = 0;
+		vec4 ShadowColor, vec4 TextColor) = 0;
 
 	// old foolish interface
 	virtual void TextColor(float r, float g, float b, float a) = 0;
@@ -56,7 +55,6 @@ public:
 	inline void TextOutlineColor(const vec4 &Color) { TextOutlineColor(Color.r, Color.g, Color.b, Color.a); }
 	virtual void Text(void *pFontSetV, float x, float y, float Size, const char *pText, float LineWidth, bool MultiLine=true) = 0;
 	virtual float TextWidth(void *pFontSetV, float Size, const char *pText, int StrLength, float LineWidth) = 0;
-	virtual int TextLineCount(void *pFontSetV, float Size, const char *pText, float LineWidth) = 0;
 
 	virtual float TextGetLineBaseY(const CTextCursor *pCursor) = 0;
 };
@@ -66,6 +64,7 @@ class IEngineTextRender : public ITextRender
 	MACRO_INTERFACE("enginetextrender", 0)
 public:
 	virtual void Init() = 0;
+	virtual void UpdateTime(int64 Now) = 0;
 };
 
 extern IEngineTextRender *CreateEngineTextRender();
