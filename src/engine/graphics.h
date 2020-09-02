@@ -152,6 +152,7 @@ public:
 	virtual void WrapClamp() = 0;
 	virtual void WrapMode(int WrapU, int WrapV) = 0;
 	virtual int MemoryUsage() const = 0;
+	virtual int LastFrameDrawCalls() const = 0;
 
 	virtual int LoadPNG(CImageInfo *pImg, const char *pFilename, int StorageType) = 0;
 
