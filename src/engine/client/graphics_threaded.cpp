@@ -55,7 +55,7 @@ void CGraphics_Threaded::AddVertices(int Count)
 		FlushVertices();
 }
 
-void CGraphics_Threaded::Rotate6(const IGraphics::CPoint &rCenter, IGraphics::CVertex *pPoints)
+void CGraphics_Threaded::Rotate6(const CPoint &rCenter, CVertex *pPoints)
 {
 	float c = cosf(m_Rotation);
 	float s = sinf(m_Rotation);
@@ -86,6 +86,7 @@ CGraphics_Threaded::CGraphics_Threaded()
 	m_State.m_BlendMode = CCommandBuffer::BLEND_NONE;
 	m_State.m_WrapModeU = WRAP_REPEAT;
 	m_State.m_WrapModeV = WRAP_REPEAT;
+	m_State.m_VertexBuffer = -1;
 
 	m_CurrentCommandBuffer = 0;
 	m_pCommandBuffer = 0x0;
@@ -99,8 +100,6 @@ CGraphics_Threaded::CGraphics_Threaded()
 
 	m_Rotation = 0;
 	m_Drawing = 0;
-
-	m_TextureMemoryUsage = 0;
 
 	m_RenderEnable = true;
 	m_DoScreenshot = false;
@@ -399,6 +398,148 @@ int CGraphics_Threaded::LoadPNG(CImageInfo *pImg, const char *pFilename, int Sto
 	return 1;
 }
 
+IGraphics::CVertexBufferHandle CGraphics_Threaded::LoadVertexBuffer(int NumVertices, const IGraphics::CVertex *pVertices, int Usage)
+{
+	if(m_pConfig->m_DbgStress)
+		return CVertexBufferHandle();
+
+	// grab vertex buffer
+	int VertexBuffer = m_FirstFreeVertexBuffer;
+	m_FirstFreeVertexBuffer = m_aVertexBufferIndices[VertexBuffer];
+	m_aVertexBufferIndices[VertexBuffer] = -1;
+
+	int MemSize = NumVertices*sizeof(IGraphics::CVertex);
+	CCommandBuffer::CVertexBufferCreateCommand Cmd;
+	Cmd.m_Slot = VertexBuffer;
+	Cmd.m_Usage = Usage;
+	Cmd.m_Size = MemSize;
+	Cmd.m_DataOffset = -1;
+
+	if(pVertices)
+	{
+		Cmd.m_DataOffset = m_pCommandBuffer->AllocData(MemSize);
+		if(Cmd.m_DataOffset < 0)
+		{
+			// kick command buffer and try again
+			KickCommandBuffer();
+
+			Cmd.m_DataOffset = m_pCommandBuffer->AllocData(MemSize);
+			if(Cmd.m_DataOffset < 0)
+			{
+				dbg_msg("graphics", "failed to allocate data for vertices (vertex buffer)");
+				return CVertexBufferHandle();
+			}
+		}
+	}
+
+	// check if we have enough free memory in the commandbuffer
+	if(!m_pCommandBuffer->AddCommand(Cmd))
+	{
+		// kick command buffer and try again
+		KickCommandBuffer();
+
+		if(pVertices)
+		{
+			Cmd.m_DataOffset = m_pCommandBuffer->AllocData(MemSize);
+			if(Cmd.m_DataOffset < 0)
+			{
+				dbg_msg("graphics", "failed to allocate data for vertices (vertex buffer)");
+				return CVertexBufferHandle();
+			}
+		}
+
+		if(!m_pCommandBuffer->AddCommand(Cmd))
+		{
+			dbg_msg("graphics", "failed to allocate memory for vertex buffer create command");
+			return CVertexBufferHandle();
+		}
+	}
+
+	if(pVertices)
+		mem_copy(&m_pCommandBuffer->DataPtr()[Cmd.m_DataOffset], pVertices, MemSize);
+
+	return CreateVertexBufferHandle(VertexBuffer, NumVertices);
+}
+
+int CGraphics_Threaded::LoadVertexBufferSub(CVertexBufferHandle *pVertexBuffer, int Offset, int NumVertices, const IGraphics::CVertex *pVertices, bool Recreate)
+{
+	if(!pVertexBuffer->IsValid())
+		return 0;
+
+	int MemSize = NumVertices*sizeof(IGraphics::CVertex);
+	CCommandBuffer::CVertexBufferUpdateCommand Cmd;
+	Cmd.m_Slot = pVertexBuffer->Id();
+	Cmd.m_Offset = Offset*sizeof(IGraphics::CVertex);
+	Cmd.m_Size = MemSize;
+	Cmd.m_Recreate = Recreate;
+	Cmd.m_DataOffset = -1;
+
+	if(pVertices)
+	{
+		Cmd.m_DataOffset = m_pCommandBuffer->AllocData(MemSize);
+		if(Cmd.m_DataOffset < 0)
+		{
+			// kick command buffer and try again
+			KickCommandBuffer();
+
+			Cmd.m_DataOffset = m_pCommandBuffer->AllocData(MemSize);
+			if(Cmd.m_DataOffset < 0)
+			{
+				dbg_msg("graphics", "failed to allocate data for vertices (vertex buffer)");
+				return 0;
+			}
+		}
+	}
+
+	// check if we have enough free memory in the commandbuffer
+	if(!m_pCommandBuffer->AddCommand(Cmd))
+	{
+		// kick command buffer and try again
+		KickCommandBuffer();
+
+		if(pVertices)
+		{
+			Cmd.m_DataOffset = m_pCommandBuffer->AllocData(MemSize);
+			if(Cmd.m_DataOffset < 0)
+			{
+				dbg_msg("graphics", "failed to allocate data for vertices (vertex buffer)");
+				return 0;
+			}
+		}
+
+		if(!m_pCommandBuffer->AddCommand(Cmd))
+		{
+			dbg_msg("graphics", "failed to allocate memory for vertex buffer update command");
+			return 0;
+		}
+	}
+
+	if(pVertices)
+		mem_copy(&m_pCommandBuffer->DataPtr()[Cmd.m_DataOffset], pVertices, MemSize);
+
+	if(Recreate)
+		*pVertexBuffer = CreateVertexBufferHandle(pVertexBuffer->Id(), NumVertices);
+
+	m_pCommandBuffer->AddCommand(Cmd);
+	return 0;
+}
+
+int CGraphics_Threaded::UnloadVertexBuffer(CVertexBufferHandle *pVertexBuffer)
+{
+	if(!pVertexBuffer->IsValid())
+		return 0;
+
+	CCommandBuffer::CVertexBufferDestroyCommand Cmd;
+	Cmd.m_Slot = pVertexBuffer->Id();
+	m_pCommandBuffer->AddCommand(Cmd);
+
+	m_aVertexBufferIndices[pVertexBuffer->Id()] = m_FirstFreeVertexBuffer;
+	m_FirstFreeVertexBuffer = pVertexBuffer->Id();
+
+	pVertexBuffer->Invalidate();
+	return 0;
+}
+
 void CGraphics_Threaded::KickCommandBuffer()
 {
 	m_pBackend->RunBuffer(m_pCommandBuffer);
@@ -562,7 +703,7 @@ void CGraphics_Threaded::QuadsDraw(CQuadItem *pArray, int Num)
 
 void CGraphics_Threaded::QuadsDrawTL(const CQuadItem *pArray, int Num)
 {
-	IGraphics::CPoint Center;
+	CPoint Center;
 
 	dbg_assert(m_Drawing == DRAWING_QUADS, "called Graphics()->QuadsDrawTL without begin");
 
@@ -612,6 +753,22 @@ void CGraphics_Threaded::QuadsDrawTL(const CQuadItem *pArray, int Num)
 	AddVertices(6*Num);
 }
 
+void CGraphics_Threaded::RenderVertexBuffer(IGraphics::CVertexBufferHandle VertexBuffer, int Offset, int PrimCount, unsigned PrimType)
+{
+	if(PrimCount == 0)
+		return;
+
+	CCommandBuffer::CRenderCommand Cmd;
+	Cmd.m_State = m_State;
+	Cmd.m_PrimType = PrimType;
+	Cmd.m_PrimCount = PrimCount;
+	Cmd.m_Offset = Offset * sizeof(IGraphics::CVertex);
+
+	Cmd.m_State.m_VertexBuffer = VertexBuffer.Id();
+
+	m_pCommandBuffer->AddCommand(Cmd);
+}
+
 void CGraphics_Threaded::RenderVertices(const IGraphics::CVertex *pVertices, int PrimCount, unsigned PrimType)
 {
 	if(PrimCount == 0)
@@ -621,6 +778,7 @@ void CGraphics_Threaded::RenderVertices(const IGraphics::CVertex *pVertices, int
 	Cmd.m_State = m_State;
 	Cmd.m_PrimType = PrimType;
 	Cmd.m_PrimCount = PrimCount;
+	Cmd.m_Offset = 0;
 
 	int NumVertices;
 	if(PrimType == CCommandBuffer::PRIMTYPE_TRIANGLES)
@@ -800,6 +958,12 @@ int CGraphics_Threaded::Init()
 	for(int i = 0; i < MAX_TEXTURES-1; i++)
 		m_aTextureIndices[i] = i+1;
 	m_aTextureIndices[MAX_TEXTURES-1] = -1;
+
+	// init vertex buffers
+	m_FirstFreeVertexBuffer = 0;
+	for(int i = 0; i < MAX_VERTEX_BUFFERS-1; i++)
+		m_aVertexBufferIndices[i] = i+1;
+	m_aVertexBufferIndices[MAX_VERTEX_BUFFERS-1] = -1;
 
 	m_pBackend = CreateGraphicsBackend();
 	if(InitWindow() != 0)

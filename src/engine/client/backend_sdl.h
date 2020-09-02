@@ -114,6 +114,13 @@ class CCommandProcessorFragment_WGPU
 		int m_MemSize;
 	};
 
+	class CVertexBuffer
+	{
+	public:
+		WGPUBufferId m_VertexBuffer;
+		int m_MemSize;
+	};
+
 	WGPUDeviceId m_Device;
 	WGPUSurfaceId m_Surface;
 	WGPUSwapChainId m_SwapChain;
@@ -143,7 +150,9 @@ class CCommandProcessorFragment_WGPU
 	CScreen m_LastScreen;
 
 	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
+	CVertexBuffer m_aVertexBuffers[CCommandBuffer::MAX_VERTEX_BUFFERS];
 	volatile int *m_pTextureMemoryUsage;
+	volatile int *m_pVertexBufferMemoryUsage;
 	int m_MaxTexSize;
 	int m_Max3DTexSize;
 
@@ -161,6 +170,7 @@ public:
 		unsigned m_ScreenHeight;
 		bool m_VSync;
 		volatile int *m_pTextureMemoryUsage;
+		volatile int *m_pVertexBufferMemoryUsage;
 	};
 
 private:
@@ -188,6 +198,9 @@ private:
 	void Cmd_Texture_Update(const CCommandBuffer::CTextureUpdateCommand *pCommand);
 	void Cmd_Texture_Destroy(const CCommandBuffer::CTextureDestroyCommand *pCommand);
 	void Cmd_Texture_Create(const CCommandBuffer::CTextureCreateCommand *pCommand);
+	void Cmd_VertexBuffer_Update(const CCommandBuffer::CVertexBufferUpdateCommand *pCommand);
+	void Cmd_VertexBuffer_Destroy(const CCommandBuffer::CVertexBufferDestroyCommand *pCommand);
+	void Cmd_VertexBuffer_Create(const CCommandBuffer::CVertexBufferCreateCommand *pCommand);
 	void Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand);
 	void Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand);
 	void Cmd_Swap(const CCommandBuffer::CSwapCommand *pCommand);
@@ -220,6 +233,7 @@ class CGraphicsBackend_SDL_WGPU : public CGraphicsBackend_Threaded
 	//SDL_GLContext m_GLContext;
 	ICommandProcessor *m_pProcessor;
 	volatile int m_TextureMemoryUsage;
+	volatile int m_VertexBufferMemoryUsage;
 	int m_NumScreens;
 public:
 	virtual int Init(const char *pName, int *pScreen, int *pWindowWidth, int *pWindowHeight, int *pScreenWidth, int *pScreenHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight);

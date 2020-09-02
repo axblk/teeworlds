@@ -303,7 +303,9 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 	m_ScreenWidth = pCommand->m_ScreenWidth;
 	m_ScreenHeight = pCommand->m_ScreenHeight;
 	m_pTextureMemoryUsage = pCommand->m_pTextureMemoryUsage;
+	m_pVertexBufferMemoryUsage = pCommand->m_pVertexBufferMemoryUsage;
 	*m_pTextureMemoryUsage = 0;
+	*m_pVertexBufferMemoryUsage = 0;
 
 	m_Surface = pCommand->m_Surface;
 
@@ -492,7 +494,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	m_Queue = wgpu_device_get_default_queue(m_Device);
 
-	WGPUBufferDescriptor BufferDesc = { .size = 2*1024*1024, .usage = WGPUBufferUsage_VERTEX|WGPUBufferUsage_COPY_DST };
+	WGPUBufferDescriptor BufferDesc = { .size = 2*1024*1024, .usage = WGPUBufferUsage_VERTEX|WGPUBufferUsage_COPY_DST|WGPUBufferUsage_COPY_SRC };
 	m_StreamingBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
 
 	BufferDesc = { .size = MATRIX_ALIGNMENT*MAX_TRANSFORM_MATRICES, .usage = WGPUBufferUsage_UNIFORM|WGPUBufferUsage_COPY_DST };
@@ -808,6 +810,66 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Create(const CCommandBuffer::CT
 	mem_free(pTexData);
 }
 
+void CCommandProcessorFragment_WGPU::Cmd_VertexBuffer_Create(const CCommandBuffer::CVertexBufferCreateCommand *pCommand)
+{
+	WGPUBufferDescriptor BufferDesc = { .size = (unsigned)pCommand->m_Size, .usage = WGPUBufferUsage_COPY_DST | WGPUBufferUsage_VERTEX };
+	m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
+
+	*m_pVertexBufferMemoryUsage += pCommand->m_Size;
+
+	if(pCommand->m_DataOffset >= 0)
+	{
+		EndRenderPass();
+		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
+
+		wgpu_command_encoder_copy_buffer_to_buffer(CmdEncoder,
+			m_StreamingBuffer,
+			pCommand->m_DataOffset,
+			m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer,
+			0,
+			pCommand->m_Size);
+		
+		SubmitCommandBuffer();
+	}
+}
+
+void CCommandProcessorFragment_WGPU::Cmd_VertexBuffer_Update(const CCommandBuffer::CVertexBufferUpdateCommand *pCommand)
+{
+	EndRenderPass();
+	
+	if(pCommand->m_Recreate)
+	{
+		wgpu_buffer_destroy(m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+		WGPUBufferDescriptor BufferDesc = { .size = (unsigned)pCommand->m_Size, .usage = WGPUBufferUsage_COPY_DST | WGPUBufferUsage_VERTEX };
+		m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
+
+		*m_pVertexBufferMemoryUsage += pCommand->m_Size - m_aVertexBuffers[pCommand->m_Slot].m_MemSize;
+		m_aVertexBuffers[pCommand->m_Slot].m_MemSize = pCommand->m_Size;
+	}
+
+	if(pCommand->m_DataOffset >= 0)
+	{
+		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
+
+		wgpu_command_encoder_copy_buffer_to_buffer(CmdEncoder,
+			m_StreamingBuffer,
+			pCommand->m_DataOffset,
+			m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer,
+			pCommand->m_Offset,
+			pCommand->m_Size);
+		
+		SubmitCommandBuffer();
+	}
+}
+
+void CCommandProcessorFragment_WGPU::Cmd_VertexBuffer_Destroy(const CCommandBuffer::CVertexBufferDestroyCommand *pCommand)
+{
+	EndRenderPass();
+	wgpu_buffer_destroy(m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
+	*m_pVertexBufferMemoryUsage -= m_aVertexBuffers[pCommand->m_Slot].m_MemSize;
+	m_aVertexBuffers[pCommand->m_Slot].m_MemSize = 0;
+}
+
 void CCommandProcessorFragment_WGPU::Cmd_Clear(const CCommandBuffer::CClearCommand *pCommand)
 {
 	EndRenderPass();
@@ -839,8 +901,10 @@ void CCommandProcessorFragment_WGPU::Cmd_Render(const CCommandBuffer::CRenderCom
 	if(PrimCount > 0)
 	{
 		unsigned DataSize = PrimCount * sizeof(IGraphics::CVertex);
-
-		wgpu_render_pass_set_vertex_buffer(RPass, 0, m_StreamingBuffer, pCommand->m_Offset, DataSize);
+		WGPUBufferId Buffer = m_StreamingBuffer;
+		if(pCommand->m_State.m_VertexBuffer >= 0 && pCommand->m_State.m_VertexBuffer < CCommandBuffer::MAX_VERTEX_BUFFERS)
+			Buffer = m_aVertexBuffers[pCommand->m_State.m_VertexBuffer].m_VertexBuffer;
+		wgpu_render_pass_set_vertex_buffer(RPass, 0, Buffer, pCommand->m_Offset, DataSize);
 		wgpu_render_pass_draw(RPass, PrimCount, 1, 0, 0);
 	}
 }
@@ -917,7 +981,9 @@ void CCommandProcessorFragment_WGPU::Cmd_VSync(const CCommandBuffer::CVSyncComma
 CCommandProcessorFragment_WGPU::CCommandProcessorFragment_WGPU()
 {
 	mem_zero(m_aTextures, sizeof(m_aTextures));
+	mem_zero(m_aVertexBuffers, sizeof(m_aVertexBuffers));
 	m_pTextureMemoryUsage = 0;
+	m_pVertexBufferMemoryUsage = 0;
 	m_CmdEncoder = 0;
 	m_RPass = 0;
 	m_StreamingBuffer = 0;
@@ -935,6 +1001,9 @@ bool CCommandProcessorFragment_WGPU::RunCommand(const CCommandBuffer::CCommand *
 	case CCommandBuffer::CMD_TEXTURE_CREATE: Cmd_Texture_Create(static_cast<const CCommandBuffer::CTextureCreateCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_TEXTURE_DESTROY: Cmd_Texture_Destroy(static_cast<const CCommandBuffer::CTextureDestroyCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_TEXTURE_UPDATE: Cmd_Texture_Update(static_cast<const CCommandBuffer::CTextureUpdateCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_CREATE: Cmd_VertexBuffer_Create(static_cast<const CCommandBuffer::CVertexBufferCreateCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_DESTROY: Cmd_VertexBuffer_Destroy(static_cast<const CCommandBuffer::CVertexBufferDestroyCommand *>(pBaseCommand)); break;
+	case CCommandBuffer::CMD_VERTEX_BUFFER_UPDATE: Cmd_VertexBuffer_Update(static_cast<const CCommandBuffer::CVertexBufferUpdateCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_CLEAR: Cmd_Clear(static_cast<const CCommandBuffer::CClearCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_RENDER: Cmd_Render(static_cast<const CCommandBuffer::CRenderCommand *>(pBaseCommand)); break;
 	case CCommandBuffer::CMD_SWAP: Cmd_Swap(static_cast<const CCommandBuffer::CSwapCommand *>(pBaseCommand)); break;
@@ -1457,6 +1526,7 @@ int CGraphicsBackend_SDL_WGPU::Init(const char *pName, int *pScreen, int *pWindo
 	CmdWGPU.m_ScreenHeight = *pScreenHeight;
 	CmdWGPU.m_VSync = Flags&IGraphicsBackend::INITFLAG_VSYNC;
 	CmdWGPU.m_pTextureMemoryUsage = &m_TextureMemoryUsage;
+	CmdWGPU.m_pVertexBufferMemoryUsage = &m_VertexBufferMemoryUsage;
 	CmdBuffer.AddCommand(CmdWGPU);
 	RunBuffer(&CmdBuffer);
 	WaitForIdle();
@@ -1481,7 +1551,7 @@ int CGraphicsBackend_SDL_WGPU::Shutdown()
 
 int CGraphicsBackend_SDL_WGPU::MemoryUsage() const
 {
-	return m_TextureMemoryUsage;
+	return m_TextureMemoryUsage + m_VertexBufferMemoryUsage;
 }
 
 void CGraphicsBackend_SDL_WGPU::Minimize()
