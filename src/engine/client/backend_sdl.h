@@ -92,8 +92,8 @@ class CCommandProcessorFragment_OpenGL
 			STATE_TEX2D = 1,
 			STATE_TEX3D = 2,
 
-			MIN_GL_MAX_3D_TEXTURE_SIZE = 64,																					// GL_MAX_3D_TEXTURE_SIZE must be at least 64 according to the standard
-			MAX_ARRAYSIZE_TEX3D = IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION / MIN_GL_MAX_3D_TEXTURE_SIZE,	// = 4
+			MIN_GL_MAX_3D_TEXTURE_SIZE = 256,																					// GL_MAX_3D_TEXTURE_SIZE must be at least 64 according to the standard
+			MAX_ARRAYSIZE_TEX3D = IGraphics::NUMTILES_DIMENSION * IGraphics::NUMTILES_DIMENSION / MIN_GL_MAX_3D_TEXTURE_SIZE,	// = 1
 		};
 		GLuint m_Tex2D;
 		GLuint m_Tex3D[MAX_ARRAYSIZE_TEX3D];
@@ -101,11 +101,34 @@ class CCommandProcessorFragment_OpenGL
 		int m_Format;
 		int m_MemSize;
 	};
+	class CShaderProgram
+	{
+	public:
+		GLuint m_Program;
+		GLuint m_TransformLoc;
+		GLuint m_TextureLoc;
+
+		bool Create(GLuint VertexShader, GLuint FragmentShader, const char *pName);
+	};
 	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
 	volatile int *m_pTextureMemoryUsage;
 	int m_MaxTexSize;
 	int m_Max3DTexSize;
+	int m_MaxArrayTexLayers;
 	int m_TextureArraySize;
+
+	enum
+	{
+		RENDER_NO_TEX=0,
+		RENDER_2D_TEX,
+		RENDER_2D_TEX_ARRAY,
+	};
+
+	CShaderProgram m_NoTexProgram;
+	CShaderProgram m_2DTexProgram;
+	CShaderProgram m_2DTexArrayProgram;
+
+	GLuint m_StreamingBuffer;
 
 public:
 	enum
@@ -123,7 +146,7 @@ public:
 private:
 	static int TexFormatToOpenGLFormat(int TexFormat);
 	static unsigned char Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp);
-	static void *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
+	static unsigned char *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
 
 	void SetState(const CCommandBuffer::CState &State);
 
@@ -139,6 +162,8 @@ public:
 	CCommandProcessorFragment_OpenGL();
 
 	bool RunCommand(const CCommandBuffer::CCommand * pBaseCommand);
+
+	void UploadStreamingData(const void *pData, unsigned Size);
 };
 
 // takes care of sdl related commands
