@@ -104,9 +104,10 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
 	local glad = Compile(settings, Collect("src/engine/external/glad/*.c"))
+	local msdfgen = Compile(settings, CollectRecursive("src/engine/external/msdfgen/*.cpp"))
 
 	-- globally available libs
-	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json, glad=glad}
+	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json, glad=glad, msdfgen=msdfgen}
 end
 
 function GenerateMacOSXSettings(settings, conf, arch, compiler)
@@ -354,7 +355,7 @@ function BuildClient(settings, family, platform)
 	local game_client = Compile(settings, CollectRecursive("src/game/client/*.cpp"), SharedClientFiles())
 	local game_editor = Compile(settings, Collect("src/game/editor/*.cpp"))
 	
-	Link(settings, "teeworlds", libs["zlib"], libs["md5"], libs["wavpack"], libs["png"], libs["json"], libs["glad"], client, game_client, game_editor)
+	Link(settings, "teeworlds", libs["zlib"], libs["md5"], libs["wavpack"], libs["png"], libs["json"], libs["glad"], libs["msdfgen"], client, game_client, game_editor)
 end
 
 function BuildServer(settings, family, platform)

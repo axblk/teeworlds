@@ -240,7 +240,7 @@ function(set_glob VAR GLOBBING EXTS DIRECTORY) # ...
 endfunction()
 
 function(set_src VAR GLOBBING DIRECTORY) # ...
-  set_glob(${VAR} ${GLOBBING} "c;cpp;h" ${DIRECTORY} ${ARGN})
+  set_glob(${VAR} ${GLOBBING} "c;cpp;h;hpp" ${DIRECTORY} ${ARGN})
   set(${VAR} ${${VAR}} PARENT_SCOPE)
 endfunction()
 
@@ -483,9 +483,60 @@ add_library(md5 EXCLUDE_FROM_ALL OBJECT ${DEP_MD5_SRC})
 set_src(DEP_GLAD_SRC GLOB src/engine/external/glad glad.c glad.h khrplatform.h)
 add_library(glad EXCLUDE_FROM_ALL OBJECT ${DEP_GLAD_SRC})
 
-list(APPEND TARGETS_DEP json md5 glad)
+set_src(DEP_MSDFGEN_SRC GLOB_RECURSE src/engine/external/msdfgen
+  core/Bitmap.h
+  core/Bitmap.hpp
+  core/BitmapRef.hpp
+  core/Contour.cpp
+  core/Contour.h
+  core/EdgeColor.h
+  core/EdgeHolder.cpp
+  core/EdgeHolder.h
+  core/Scanline.cpp
+  core/Scanline.h
+  core/Shape.cpp
+  core/Shape.h
+  core/SignedDistance.cpp
+  core/SignedDistance.h
+  core/Vector2.cpp
+  core/Vector2.h
+  core/arithmetics.hpp
+  core/contour-combiners.cpp
+  core/contour-combiners.h
+  core/edge-coloring.cpp
+  core/edge-coloring.h
+  core/edge-segments.cpp
+  core/edge-segments.h
+  core/edge-selectors.cpp
+  core/edge-selectors.h
+  core/equation-solver.cpp
+  core/equation-solver.h
+  core/estimate-sdf-error.cpp
+  core/estimate-sdf-error.h
+  core/msdfgen.cpp
+  core/pixel-conversion.hpp
+  core/rasterization.cpp
+  core/rasterization.h
+  core/render-sdf.cpp
+  core/render-sdf.h
+  core/save-bmp.cpp
+  core/save-bmp.h
+  core/save-tiff.cpp
+  core/save-tiff.h
+  core/shape-description.cpp
+  core/shape-description.h
+  ext/import-font.cpp
+  ext/import-font.h
+  msdfgen-ext.h
+  msdfgen.h
+)
+add_library(msdfgen EXCLUDE_FROM_ALL OBJECT ${DEP_MSDFGEN_SRC})
+target_include_directories(msdfgen PRIVATE ${FREETYPE_INCLUDE_DIRS})
+
+list(APPEND TARGETS_DEP json md5 glad msdfgen)
 set(DEP_JSON $<TARGET_OBJECTS:json>)
 set(DEP_GLAD $<TARGET_OBJECTS:glad>)
+set(DEP_MSDFGEN $<TARGET_OBJECTS:msdfgen>)
 set(DEP_MD5)
 if(NOT CRYPTO_FOUND)
   set(DEP_MD5 $<TARGET_OBJECTS:md5>)
@@ -1520,7 +1571,7 @@ if(CLIENT)
   )
   set(CLIENT_SRC ${PLATFORM_CLIENT} ${ENGINE_CLIENT} ${GAME_CLIENT} ${GAME_EDITOR} ${GAME_GENERATED_CLIENT})
 
-  set(DEPS_CLIENT ${DEPS} ${PNGLITE_DEP} ${WAVPACK_DEP} ${DEP_GLAD})
+  set(DEPS_CLIENT ${DEPS} ${PNGLITE_DEP} ${WAVPACK_DEP} ${DEP_GLAD} ${DEP_MSDFGEN})
 
   # Libraries
   set(LIBS_CLIENT
