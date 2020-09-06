@@ -63,23 +63,6 @@ bool CMenusKeyBinder::OnInput(IInput::CEvent Event)
 	return false;
 }
 
-int CMenus::DoButton_Customize(CButtonContainer *pBC, IGraphics::CTextureHandle Texture, int SpriteID, const CUIRect *pRect, float ImageRatio)
-{
-	float Seconds = 0.6f; //  0.6 seconds for fade
-	float Fade = ButtonFade(pBC, Seconds);
-
-	RenderTools()->DrawUIRect(pRect, vec4(1.0f, 1.0f, 1.0f, 0.5f+(Fade/Seconds)*0.25f), CUI::CORNER_ALL, 10.0f);
-	Graphics()->TextureSet(Texture);
-	Graphics()->QuadsBegin();
-	RenderTools()->SelectSprite(SpriteID);
-	float Height = pRect->w/ImageRatio;
-	IGraphics::CQuadItem QuadItem(pRect->x, pRect->y+(pRect->h-Height)/2, pRect->w, Height);
-	Graphics()->QuadsDrawTL(&QuadItem, 1);
-	Graphics()->QuadsEnd();
-
-	return UI()->DoButtonLogic(pBC->GetID(), pRect);
-}
-
 void CMenus::RenderHSLPicker(CUIRect MainView)
 {
 	CUIRect Label, Button, Picker;
@@ -357,7 +340,7 @@ void CMenus::RenderSkinSelection(CUIRect MainView)
 	int OldSelected = -1;
 	s_ListBox.DoHeader(&MainView, Localize("Skins"), GetListHeaderHeight());
 	m_RefreshSkinSelector = s_ListBox.DoFilter();
-	s_ListBox.DoStart(50.0f, s_paSkinList.size(), 10, OldSelected);
+	s_ListBox.DoStart(60.0f, s_paSkinList.size(), 10, 1, OldSelected);
 
 	for(int i = 0; i < s_paSkinList.size(); ++i)
 	{
@@ -391,6 +374,22 @@ void CMenus::RenderSkinSelection(CUIRect MainView)
 			Info.m_Size = 50.0f;
 			Item.m_Rect.HSplitTop(5.0f, 0, &Item.m_Rect); // some margin from the top
 			RenderTools()->RenderTee(CAnimState::GetIdle(), &Info, 0, vec2(1.0f, 0.0f), vec2(Item.m_Rect.x+Item.m_Rect.w/2, Item.m_Rect.y+Item.m_Rect.h/2));
+		
+			CUIRect Label;
+			Item.m_Rect.Margin(5.0f, &Item.m_Rect);
+			Item.m_Rect.HSplitBottom(10.0f, &Item.m_Rect, &Label);
+
+			if(Item.m_Selected)
+			{
+				TextRender()->TextColor(CUI::ms_HighlightTextColor);
+				TextRender()->TextOutlineColor(CUI::ms_HighlightTextOutlineColor);
+			}
+			UI()->DoLabel(&Label, s->m_aName, 10.0f, CUI::ALIGN_CENTER);
+			if(Item.m_Selected)
+			{
+				TextRender()->TextColor(CUI::ms_DefaultTextColor);
+				TextRender()->TextOutlineColor(CUI::ms_DefaultTextOutlineColor);
+			}
 		}
 	}
 
@@ -436,7 +435,7 @@ void CMenus::RenderSkinPartSelection(CUIRect MainView)
 	static int OldSelected = -1;
 	s_ListBox.DoHeader(&MainView, Localize(CSkins::ms_apSkinPartNames[m_TeePartSelected]), GetListHeaderHeight());
 	s_InitSkinPartList = s_ListBox.DoFilter();
-	s_ListBox.DoStart(50.0f, s_paList[m_TeePartSelected].size(), 5, OldSelected);
+	s_ListBox.DoStart(50.0f, s_paList[m_TeePartSelected].size(), 5, 1, OldSelected);
 
 	for(int i = 0; i < s_paList[m_TeePartSelected].size(); ++i)
 	{
@@ -712,7 +711,7 @@ void CMenus::RenderLanguageSelection(CUIRect MainView, bool Header)
 	if(Header)
 		s_ListBox.DoHeader(&MainView, Localize("Language"), GetListHeaderHeight());
 	bool IsActive = m_ActiveListBox == ACTLB_LANG;
-	s_ListBox.DoStart(20.0f, s_Languages.size(), 1, s_SelectedLanguage, Header?0:&MainView, Header, &IsActive);
+	s_ListBox.DoStart(20.0f, s_Languages.size(), 1, 3, s_SelectedLanguage, Header?0:&MainView, Header, &IsActive);
 
 	for(sorted_array<CLanguage>::range r = s_Languages.all(); !r.empty(); r.pop_front())
 	{
@@ -781,7 +780,7 @@ void CMenus::RenderThemeSelection(CUIRect MainView, bool Header)
 		s_ListBox.DoHeader(&MainView, Localize("Theme"), GetListHeaderHeight());
 
 	bool IsActive = m_ActiveListBox == ACTLB_THEME;
-	s_ListBox.DoStart(20.0f, m_lThemes.size(), 1, SelectedTheme, Header?0:&MainView, Header, &IsActive);
+	s_ListBox.DoStart(20.0f, m_lThemes.size(), 1, 3, SelectedTheme, Header?0:&MainView, Header, &IsActive);
 
 	for(sorted_array<CTheme>::range r = m_lThemes.all(); !r.empty(); r.pop_front())
 	{
@@ -1130,7 +1129,7 @@ void CMenus::RenderSettingsPlayer(CUIRect MainView)
 	static CListBox s_ListBox;
 	int OldSelected = -1;
 	s_ListBox.DoHeader(&MainView, Localize("Country"), GetListHeaderHeight());
-	s_ListBox.DoStart(40.0f, m_pClient->m_pCountryFlags->Num(), 18, OldSelected);
+	s_ListBox.DoStart(40.0f, m_pClient->m_pCountryFlags->Num(), 18, 1, OldSelected);
 
 	for(int i = 0; i < m_pClient->m_pCountryFlags->Num(); ++i)
 	{
@@ -1471,6 +1470,7 @@ void CMenus::RenderSettingsControls(CUIRect MainView)
 	vec2 ScrollOffset(0, 0);
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
+	ScrollParams.m_ScrollUnit = 60.0f; // inconsistent margin, 3 category header per scroll
 	s_ScrollRegion.Begin(&MainView, &ScrollOffset, &ScrollParams);
 	MainView.y += ScrollOffset.y;
 
@@ -1600,7 +1600,7 @@ bool CMenus::DoResolutionList(CUIRect* pRect, CListBox* pListBox,
 	int OldSelected = -1;
 	char aBuf[32];
 
-	pListBox->DoStart(20.0f, lModes.size(), 1, OldSelected, pRect);
+	pListBox->DoStart(20.0f, lModes.size(), 1, 3, OldSelected, pRect);
 
 	for(int i = 0; i < lModes.size(); ++i)
 	{

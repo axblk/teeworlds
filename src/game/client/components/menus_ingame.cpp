@@ -235,7 +235,7 @@ void CMenus::RenderPlayers(CUIRect MainView)
 	CScrollRegionParams ScrollParams;
 	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
 	ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
-	ScrollParams.m_ScrollSpeed = 15;
+	ScrollParams.m_ScrollUnit = ButtonHeight * 3; // 3 players per scroll
 	if(s_ScrollRegion.IsScrollbarShown())
 		Row.VSplitRight(ScrollParams.m_ScrollbarWidth, &Row, 0);
 
@@ -281,10 +281,11 @@ void CMenus::RenderPlayers(CUIRect MainView)
 			MainView.HSplitTop(ButtonHeight, &Row, &MainView);
 			s_ScrollRegion.AddRect(Row);
 
+			Count++;
 			if(s_ScrollRegion.IsRectClipped(Row))
 				continue;
 
-			if(Count++ % 2 == 0)
+			if(Count % 2 == 1)
 				RenderTools()->DrawUIRect(&Row, vec4(1.0f, 1.0f, 1.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
 
 			// player info
@@ -507,7 +508,7 @@ bool CMenus::RenderServerControlServer(CUIRect MainView)
 	static CListBox s_ListBox;
 	CUIRect List = MainView;
 	s_ListBox.DoHeader(&List, Localize("Option"), GetListHeaderHeight());
-	s_ListBox.DoStart(20.0f, m_pClient->m_pVoting->m_NumVoteOptions, 1, m_CallvoteSelectedOption, 0, true);
+	s_ListBox.DoStart(20.0f, m_pClient->m_pVoting->m_NumVoteOptions, 1, 3, m_CallvoteSelectedOption, 0, true);
 
 	for(CVoteOptionClient *pOption = m_pClient->m_pVoting->m_pFirst; pOption; pOption = pOption->m_pNext)
 	{
@@ -555,7 +556,7 @@ void CMenus::RenderServerControlKick(CUIRect MainView, bool FilterSpectators)
 	static CListBox s_ListBox;
 	CUIRect List = MainView;
 	s_ListBox.DoHeader(&List, Localize("Player"), GetListHeaderHeight());
-	s_ListBox.DoStart(20.0f, NumOptions, 1, Selected, 0, true);
+	s_ListBox.DoStart(20.0f, NumOptions, 1, 3, Selected, 0, true);
 
 	for(int i = 0; i < NumOptions; i++)
 	{
@@ -779,8 +780,7 @@ void CMenus::RenderServerControl(CUIRect MainView)
 			// clear button
 			{
 				static CButtonContainer s_ClearButton;
-				float Fade = ButtonFade(&s_ClearButton, 0.6f);
-				RenderTools()->DrawUIRect(&ClearButton, vec4(1.0f, 1.0f, 1.0f, 0.33f+(Fade/0.6f)*0.165f), CUI::CORNER_R, 3.0f);
+				RenderTools()->DrawUIRect(&ClearButton, vec4(1.0f, 1.0f, 1.0f, 0.33f+s_ClearButton.GetFade()*0.165f), CUI::CORNER_R, 3.0f);
 				Label = ClearButton;
 				Label.y += 2.0f;
 				UI()->DoLabel(&Label, "x", Label.h*ms_FontmodHeight*0.8f, CUI::ALIGN_CENTER);
