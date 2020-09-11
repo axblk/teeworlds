@@ -153,85 +153,17 @@ void CBroadcast::RenderServerBroadcast()
 	const float FontSize = m_SrvBroadcastFontSize;
 	const int LineCount = m_SrvBroadcastLineCount;
 	const char* pBroadcastMsg = m_aSrvBroadcastMsg;
-	CTextCursor Cursor;
+	CTextCursor Cursor(FontSize);
 
 	const vec2 ShadowOff(1.0f, 2.0f);
 	const vec4 ShadowColorBlack(0, 0, 0, 0.9f * Fade);
 	const vec4 TextColorWhite(1, 1, 1, Fade);
 	float y = BcView.y + BcView.h - LineCount * FontSize;
 
-	for(int l = 0; l < LineCount; l++)
-	{
-		const CBcLineInfo& Line = m_aSrvBroadcastLines[l];
-		TextRender()->SetCursor(&Cursor, BcView.x + (BcView.w - Line.m_Width) * 0.5f, y,
-								FontSize, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
-		Cursor.m_LineWidth = BcView.w;
-
-		// draw colored text
-		if(ColoredBroadcastEnabled)
-		{
-			int DrawnStrLen = 0;
-			int ThisCharPos = Line.m_pStrStart - pBroadcastMsg;
-			while(DrawnStrLen < Line.m_StrLen)
-			{
-				int StartColorID = -1;
-				int ColorStrLen = -1;
-
-				// find color
-				for(int j = 0; j < m_SrvBroadcastColorCount; j++)
-				{
-					if((ThisCharPos+DrawnStrLen) >= m_aSrvBroadcastColorList[j].m_CharPos)
-					{
-						StartColorID = j;
-					}
-					else if(StartColorID >= 0)
-					{
-						ColorStrLen = m_aSrvBroadcastColorList[j].m_CharPos -
-									  max(m_aSrvBroadcastColorList[StartColorID].m_CharPos, ThisCharPos);
-						break;
-					}
-				}
-
-				dbg_assert(StartColorID >= 0, "This should not be -1, color not found");
-
-				if(ColorStrLen < 0)
-					ColorStrLen = Line.m_StrLen-DrawnStrLen;
-				ColorStrLen = min(ColorStrLen, Line.m_StrLen-DrawnStrLen);
-
-				const CBcColor& TextColor = m_aSrvBroadcastColorList[StartColorID];
-				float r = TextColor.m_R/255.f;
-				float g = TextColor.m_G/255.f;
-				float b = TextColor.m_B/255.f;
-				float AvgLum = 0.2126*r + 0.7152*g + 0.0722*b;
-
-				if(AvgLum < 0.25f)
-				{
-					TextRender()->TextOutlineColor(1, 1, 1, 0.6f);
-					TextRender()->TextColor(r, g, b, Fade);
-					TextRender()->TextEx(&Cursor, Line.m_pStrStart+DrawnStrLen, ColorStrLen);
-				}
-				else
-				{
-					vec4 TextColor(r, g, b, Fade);
-					vec4 ShadowColor(r * 0.15f, g * 0.15f, b * 0.15f, 0.9f * Fade);
-					TextRender()->TextShadowed(&Cursor, Line.m_pStrStart+DrawnStrLen, ColorStrLen,
-											   ShadowOff, ShadowColor, TextColor);
-				}
-
-				DrawnStrLen += ColorStrLen;
-			}
-		}
-		else
-		{
-			TextRender()->TextShadowed(&Cursor, Line.m_pStrStart, Line.m_StrLen,
-									   ShadowOff, ShadowColorBlack, TextColorWhite);
-		}
-
-		y += FontSize;
-	}
+	// TODO: ADDBACK: do broadcast
 
 	TextRender()->TextColor(1, 1, 1, 1);
-	TextRender()->TextOutlineColor(0, 0, 0, 0.3f);
+	TextRender()->TextSecondaryColor(0, 0, 0, 0.3f);
 }
 
 CBroadcast::CBroadcast()
@@ -241,13 +173,8 @@ CBroadcast::CBroadcast()
 
 void CBroadcast::DoBroadcast(const char *pText)
 {
+	// TODO: ADDBACK: do broadcast
 	str_copy(m_aBroadcastText, pText, sizeof(m_aBroadcastText));
-	CTextCursor Cursor;
-	TextRender()->SetCursor(&Cursor, 0, 0, 12.0f, TEXTFLAG_STOP_AT_END);
-	Cursor.m_LineWidth = 300*Graphics()->ScreenAspect();
-	TextRender()->TextEx(&Cursor, m_aBroadcastText, -1);
-	m_BroadcastRenderOffset = 150*Graphics()->ScreenAspect()-Cursor.m_X/2;
-	m_BroadcastTime = Client()->LocalTime() + 10.0f;
 }
 
 void CBroadcast::OnReset()
@@ -346,75 +273,15 @@ void CBroadcast::OnMessage(int MsgType, void* pRawMsg)
 		const char* pBroadcastMsg = m_aSrvBroadcastMsg;
 		const int MsgLen = m_aSrvBroadcastMsgLen;
 
-		CTextCursor Cursor;
 		Graphics()->MapScreen(0, 0, Width, Height);
 
 		// one line == big font
 		// 2+ lines == small font
 		m_SrvBroadcastLineCount = 0;
 		float FontSize = BROADCAST_FONTSIZE_BIG;
+		CTextCursor Cursor(FontSize);
 
-		if(UserLineCount <= 1) // auto mode
-		{
-			TextRender()->SetCursor(&Cursor, 0, 0, FontSize, 0);
-			Cursor.m_LineWidth = LineMaxWidth;
-			TextRender()->TextEx(&Cursor, pBroadcastMsg, MsgLen);
-
-			// can't fit on one line, reduce size
-			Cursor.m_LineCount = min(Cursor.m_LineCount, (int)MAX_BROADCAST_LINES);
-			FontSize = mix(BROADCAST_FONTSIZE_BIG, BROADCAST_FONTSIZE_SMALL,
-						   Cursor.m_LineCount/(float)MAX_BROADCAST_LINES);
-
-			// make lines
-			int CurCharCount = 0;
-			while(CurCharCount < MsgLen && m_SrvBroadcastLineCount < MAX_BROADCAST_LINES)
-			{
-				const char* RemainingMsg = pBroadcastMsg + CurCharCount;
-
-				TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END);
-				Cursor.m_LineWidth = LineMaxWidth;
-
-				TextRender()->TextEx(&Cursor, RemainingMsg, -1);
-				int StrLen = Cursor.m_CharCount;
-
-				// don't cut words
-				if(CurCharCount + StrLen < MsgLen)
-				{
-					const int WorldLen = WordLengthBack(RemainingMsg + StrLen, StrLen);
-					if(WorldLen > 0 && WorldLen < StrLen)
-					{
-						StrLen -= WorldLen;
-						TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END);
-						Cursor.m_LineWidth = LineMaxWidth;
-						TextRender()->TextEx(&Cursor, RemainingMsg, StrLen);
-					}
-				}
-
-				const float TextWidth = Cursor.m_X-Cursor.m_StartX;
-
-				CBcLineInfo Line = { RemainingMsg, StrLen, TextWidth };
-				m_aSrvBroadcastLines[m_SrvBroadcastLineCount++] = Line;
-				CurCharCount += StrLen;
-			}
-		}
-		else // user defined lines mode
-		{
-			FontSize = mix(BROADCAST_FONTSIZE_BIG, BROADCAST_FONTSIZE_SMALL,
-						   UserLineCount/(float)MAX_BROADCAST_LINES);
-
-			for(int i = 0; i < UserLineCount && m_SrvBroadcastLineCount < MAX_BROADCAST_LINES; i++)
-			{
-				TextRender()->SetCursor(&Cursor, 0, 0, FontSize, TEXTFLAG_STOP_AT_END);
-				Cursor.m_LineWidth = LineMaxWidth;
-				TextRender()->TextEx(&Cursor, UserLines[i].m_pStrStart, UserLines[i].m_StrLen);
-
-				const float TextWidth = Cursor.m_X-Cursor.m_StartX;
-				const int StrLen = Cursor.m_CharCount;
-
-				CBcLineInfo Line = { UserLines[i].m_pStrStart, StrLen, TextWidth };
-				m_aSrvBroadcastLines[m_SrvBroadcastLineCount++] = Line;
-			}
-		}
+		// TODO: ADDBACK: broadcast lines
 
 		m_SrvBroadcastFontSize = FontSize;
 	}
@@ -436,10 +303,7 @@ void CBroadcast::OnRender()
 
 	if(Client()->LocalTime() < m_BroadcastTime)
 	{
-		CTextCursor Cursor;
-		TextRender()->SetCursor(&Cursor, m_BroadcastRenderOffset, 40.0f, 12.0f, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
-		Cursor.m_LineWidth = 300*Graphics()->ScreenAspect()-m_BroadcastRenderOffset;
-		TextRender()->TextEx(&Cursor, m_aBroadcastText, -1);
+		// TODO: ADDBACK: render broadcast
 	}
 }
 
