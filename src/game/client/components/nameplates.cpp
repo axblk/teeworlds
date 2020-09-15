@@ -40,7 +40,40 @@ void CNamePlates::RenderNameplate(
 		char aName[64];
 		str_format(aName, sizeof(aName), "%s", Config()->m_ClShowsocial ? m_pClient->m_aClients[ClientID].m_aName: "");
 
-		// TODO: ADDBACK: draw nameplate
+		// TODO: cache nameplates
+		static CTextCursor s_Cursor;
+		s_Cursor.m_FontSize = FontSize;
+		s_Cursor.Reset();
+		TextRender()->TextDeferred(&s_Cursor, aName, -1);
+
+		float tw = s_Cursor.m_Width + RenderTools()->GetClientIdRectSize(FontSize);
+		s_Cursor.MoveTo(Position.x-tw/2.0f, Position.y-FontSize-38.0f);
+
+		TextRender()->TextSecondaryColor(0.0f, 0.0f, 0.0f, 0.5f);
+		TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
+		if(Config()->m_ClNameplatesTeamcolors && m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_TEAMS)
+		{
+			if(m_pClient->m_aClients[ClientID].m_Team == TEAM_RED)
+				TextRender()->TextColor(1.0f, 0.5f, 0.5f, a);
+			else if(m_pClient->m_aClients[ClientID].m_Team == TEAM_BLUE)
+				TextRender()->TextColor(0.7f, 0.7f, 1.0f, a);
+		}
+
+		const vec4 IdTextColor(0.1f, 0.1f, 0.1f, a);
+		vec4 BgIdColor(1.0f, 1.0f, 1.0f, a * 0.5f);
+		if(Config()->m_ClNameplatesTeamcolors && m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_TEAMS)
+		{
+			if(m_pClient->m_aClients[ClientID].m_Team == TEAM_RED)
+				BgIdColor = vec4(1.0f, 0.5f, 0.5f, a * 0.5f);
+			else if(m_pClient->m_aClients[ClientID].m_Team == TEAM_BLUE)
+				BgIdColor = vec4(0.7f, 0.7f, 1.0f, a * 0.5f);
+		}
+
+		if(a > 0.001f)
+		{
+			RenderTools()->DrawClientID(TextRender(), &s_Cursor, ClientID, BgIdColor, IdTextColor);
+			TextRender()->DrawTextOutlined(&s_Cursor, a);
+		}
 
 		TextRender()->TextColor(CUI::ms_DefaultTextColor);
 		TextRender()->TextSecondaryColor(CUI::ms_DefaultTextOutlineColor);
