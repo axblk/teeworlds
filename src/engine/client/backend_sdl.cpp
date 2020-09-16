@@ -12,6 +12,8 @@
 
 #include "shaders.h"
 
+#define WGPUBIND_BUFFER_ALIGNMENT 256
+
 #define MATRIX_ALIGNMENT ((sizeof(CMat4) + WGPUBIND_BUFFER_ALIGNMENT - 1) / WGPUBIND_BUFFER_ALIGNMENT * WGPUBIND_BUFFER_ALIGNMENT)
 #define MAX_TRANSFORM_MATRICES 256
 
@@ -199,7 +201,7 @@ void CCommandProcessorFragment_WGPU::ConvertToRGBA(int Width, int Height, int Fo
 	}
 }
 
-void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPassId RPass)
+void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPass *pRPass)
 {
 	// TODO: remove this limit
 	if(m_MVPCount >= MAX_TRANSFORM_MATRICES)
@@ -208,11 +210,11 @@ void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &Stat
 	if(State.m_ClipEnable)
 	{
 		int ClipY = m_ScreenHeight - State.m_ClipH - State.m_ClipY;
-		wgpu_render_pass_set_scissor_rect(RPass, State.m_ClipX, ClipY, State.m_ClipW, State.m_ClipH);
+		wgpu_render_pass_set_scissor_rect(pRPass, State.m_ClipX, ClipY, State.m_ClipW, State.m_ClipH);
 	}
 	else
 	{
-		wgpu_render_pass_set_scissor_rect(RPass, 0, 0, m_ScreenWidth, m_ScreenHeight);
+		wgpu_render_pass_set_scissor_rect(pRPass, 0, 0, m_ScreenWidth, m_ScreenHeight);
 	}
 
 	WGPURenderPipelineId *pPipeline = m_RenderPipeline;
@@ -262,13 +264,13 @@ void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &Stat
 		dbg_msg("render", "unknown blendmode %d\n", State.m_BlendMode);
 	};
 
-	wgpu_render_pass_set_pipeline(RPass, pPipeline[BlendMode]);
+	wgpu_render_pass_set_pipeline(pRPass, pPipeline[BlendMode]);
 	if(pTex)
 	{
 		WGPUBindGroupId TexBindGroup = TexArray
 			? GetTexBindGroup(pTex, IGraphics::WRAP_CLAMP, IGraphics::WRAP_CLAMP, true)
 			: GetTexBindGroup(pTex, State.m_WrapModeU, State.m_WrapModeV, false);
-		wgpu_render_pass_set_bind_group(RPass, 1, TexBindGroup, NULL, 0);
+		wgpu_render_pass_set_bind_group(pRPass, 1, TexBindGroup, NULL, 0);
 	}
 
 	CMVPData CurMVP = {
@@ -286,7 +288,7 @@ void CCommandProcessorFragment_WGPU::SetState(const CCommandBuffer::CState &Stat
 	}
 
 	unsigned Offset = MATRIX_ALIGNMENT * (m_MVPCount - 1);
-	wgpu_render_pass_set_bind_group(RPass, 0, m_TransformBindGroup, &Offset, 1);
+	wgpu_render_pass_set_bind_group(pRPass, 0, m_TransformBindGroup, &Offset, 1);
 }
 
 void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
@@ -356,7 +358,9 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 			.binding = 0,
 			.visibility = WGPUShaderStage_VERTEX,
 			.ty = WGPUBindingType_UniformBuffer,
-			.has_dynamic_offset = true
+			.has_dynamic_offset = true,
+			.min_buffer_binding_size = sizeof(CMat4),
+			.count = 0,
 		}
 	};
 
@@ -367,12 +371,14 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 			.ty = WGPUBindingType_SampledTexture,
 			.multisampled = false,
 			.view_dimension = WGPUTextureViewDimension_D2,
-			.texture_component_type = WGPUTextureComponentType_Float
+			.texture_component_type = WGPUTextureComponentType_Float,
+			.count = 0,
 		},
 		{
 			.binding = 1,
 			.visibility = WGPUShaderStage_FRAGMENT,
 			.ty = WGPUBindingType_Sampler,
+			.count = 0,
 		}
 	};
 
@@ -392,54 +398,17 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 		}
 	};
 
-	WGPUBindGroupLayoutDescriptor BindGroupLayoutDesc = {
-		.label = "bind group transform layout",
-		.entries = aEntriesTransform,
-		.entries_length = 1,
-	};
-	m_BindGroupTransformLayout = wgpu_device_create_bind_group_layout(m_Device, &BindGroupLayoutDesc);
-
-	BindGroupLayoutDesc = {
-		.label = "bind group 2D layout",
-		.entries = aEntries2D,
-		.entries_length = 2,
-	};
-	m_BindGroup2DLayout = wgpu_device_create_bind_group_layout(m_Device, &BindGroupLayoutDesc);
-
-	BindGroupLayoutDesc = {
-		.label = "bind group 2D array layout",
-		.entries = aEntries2DArray,
-		.entries_length = 2,
-	};
-	m_BindGroup2DArrayLayout = wgpu_device_create_bind_group_layout(m_Device, &BindGroupLayoutDesc);
-
-	dbg_msg("wgpu", "created bind group layout: %llu, %llu, %llu", m_BindGroupTransformLayout, m_BindGroup2DLayout, m_BindGroup2DArrayLayout);
-
-	WGPUPipelineLayoutDescriptor PipelineLayoutDesc = {
-		.bind_group_layouts = &m_BindGroupTransformLayout,
-		.bind_group_layouts_length = 1,
-	};
-	WGPUPipelineLayoutId PipelineLayout = wgpu_device_create_pipeline_layout(m_Device, &PipelineLayoutDesc);
+	m_BindGroupTransformLayout = CreateBindGroupLayout(aEntriesTransform, 1, "bind group transform layout");
+	m_BindGroup2DLayout = CreateBindGroupLayout(aEntries2D, 2, "bind group 2D layout");
+	m_BindGroup2DArrayLayout = CreateBindGroupLayout(aEntries2DArray, 2, "bind group 2D array layout");
 
 	WGPUBindGroupLayoutId aBindGroup2DLayouts[2] = {m_BindGroupTransformLayout, m_BindGroup2DLayout};
-	PipelineLayoutDesc = {
-		.bind_group_layouts = aBindGroup2DLayouts,
-		.bind_group_layouts_length = 2,
-	};
-	WGPUPipelineLayoutId Pipeline2DLayout = wgpu_device_create_pipeline_layout(m_Device, &PipelineLayoutDesc);
-
 	WGPUBindGroupLayoutId aBindGroup2DArrayLayouts[2] = {m_BindGroupTransformLayout, m_BindGroup2DArrayLayout};
-	PipelineLayoutDesc = {
-		.bind_group_layouts = aBindGroup2DArrayLayouts,
-		.bind_group_layouts_length = 2,
-	};
-	WGPUPipelineLayoutId Pipeline2DArrayLayout = wgpu_device_create_pipeline_layout(m_Device, &PipelineLayoutDesc);
 
-	PipelineLayoutDesc = {
-		.bind_group_layouts = &m_BindGroup2DLayout,
-		.bind_group_layouts_length = 1,
-	};
-	WGPUPipelineLayoutId PipelineMipmapLayout = wgpu_device_create_pipeline_layout(m_Device, &PipelineLayoutDesc);
+	WGPUPipelineLayoutId PipelineLayout = CreatePipelineLayout(&m_BindGroupTransformLayout, 1);
+	WGPUPipelineLayoutId Pipeline2DLayout = CreatePipelineLayout(aBindGroup2DLayouts, 2);
+	WGPUPipelineLayoutId Pipeline2DArrayLayout = CreatePipelineLayout(aBindGroup2DArrayLayouts, 2);
+	WGPUPipelineLayoutId PipelineMipmapLayout = CreatePipelineLayout(&m_BindGroup2DLayout, 1);
 
 	dbg_msg("wgpu", "created pipeline layouts");
 
@@ -496,11 +465,8 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 
 	m_Queue = wgpu_device_get_default_queue(m_Device);
 
-	WGPUBufferDescriptor BufferDesc = { .size = 2*1024*1024, .usage = WGPUBufferUsage_VERTEX|WGPUBufferUsage_COPY_DST|WGPUBufferUsage_COPY_SRC };
-	m_StreamingBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
-
-	BufferDesc = { .size = MATRIX_ALIGNMENT*MAX_TRANSFORM_MATRICES, .usage = WGPUBufferUsage_UNIFORM|WGPUBufferUsage_COPY_DST };
-	m_TransformBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
+	m_StreamingBuffer = CreateBuffer(2*1024*1024, WGPUBufferUsage_VERTEX|WGPUBufferUsage_COPY_DST|WGPUBufferUsage_COPY_SRC, false, "streaming buffer");
+	m_TransformBuffer = CreateBuffer(MATRIX_ALIGNMENT*MAX_TRANSFORM_MATRICES, WGPUBufferUsage_UNIFORM|WGPUBufferUsage_COPY_DST, false, "transform buffer");
 
 	WGPUBindGroupEntry aEntries[1] = {
 		{
@@ -511,12 +477,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Init(const CInitCommand *pCommand)
 		}
 	};
 
-	WGPUBindGroupDescriptor BindGroupDesc = {
-		.layout = m_BindGroupTransformLayout,
-		.entries = aEntries,
-		.entries_length = 1,
-	};
-	m_TransformBindGroup = wgpu_device_create_bind_group(m_Device, &BindGroupDesc);
+	m_TransformBindGroup = CreateBindGroup(m_BindGroupTransformLayout, aEntries, 1);
 
 	m_Ready = true;
 }
@@ -814,8 +775,7 @@ void CCommandProcessorFragment_WGPU::Cmd_Texture_Create(const CCommandBuffer::CT
 
 void CCommandProcessorFragment_WGPU::Cmd_VertexBuffer_Create(const CCommandBuffer::CVertexBufferCreateCommand *pCommand)
 {
-	WGPUBufferDescriptor BufferDesc = { .size = (unsigned)pCommand->m_Size, .usage = WGPUBufferUsage_COPY_DST | WGPUBufferUsage_VERTEX };
-	m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
+	m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer = CreateBuffer(pCommand->m_Size, WGPUBufferUsage_COPY_DST | WGPUBufferUsage_VERTEX);
 
 	*m_pVertexBufferMemoryUsage += pCommand->m_Size;
 
@@ -842,8 +802,7 @@ void CCommandProcessorFragment_WGPU::Cmd_VertexBuffer_Update(const CCommandBuffe
 	if(pCommand->m_Recreate)
 	{
 		wgpu_buffer_destroy(m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer);
-		WGPUBufferDescriptor BufferDesc = { .size = (unsigned)pCommand->m_Size, .usage = WGPUBufferUsage_COPY_DST | WGPUBufferUsage_VERTEX };
-		m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer = wgpu_device_create_buffer(m_Device, &BufferDesc);
+		m_aVertexBuffers[pCommand->m_Slot].m_VertexBuffer = CreateBuffer(pCommand->m_Size, WGPUBufferUsage_COPY_DST | WGPUBufferUsage_VERTEX);
 
 		*m_pVertexBufferMemoryUsage += pCommand->m_Size - m_aVertexBuffers[pCommand->m_Slot].m_MemSize;
 		m_aVertexBuffers[pCommand->m_Slot].m_MemSize = pCommand->m_Size;
@@ -880,34 +839,34 @@ void CCommandProcessorFragment_WGPU::Cmd_Clear(const CCommandBuffer::CClearComma
 
 void CCommandProcessorFragment_WGPU::Cmd_Render(const CCommandBuffer::CRenderCommand *pCommand)
 {
-	WGPURenderPassId RPass = GetRenderPass();
-	if(!RPass)
+	WGPURenderPass *pRPass = GetRenderPass();
+	if(!pRPass)
 		return;
 
-	SetState(pCommand->m_State, pCommand->m_PrimType, RPass);
+	SetState(pCommand->m_State, pCommand->m_PrimType, pRPass);
 
-	unsigned PrimCount = 0;
+	unsigned VertexCount = 0;
 
 	switch(pCommand->m_PrimType)
 	{
 	case CCommandBuffer::PRIMTYPE_TRIANGLES:
-		PrimCount = pCommand->m_PrimCount*3;
+		VertexCount = pCommand->m_PrimCount*3;
 		break;
 	case CCommandBuffer::PRIMTYPE_LINES:
-		PrimCount = pCommand->m_PrimCount*2;
+		VertexCount = pCommand->m_PrimCount*2;
 		break;
 	default:
 		dbg_msg("render", "unknown primtype %d\n", pCommand->m_PrimType);
 	};
 
-	if(PrimCount > 0)
+	if(VertexCount > 0)
 	{
-		unsigned DataSize = PrimCount * sizeof(IGraphics::CVertex);
+		unsigned DataSize = VertexCount * sizeof(IGraphics::CVertex);
 		WGPUBufferId Buffer = m_StreamingBuffer;
 		if(pCommand->m_State.m_VertexBuffer >= 0 && pCommand->m_State.m_VertexBuffer < CCommandBuffer::MAX_VERTEX_BUFFERS)
 			Buffer = m_aVertexBuffers[pCommand->m_State.m_VertexBuffer].m_VertexBuffer;
-		wgpu_render_pass_set_vertex_buffer(RPass, 0, Buffer, pCommand->m_Offset, DataSize);
-		wgpu_render_pass_draw(RPass, PrimCount, 1, 0, 0);
+		wgpu_render_pass_set_vertex_buffer(pRPass, 0, Buffer, pCommand->m_Offset, DataSize);
+		wgpu_render_pass_draw(pRPass, VertexCount, 1, 0, 0);
 	}
 }
 
@@ -932,6 +891,11 @@ void CCommandProcessorFragment_WGPU::Cmd_Swap(const CCommandBuffer::CSwapCommand
 	}
 
 	m_NextTexture = wgpu_swap_chain_get_next_texture(m_SwapChain);
+	if(m_NextTexture.status != WGPUSwapChainStatus_Good)
+	{
+		m_SwapChain = CreateSwapChain(m_PresentMode);
+	}
+
 }
 
 void CCommandProcessorFragment_WGPU::Cmd_Screenshot(const CCommandBuffer::CScreenshotCommand *pCommand)
@@ -987,7 +951,7 @@ CCommandProcessorFragment_WGPU::CCommandProcessorFragment_WGPU()
 	m_pTextureMemoryUsage = 0;
 	m_pVertexBufferMemoryUsage = 0;
 	m_CmdEncoder = 0;
-	m_RPass = 0;
+	m_pRPass = 0;
 	m_StreamingBuffer = 0;
 	m_TransformBuffer = 0;
 	m_TransformBindGroup = 0;
@@ -1042,12 +1006,12 @@ void CCommandProcessorFragment_WGPU::GenerateMipmapsForLayer(WGPUTextureId Tex, 
 	for(unsigned i = 1; i < MipLevels; i++)
 	{
 		WGPUBindGroupId BindGroup = CreateTexBindGroup(aTexViews[i-1], m_Sampler[0][1][1]);
-		WGPURenderPassId RPass = CreateRenderPass(CmdEncoder, aTexViews[i], WGPULoadOp_Clear, White);
+		WGPURenderPass *pRPass = CreateRenderPass(CmdEncoder, aTexViews[i], WGPULoadOp_Clear, White);
 
-		wgpu_render_pass_set_pipeline(RPass, m_RenderPipelineMipmap);
-		wgpu_render_pass_set_bind_group(RPass, 0, BindGroup, NULL, 0);
-		wgpu_render_pass_draw(RPass, 4, 1, 0, 0);
-		wgpu_render_pass_end_pass(RPass);
+		wgpu_render_pass_set_pipeline(pRPass, m_RenderPipelineMipmap);
+		wgpu_render_pass_set_bind_group(pRPass, 0, BindGroup, NULL, 0);
+		wgpu_render_pass_draw(pRPass, 4, 1, 0, 0);
+		wgpu_render_pass_end_pass(pRPass);
 
 		wgpu_bind_group_destroy(BindGroup);
 	}
@@ -1070,15 +1034,34 @@ WGPUSwapChainId CCommandProcessorFragment_WGPU::CreateSwapChain(WGPUPresentMode 
 	return wgpu_device_create_swap_chain(m_Device, m_Surface, &SwapChainDesc);
 }
 
-WGPUShaderModuleId CCommandProcessorFragment_WGPU::CreateShaderModule(const uint32_t *pBytes, uintptr_t Length)
+WGPUShaderModuleId CCommandProcessorFragment_WGPU::CreateShaderModule(const uint32_t *pBytes, unsigned int Length)
 {
-	WGPUShaderModuleDescriptor ShaderDesc = {
-		.code = WGPUU32Array {
-			.bytes = pBytes,
-			.length = Length,
-		},
+	WGPUShaderSource ShaderSrc = {
+		.bytes = pBytes,
+		.length = Length,
 	};
-	return wgpu_device_create_shader_module(m_Device, &ShaderDesc);
+	return wgpu_device_create_shader_module(m_Device, ShaderSrc);
+}
+
+WGPUBindGroupLayoutId CCommandProcessorFragment_WGPU::CreateBindGroupLayout(const WGPUBindGroupLayoutEntry *pEntries, unsigned int Length, const char *pLabel)
+{
+	WGPUBindGroupLayoutDescriptor BindGroupLayoutDesc = {
+		.label = pLabel,
+		.entries = pEntries,
+		.entries_length = Length,
+	};
+	WGPUBindGroupLayoutId BindGroupLayout = wgpu_device_create_bind_group_layout(m_Device, &BindGroupLayoutDesc);
+	dbg_msg("wgpu", "created bind group layout: %llu (%s)", BindGroupLayout, pLabel ? pLabel : "None");
+	return BindGroupLayout;
+}
+
+WGPUPipelineLayoutId CCommandProcessorFragment_WGPU::CreatePipelineLayout(const WGPUBindGroupLayoutId *pBindGroupLayouts, unsigned int Length)
+{
+	WGPUPipelineLayoutDescriptor PipelineLayoutDesc = {
+		.bind_group_layouts = pBindGroupLayouts,
+		.bind_group_layouts_length = Length,
+	};
+	return wgpu_device_create_pipeline_layout(m_Device, &PipelineLayoutDesc);
 }
 
 WGPURenderPipelineId CCommandProcessorFragment_WGPU::CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, WGPUPrimitiveTopology PrimTopology, WGPUBlendDescriptor BlendInfo, bool Mipmap)
@@ -1170,6 +1153,28 @@ WGPUSamplerId CCommandProcessorFragment_WGPU::CreateSampler(WGPUAddressMode Mode
 	return wgpu_device_create_sampler(m_Device, &SamplerDesc);
 }
 
+WGPUBufferId CCommandProcessorFragment_WGPU::CreateBuffer(unsigned int Size, WGPUBufferUsage Usage, bool MappedAtCreation, const char *pLabel)
+{
+	WGPUBufferDescriptor BufferDesc = {
+		.label = pLabel,
+		.size = Size,
+		.usage = Usage,
+		.mapped_at_creation = MappedAtCreation,
+	};
+	return wgpu_device_create_buffer(m_Device, &BufferDesc);
+}
+
+WGPUBindGroupId CCommandProcessorFragment_WGPU::CreateBindGroup(WGPUBindGroupLayoutId Layout, WGPUBindGroupEntry *pEntries, unsigned int Length, const char *pLabel)
+{
+	WGPUBindGroupDescriptor BindGroupDesc = {
+		.label = pLabel,
+		.layout = Layout,
+		.entries = pEntries,
+		.entries_length = Length,
+	};
+	return wgpu_device_create_bind_group(m_Device, &BindGroupDesc);
+}
+
 WGPUBindGroupId CCommandProcessorFragment_WGPU::CreateTexBindGroup(WGPUTextureViewId TexView, WGPUSamplerId Sampler, bool Array)
 {
 	WGPUBindGroupEntry aEntries[2] = {
@@ -1182,23 +1187,22 @@ WGPUBindGroupId CCommandProcessorFragment_WGPU::CreateTexBindGroup(WGPUTextureVi
 			.sampler = { Sampler },
 		}
 	};
-	WGPUBindGroupDescriptor BindGroupDesc = {
-		.layout = Array ? m_BindGroup2DArrayLayout : m_BindGroup2DLayout,
-		.entries = aEntries,
-		.entries_length = 2,
-	};
-	return wgpu_device_create_bind_group(m_Device, &BindGroupDesc);
+	return CreateBindGroup(Array ? m_BindGroup2DArrayLayout : m_BindGroup2DLayout, aEntries, 2);
 }
 
-WGPURenderPassId CCommandProcessorFragment_WGPU::CreateRenderPass(WGPUCommandEncoderId CmdEncoder, WGPUTextureViewId TexView, WGPULoadOp LoadOp, WGPUColor ClearColor)
+WGPURenderPass *CCommandProcessorFragment_WGPU::CreateRenderPass(WGPUCommandEncoderId CmdEncoder, WGPUTextureViewId TexView, WGPULoadOp LoadOp, WGPUColor ClearColor)
 {
 	WGPURenderPassColorAttachmentDescriptor aColorAttachments[1] = {
 		{
 			.attachment = TexView,
-			.load_op = LoadOp,
-			.store_op = WGPUStoreOp_Store,
-			.clear_color = ClearColor,
-		},
+			.resolve_target = 0,
+			.channel = {
+				.load_op = LoadOp,
+				.store_op = WGPUStoreOp_Store,
+				.clear_value = ClearColor,
+				.read_only = false,
+			}
+		}
 	};
 
 	WGPURenderPassDescriptor RenderPassDesc = {
@@ -1233,27 +1237,27 @@ WGPUCommandEncoderId CCommandProcessorFragment_WGPU::GetCommandEncoder()
 	return m_CmdEncoder;
 }
 
-WGPURenderPassId CCommandProcessorFragment_WGPU::GetRenderPass(bool Clear, IGraphics::CColor ClearColor)
+WGPURenderPass *CCommandProcessorFragment_WGPU::GetRenderPass(bool Clear, IGraphics::CColor ClearColor)
 {
-	if(!m_RPass && m_NextTexture.view_id)
+	if(!m_pRPass && m_NextTexture.view_id)
 	{
 		WGPUCommandEncoderId CmdEncoder = GetCommandEncoder();
 		WGPUColor Color = { .r = ClearColor.r, .g = ClearColor.g, .b = ClearColor.b, .a = 1.0 };
-		m_RPass = CreateRenderPass(CmdEncoder, m_NextTexture.view_id, Clear ? WGPULoadOp_Clear : WGPULoadOp_Load, Color);
+		m_pRPass = CreateRenderPass(CmdEncoder, m_NextTexture.view_id, Clear ? WGPULoadOp_Clear : WGPULoadOp_Load, Color);
 
 		//dbg_msg("wgpu", "began render pass");
 	}
 
-	return m_RPass;
+	return m_pRPass;
 }
 
 void CCommandProcessorFragment_WGPU::EndRenderPass()
 {
-	if(m_RPass)
+	if(m_pRPass)
 	{
-		wgpu_render_pass_end_pass(m_RPass);
+		wgpu_render_pass_end_pass(m_pRPass);
 		//dbg_msg("wgpu", "render pass ended");
-		m_RPass = 0;
+		m_pRPass = 0;
 	}
 }
 

@@ -128,7 +128,7 @@ class CCommandProcessorFragment_WGPU
 	WGPUQueueId m_Queue;
 	WGPUSwapChainOutput m_NextTexture;
 	WGPUCommandEncoderId m_CmdEncoder;
-	WGPURenderPassId m_RPass;
+	WGPURenderPass *m_pRPass;
 	WGPUBufferId m_StreamingBuffer;
 	WGPUBufferId m_TransformBuffer;
 	WGPUBindGroupId m_TransformBindGroup;
@@ -181,18 +181,22 @@ private:
 	void GenerateMipmapsForLayer(WGPUTextureId Tex, unsigned BaseLayer, unsigned MipLevels);
 
 	WGPUSwapChainId CreateSwapChain(WGPUPresentMode PresentMode);
-	WGPUShaderModuleId CreateShaderModule(const uint32_t *pBytes, uintptr_t Length);
+	WGPUShaderModuleId CreateShaderModule(const uint32_t *pBytes, unsigned int Length);
+	WGPUBindGroupLayoutId CreateBindGroupLayout(const WGPUBindGroupLayoutEntry *pEntries, unsigned int Length, const char *pLabel = 0);
+	WGPUPipelineLayoutId CreatePipelineLayout(const WGPUBindGroupLayoutId *pBindGroupLayouts, unsigned int Length);
 	WGPURenderPipelineId CreateRenderPipeline(WGPUPipelineLayoutId PipelineLayout, WGPUShaderModuleId VertexShader, WGPUShaderModuleId FragmentShader, WGPUPrimitiveTopology PrimTopology, WGPUBlendDescriptor BlendInfo, bool Mipmap = false);
 	WGPUSamplerId CreateSampler(WGPUAddressMode ModeU, WGPUAddressMode ModeV, bool LinearMipmaps);
+	WGPUBufferId CreateBuffer(unsigned int Size, WGPUBufferUsage Usage, bool MappedAtCreation = false, const char *pLabel = 0);
+	WGPUBindGroupId CreateBindGroup(WGPUBindGroupLayoutId Layout, WGPUBindGroupEntry *pEntries, unsigned int Length, const char *pLabel = 0);
 	WGPUBindGroupId CreateTexBindGroup(WGPUTextureViewId TexView, WGPUSamplerId Sampler, bool Array = false);
-	WGPURenderPassId CreateRenderPass(WGPUCommandEncoderId CmdEncoder, WGPUTextureViewId TexView, WGPULoadOp LoadOp, WGPUColor ClearColor);
+	WGPURenderPass *CreateRenderPass(WGPUCommandEncoderId CmdEncoder, WGPUTextureViewId TexView, WGPULoadOp LoadOp, WGPUColor ClearColor);
 
 	WGPUBindGroupId GetTexBindGroup(CTextureData *pTex, int WrapModeU, int WrapModeV, bool Array);
 	WGPUCommandEncoderId GetCommandEncoder();
-	WGPURenderPassId GetRenderPass(bool Clear = false, IGraphics::CColor ClearColor = {0.0f, 0.0f, 0.0f, 1.0f});
+	WGPURenderPass *GetRenderPass(bool Clear = false, IGraphics::CColor ClearColor = {0.0f, 0.0f, 0.0f, 1.0f});
 	void EndRenderPass();
 
-	void SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPassId RPass);
+	void SetState(const CCommandBuffer::CState &State, int PrimType, WGPURenderPass *pRPass);
 
 	void Cmd_Init(const CInitCommand *pCommand);
 	void Cmd_Texture_Update(const CCommandBuffer::CTextureUpdateCommand *pCommand);
