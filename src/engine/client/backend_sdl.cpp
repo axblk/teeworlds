@@ -118,6 +118,45 @@ static const GLchar *s_pFragment2DTexArrayShader330 =
 	"    f_Color = texture(s_Texture, v_TexCoord) * v_Color;\n"
 	"}\n";
 
+static const GLchar *s_pFragmentMSDFShader120 =
+	"#version 120\n"
+	"uniform sampler2D s_Texture;\n"
+	"varying vec3 v_TexCoord;\n"
+	"varying vec4 v_Color;\n"
+	"float median(float r, float g, float b) {\n"
+	"    return max(min(r, g), min(max(r, g), b));\n"
+	"}\n"
+	"void main()\n"
+	"{\n"
+	"    float pxRange = 2.0;\n"
+	"    vec2 msdfUnit = pxRange/vec2(textureSize(s_Texture, 0));\n"
+	"    vec3 sample = texture2D(s_Texture, v_TexCoord.xy).rgb;\n"
+	"    float sigDist = median(sample.r, sample.g, sample.b) - 0.5;\n"
+	"    sigDist *= dot(msdfUnit, 0.5/fwidth(v_TexCoord.xy));\n"
+	"    float opacity = clamp(sigDist + 0.5, 0.0, 1.0);\n"
+	"    gl_FragColor = v_Color * opacity;\n"
+	"}\n";
+
+static const GLchar *s_pFragmentMSDFShader330 =
+	"#version 330 core\n"
+	"uniform sampler2D s_Texture;\n"
+	"in vec3 v_TexCoord;\n"
+	"in vec4 v_Color;\n"
+	"out vec4 f_Color;\n"
+	"float median(float r, float g, float b) {\n"
+	"    return max(min(r, g), min(max(r, g), b));\n"
+	"}\n"
+	"void main()\n"
+	"{\n"
+	"    float pxRange = 2.0;\n"
+	"    vec2 msdfUnit = pxRange/vec2(textureSize(s_Texture, 0));\n"
+	"    vec3 sample = texture(s_Texture, v_TexCoord.xy).rgb;\n"
+	"    float sigDist = median(sample.r, sample.g, sample.b) - 0.5;\n"
+	"    sigDist *= dot(msdfUnit, 0.5/fwidth(v_TexCoord.xy));\n"
+	"    float opacity = clamp(sigDist + 0.5, 0.0, 1.0);\n"
+	"    f_Color = v_Color * opacity;\n"
+	"}\n";
+
 // ------------ CGraphicsBackend_Threaded
 
 void CGraphicsBackend_Threaded::ThreadFunc(void *pUser)
@@ -284,7 +323,7 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 			//glBindTexture(Target, m_aTextures[State.m_Texture].m_Tex3D[State.m_TextureArrayIndex]);
 		}
 		else
-			dbg_msg("render", "invalid texture %d %d %d\n", State.m_Texture, State.m_Dimension, m_aTextures[State.m_Texture].m_State);
+			dbg_msg("render", "invalid texture %d %d %d", State.m_Texture, State.m_Dimension, m_aTextures[State.m_Texture].m_State);
 
 		if(m_aTextures[State.m_Texture].m_Format == CCommandBuffer::TEXFORMAT_RGBA)
 			SrcBlendMode = GL_ONE;
@@ -292,8 +331,15 @@ void CCommandProcessorFragment_OpenGL::SetState(const CCommandBuffer::CState &St
 			SrcBlendMode = GL_SRC_ALPHA;
 	}
 
-	const CShaderProgram *pPrograms[] = {&m_NoTexProgram, &m_2DTexProgram, &m_2DTexArrayProgram};
+	if(State.m_MSDF)
+	{
+		if(RenderMode == RENDER_NO_TEX)
+		 	dbg_msg("render", "using MSDF without texture");
+		else
+			RenderMode = RENDER_MSDF;
+	}
 
+	const CShaderProgram *pPrograms[] = {&m_NoTexProgram, &m_2DTexProgram, &m_2DTexArrayProgram, &m_MSDFProgram};
 	glUseProgram(pPrograms[RenderMode]->m_Program);
 
 	glUniform1i(pPrograms[RenderMode]->m_TextureLoc, 0);
@@ -502,6 +548,7 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 	const GLchar *pFragmentNoTexShaderSrc = LegacyGL ? s_pFragmentNoTexShader120 : s_pFragmentNoTexShader330;
 	const GLchar *pFragment2DTexShaderSrc = LegacyGL ? s_pFragment2DTexShader120 : s_pFragment2DTexShader330;
 	const GLchar *pFragment3DTexShaderSrc = LegacyGL ? s_pFragment3DTexShader120 : s_pFragment2DTexArrayShader330;
+	const GLchar *pFragmentMSDFShaderSrc = LegacyGL ? s_pFragmentMSDFShader120 : s_pFragmentMSDFShader330;
 
 	GLuint VertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(VertexShader, 1, &pVertexShaderSrc, NULL);
@@ -523,14 +570,21 @@ void CCommandProcessorFragment_OpenGL::Cmd_Init(const CInitCommand *pCommand)
 	glCompileShader(Fragment3DTexShader);
 	CheckShader(Fragment3DTexShader, "3d tex fragment shader");
 
+	GLuint FragmentMSDFShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(FragmentMSDFShader, 1, &pFragmentMSDFShaderSrc, NULL);
+	glCompileShader(FragmentMSDFShader);
+	CheckShader(FragmentMSDFShader, "MSDF fragment shader");
+
 	m_NoTexProgram.Create(VertexShader, FragmentNoTexShader, "no tex shader program");
 	m_2DTexProgram.Create(VertexShader, Fragment2DTexShader, "2d tex shader program");
 	m_2DTexArrayProgram.Create(VertexShader, Fragment3DTexShader, "2d tex array shader program");
+	m_MSDFProgram.Create(VertexShader, FragmentMSDFShader, "MSDF shader program");
 
 	glDeleteShader(VertexShader);
 	glDeleteShader(FragmentNoTexShader);
 	glDeleteShader(Fragment2DTexShader);
 	glDeleteShader(Fragment3DTexShader);
+	glDeleteShader(FragmentMSDFShader);
 
 	glGenBuffers(1, &m_StreamingBuffer.m_VertexBuffer);
 

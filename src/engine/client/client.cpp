@@ -691,6 +691,8 @@ void CClient::DebugRender()
 	if(!Config()->m_Debug)
 		return;
 
+	m_pTextRender->RenderAtlasTex();
+
 	static NETSTATS Prev, Current;
 	static int64 LastSnap = 0;
 	static float FrameTimeAvg = 0;

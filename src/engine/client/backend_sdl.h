@@ -136,11 +136,13 @@ class CCommandProcessorFragment_OpenGL
 		RENDER_NO_TEX=0,
 		RENDER_2D_TEX,
 		RENDER_2D_TEX_ARRAY,
+		RENDER_MSDF,
 	};
 
 	CShaderProgram m_NoTexProgram;
 	CShaderProgram m_2DTexProgram;
 	CShaderProgram m_2DTexArrayProgram;
+	CShaderProgram m_MSDFProgram;
 
 	CVertexBuffer m_StreamingBuffer;
 

@@ -152,6 +152,7 @@ public:
 	virtual void WrapClamp() = 0;
 	virtual void WrapMode(int WrapU, int WrapV) = 0;
 	virtual void SetPositionOffset(float x, float y) = 0;
+	virtual void SetMSDF(bool Active) = 0;
 	virtual int MemoryUsage() const = 0;
 	virtual int LastFrameDrawCalls() const = 0;
 

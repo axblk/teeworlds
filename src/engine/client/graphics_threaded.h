@@ -149,6 +149,8 @@ public:
 		int m_ClipY;
 		int m_ClipW;
 		int m_ClipH;
+
+		bool m_MSDF;
 	};
 
 	struct CClearCommand : public CCommand
@@ -441,6 +443,7 @@ public:
 	virtual void WrapMode(int WrapU, int WrapV);
 
 	virtual void SetPositionOffset(float x, float y);
+	virtual void SetMSDF(bool Active);
 
 	virtual int MemoryUsage() const;
 	virtual int LastFrameDrawCalls() const { return m_LastFrameDrawCalls; };
