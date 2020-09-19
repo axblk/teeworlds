@@ -32,7 +32,7 @@ CUI::CUI()
 	m_MouseWorldY = 0;
 	m_MouseButtons = 0;
 	m_LastMouseButtons = 0;
-	m_UseMouseButtons = true;
+	m_Enabled = true;
 
 	m_Screen.x = 0;
 	m_Screen.y = 0;
@@ -43,7 +43,7 @@ CUI::CUI()
 void CUI::Update(float MouseX, float MouseY, float MouseWorldX, float MouseWorldY)
 {
 	unsigned MouseButtons = 0;
-	if(m_UseMouseButtons)
+	if(Enabled())
 	{
 		if(Input()->KeyIsPressed(KEY_MOUSE_1)) MouseButtons |= 1;
 		if(Input()->KeyIsPressed(KEY_MOUSE_2)) MouseButtons |= 2;
@@ -60,6 +60,16 @@ void CUI::Update(float MouseX, float MouseY, float MouseWorldX, float MouseWorld
 	if(m_pActiveItem)
 		m_pHotItem = m_pActiveItem;
 	m_pBecommingHotItem = 0;
+}
+
+bool CUI::KeyPress(int Key) const
+{
+	return Enabled() && Input()->KeyPress(Key);
+}
+
+bool CUI::KeyIsPressed(int Key) const
+{
+	return Enabled() && Input()->KeyIsPressed(Key);
 }
 
 void CUI::ConvertCursorMove(float *pX, float *pY, int CursorType) const
@@ -308,30 +318,33 @@ bool CUIRect::Inside(float x, float y) const
 		&& y < this->y + this->h;
 }
 
-bool CUI::DoButtonLogic(const void *pID, const CUIRect *pRect)
+bool CUI::DoButtonLogic(const void *pID, const CUIRect *pRect, int Button)
 {
 	// logic
 	bool Clicked = false;
+	static int s_LastButton = -1;
 	const bool Hovered = MouseHovered(pRect);
 
 	if(CheckActiveItem(pID))
 	{
-		if(!MouseButton(0))
+		if(s_LastButton == Button && !MouseButton(s_LastButton))
 		{
 			if(Hovered)
 				Clicked = true;
 			SetActiveItem(0);
+			s_LastButton = -1;
 		}
 	}
 	else if(HotItem() == pID)
 	{
-		if(MouseButton(0))
+		if(MouseButton(Button))
 		{
 			SetActiveItem(pID);
+			s_LastButton = Button;
 		}
 	}
 
-	if(Hovered && !MouseButton(0))
+	if(Hovered && !MouseButton(Button))
 		SetHotItem(pID);
 
 	return Clicked;

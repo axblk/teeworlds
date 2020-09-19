@@ -53,7 +53,7 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 
 	CUIRect SeekBar, ButtonBar, NameBar;
 
-	const bool CtrlDown = Input()->KeyIsPressed(KEY_LCTRL) || Input()->KeyIsPressed(KEY_RCTRL);
+	const bool CtrlDown = UI()->KeyIsPressed(KEY_LCTRL) || UI()->KeyIsPressed(KEY_RCTRL);
 	static bool s_LastCtrlDown = CtrlDown;
 
 	int CurrentTick = pInfo->m_CurrentTick - pInfo->m_FirstTick;
@@ -162,16 +162,15 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 	// rewind when reaching the end
 	if(CurrentTick == TotalTicks)
 	{
-		m_pClient->OnReset();
 		DemoPlayer()->Pause();
 		PositionToSeek = 0.0f;
 	}
 
-	bool IncreaseDemoSpeed = Input()->KeyPress(KEY_MOUSE_WHEEL_UP) || Input()->KeyPress(KEY_PLUS) || Input()->KeyPress(KEY_KP_PLUS);
-	bool DecreaseDemoSpeed = Input()->KeyPress(KEY_MOUSE_WHEEL_DOWN) || Input()->KeyPress(KEY_MINUS) || Input()->KeyPress(KEY_KP_MINUS);
+	bool IncreaseDemoSpeed = UI()->KeyPress(KEY_MOUSE_WHEEL_UP) || UI()->KeyPress(KEY_PLUS) || UI()->KeyPress(KEY_KP_PLUS);
+	bool DecreaseDemoSpeed = UI()->KeyPress(KEY_MOUSE_WHEEL_DOWN) || UI()->KeyPress(KEY_MINUS) || UI()->KeyPress(KEY_KP_MINUS);
 
 	// add spacebar for toggling Play/Pause
-	if(Input()->KeyPress(KEY_SPACE))
+	if(UI()->KeyPress(KEY_SPACE))
 	{
 		if(!pInfo->m_Paused)
 			DemoPlayer()->Pause();
@@ -181,8 +180,8 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 
 	// skip forward/backward using left/right arrow keys
 	const bool ShiftDown = Input()->KeyIsPressed(KEY_LSHIFT) || Input()->KeyIsPressed(KEY_RSHIFT);
-	const bool SkipBackwards = Input()->KeyPress(KEY_LEFT);
-	const bool SkipForwards = Input()->KeyPress(KEY_RIGHT);
+	const bool SkipBackwards = UI()->KeyPress(KEY_LEFT);
+	const bool SkipForwards = UI()->KeyPress(KEY_RIGHT);
 	if(SkipBackwards || SkipForwards)
 	{
 		int DesiredTick = 0;
@@ -276,7 +275,6 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 		static CButtonContainer s_ResetButton;
 		if(DoButton_SpriteID(&s_ResetButton, IMAGE_DEMOBUTTONS, SPRITE_DEMOBUTTON_STOP, false, &Button, CUI::CORNER_ALL))
 		{
-			m_pClient->OnReset();
 			DemoPlayer()->Pause();
 			PositionToSeek = 0.0f;
 		}
@@ -554,7 +552,7 @@ void CMenus::RenderDemoList(CUIRect MainView)
 			for(int c = 0; c < NumCols; c++)
 			{
 				CUIRect Button;
-				Button.x = ms_aDemoCols[c].m_Rect.x + FileIcon.w + 10.0f;
+				Button.x = ms_aDemoCols[c].m_Rect.x;
 				Button.y = FileIcon.y;
 				Button.h = ms_aDemoCols[c].m_Rect.h;
 				Button.w = ms_aDemoCols[c].m_Rect.w;
@@ -568,6 +566,7 @@ void CMenus::RenderDemoList(CUIRect MainView)
 				}
 				if(ID == COL_DEMO_NAME)
 				{
+					Button.x += FileIcon.w + 10.0f;
 					UI()->DoLabel(&Button, DemoItem.m_aName, Item.m_Rect.h*ms_FontmodHeight*0.8f, CUI::ALIGN_LEFT);
 				}
 				else if(ID == COL_DEMO_LENGTH && !r.front().m_IsDir && r.front().m_InfosLoaded)
@@ -657,7 +656,7 @@ void CMenus::RenderDemoList(CUIRect MainView)
 
 	BottomView.VSplitLeft(ButtonWidth, &Button, &BottomView);
 	static CButtonContainer s_RefreshButton;
-	if(DoButton_Menu(&s_RefreshButton, Localize("Refresh"), 0, &Button) || (Input()->KeyPress(KEY_R) && (Input()->KeyIsPressed(KEY_LCTRL) || Input()->KeyIsPressed(KEY_RCTRL))))
+	if(DoButton_Menu(&s_RefreshButton, Localize("Refresh"), 0, &Button) || (UI()->KeyPress(KEY_R) && (Input()->KeyIsPressed(KEY_LCTRL) || Input()->KeyIsPressed(KEY_RCTRL))))
 	{
 		DemolistPopulate();
 		DemolistOnUpdate(false);
