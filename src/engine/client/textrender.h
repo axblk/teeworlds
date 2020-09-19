@@ -20,14 +20,10 @@ enum
 	PAGE_COUNT = 2,
 };
 
-// TODO: use SDF or MSDF font instead of multiple font sizes
-static int s_aFontSizes[] = {8,9,10,11,12,13,14,15,16,17,18,19,20,36,64};
-#define NUM_FONT_SIZES (sizeof(s_aFontSizes)/sizeof(int))
 #define PAGE_SIZE (TEXTURE_SIZE/PAGE_COUNT)
 
 struct CGlyph
 {
-	int m_FontSizeIndex;
 	int m_ID;
 	int m_AtlasIndex;
 	int m_PageID;
@@ -44,18 +40,16 @@ struct CGlyph
 
 struct CGlyphIndex
 {
-	int m_FontSizeIndex;
 	int m_ID;
 	CGlyph *m_pGlyph;
 
 	friend bool operator ==(const CGlyphIndex& l, const CGlyphIndex& r)
 	{
-		return l.m_ID == r.m_ID && l.m_FontSizeIndex == r.m_FontSizeIndex;
+		return l.m_ID == r.m_ID;
 	};
 	friend bool operator < (const CGlyphIndex& l, const CGlyphIndex& r)
 	{
-		if (l.m_FontSizeIndex == r.m_FontSizeIndex) return l.m_ID < r.m_ID;
-		return l.m_FontSizeIndex < r.m_FontSizeIndex;
+		return l.m_ID < r.m_ID;
 	};
 	friend bool operator > (const CGlyphIndex& l, const CGlyphIndex& r) { return r < l; };
 	friend bool operator <=(const CGlyphIndex& l, const CGlyphIndex& r) { return !(l > r); };
@@ -96,8 +90,7 @@ public:
 class CGlyphMap
 {
 	IGraphics *m_pGraphics;
-	FT_Stroker m_FtStroker;
-	IGraphics::CTextureHandle m_aTextures[2];
+	IGraphics::CTextureHandle m_Texture;
 	CAtlas m_aAtlasPages[PAGE_COUNT*PAGE_COUNT];
 	int m_ActiveAtlasIndex;
 	sorted_array<CGlyphIndex> m_Glyphs;
@@ -112,18 +105,16 @@ class CGlyphMap
 	FT_Face m_aFtFaces[MAX_FACES];
 	int m_NumFtFaces;
 
-	int AdjustOutlineThicknessToFontSize(int OutlineThickness, int FontSize);
-
 	void InitTexture(int Width, int Height);
 	int FitGlyph(int Width, int Height, ivec2 *Position);
-	void UploadGlyph(int TextureIndex, int PosX, int PosY, int Width, int Height, const unsigned char *pData);
+	void UploadGlyph(int PosX, int PosY, int Width, int Height, const unsigned char *pData);
 	bool SetFaceByName(FT_Face *pFace, const char *pFamilyName);
 	int GetCharGlyph(int Chr, FT_Face *pFace);
 public:
 	CGlyphMap(IGraphics *pGraphics, FT_Library FtLibrary);
 	~CGlyphMap();
 
-	IGraphics::CTextureHandle GetTexture(int Index) { return m_aTextures[Index]; }
+	IGraphics::CTextureHandle GetTexture() { return m_Texture; }
 	FT_Face GetDefaultFace() { return m_DefaultFace; };
 	int AddFace(FT_Face Face);
 	void SetDefaultFaceByName(const char *pFamilyName);
@@ -131,9 +122,8 @@ public:
 	void SetVariantFaceByName(const char *pFamilyName);
 	
 	bool RenderGlyph(CGlyph *pGlyph, bool Render);
-	CGlyph *GetGlyph(int Chr, int FontSizeIndex, bool Render);
-	int GetFontSizeIndex(int PixelSize);
-	vec2 Kerning(CGlyph *pLeft, CGlyph *pRight, int PixelSize);
+	CGlyph *GetGlyph(int Chr, bool Render);
+	vec2 Kerning(CGlyph *pLeft, CGlyph *pRight);
 
 	int NumTotalPages() { return m_NumTotalPages; }
 	void PagesAccessReset();
@@ -188,10 +178,10 @@ class CTextRender : public IEngineTextRender
 	}
 
 	CWordWidthHint MakeWord(CTextCursor *pCursor, const char *pText, const char *pEnd, 
-						int FontSizeIndex, float Size, int PixelSize, vec2 ScreenScale);
+						float Size, int PixelSize, vec2 ScreenScale);
 	void TextRefreshGlyphs(CTextCursor *pCursor);
 
-	void DrawText(CTextCursor *pCursor, vec2 Offset, int Texture, bool IsSecondary, float Alpha, int StartGlyph, int NumGlyphs);
+	void DrawText(CTextCursor *pCursor, vec2 Offset, bool IsSecondary, float Alpha, int StartGlyph, int NumGlyphs);
 
 public:
 	CTextRender();
@@ -223,6 +213,8 @@ public:
 	void DrawTextShadowed(CTextCursor *pCursor, vec2 ShadowOffset, float Alpha, int StartGlyph, int NumGlyphs);
 
 	vec2 CaretPosition(CTextCursor *pCursor, int NumChars);
+
+	void RenderAtlasTex();
 };
 
 #endif
