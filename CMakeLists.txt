@@ -21,10 +21,6 @@ if(POLICY CMP0017)
   cmake_policy(SET CMP0017 NEW)
 endif()
 
-if(POLICY CMP0072)
-  cmake_policy(SET CMP0072 OLD)
-endif()
-
 if(POLICY CMP0091)
   cmake_policy(SET CMP0091 NEW)
 endif()
@@ -85,8 +81,6 @@ option(DOWNLOAD_DEPENDENCIES "Download dependencies (only available on Windows)"
 option(DOWNLOAD_GTEST "Download and compile GTest if not found" ${AUTO_DEPENDENCIES_DEFAULT})
 option(PREFER_BUNDLED_LIBS "Prefer bundled libraries over system libraries" ${AUTO_DEPENDENCIES_DEFAULT})
 option(DEV "Don't generate stuff necessary for packaging" OFF)
-
-set(OpenGL_GL_PREFERENCE LEGACY)
 
 # Set the default build type to Release
 if(NOT(CMAKE_BUILD_TYPE))
@@ -398,23 +392,21 @@ endif()
 
 if(TARGET_OS STREQUAL "windows")
   set(PLATFORM_CLIENT)
-  set(PLATFORM_CLIENT_LIBS opengl32 winmm)
+  set(PLATFORM_CLIENT_LIBS winmm)
   set(PLATFORM_LIBS ws2_32) # Windows sockets
 elseif(TARGET_OS STREQUAL "mac")
   find_library(CARBON Carbon)
   find_library(COCOA Cocoa)
-  find_library(OPENGL OpenGL)
   set(PLATFORM_CLIENT
     src/osxlaunch/client.m
   )
-  set(PLATFORM_CLIENT_LIBS ${COCOA} ${OPENGL})
+  set(PLATFORM_CLIENT_LIBS ${COCOA})
   set(PLATFORM_LIBS ${CARBON})
 else()
   set(PLATFORM_CLIENT)
-  find_package(OpenGL)
   find_package(X11)
-  set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY} ${X11_X11_LIB})
-  set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR} ${X11_X11_INCLUDE_PATH})
+  set(PLATFORM_CLIENT_LIBS ${X11_X11_LIB})
+  set(PLATFORM_CLIENT_INCLUDE_DIRS ${X11_X11_INCLUDE_PATH})
   if(TARGET_OS STREQUAL "linux")
     set(PLATFORM_LIBS rt) # clock_gettime for glibc < 2.17
   else()
@@ -488,8 +480,12 @@ add_library(json EXCLUDE_FROM_ALL OBJECT ${DEP_JSON_SRC})
 set_src(DEP_MD5_SRC GLOB src/engine/external/md5 md5.c md5.h)
 add_library(md5 EXCLUDE_FROM_ALL OBJECT ${DEP_MD5_SRC})
 
-list(APPEND TARGETS_DEP json md5)
+set_src(DEP_GLAD_SRC GLOB src/engine/external/glad glad.c glad.h khrplatform.h)
+add_library(glad EXCLUDE_FROM_ALL OBJECT ${DEP_GLAD_SRC})
+
+list(APPEND TARGETS_DEP json md5 glad)
 set(DEP_JSON $<TARGET_OBJECTS:json>)
+set(DEP_GLAD $<TARGET_OBJECTS:glad>)
 set(DEP_MD5)
 if(NOT CRYPTO_FOUND)
   set(DEP_MD5 $<TARGET_OBJECTS:md5>)
@@ -1524,7 +1520,7 @@ if(CLIENT)
   )
   set(CLIENT_SRC ${PLATFORM_CLIENT} ${ENGINE_CLIENT} ${GAME_CLIENT} ${GAME_EDITOR} ${GAME_GENERATED_CLIENT})
 
-  set(DEPS_CLIENT ${DEPS} ${PNGLITE_DEP} ${WAVPACK_DEP})
+  set(DEPS_CLIENT ${DEPS} ${PNGLITE_DEP} ${WAVPACK_DEP} ${DEP_GLAD})
 
   # Libraries
   set(LIBS_CLIENT
@@ -1534,6 +1530,7 @@ if(CLIENT)
     ${SDL2_LIBRARIES}
     ${WAVPACK_LIBRARIES}
     ${PLATFORM_CLIENT_LIBS}
+    ${CMAKE_DL_LIBS}
   )
 
   if(TARGET_OS STREQUAL "windows")

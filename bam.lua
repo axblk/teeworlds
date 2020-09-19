@@ -103,9 +103,10 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 	local wavpack = Compile(settings, Collect("src/engine/external/wavpack/*.c"))
 	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
 	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
+	local glad = Compile(settings, Collect("src/engine/external/glad/*.c"))
 
 	-- globally available libs
-	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json}
+	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json, glad=glad}
 end
 
 function GenerateMacOSXSettings(settings, conf, arch, compiler)
@@ -162,7 +163,6 @@ function GenerateMacOSXSettings(settings, conf, arch, compiler)
 	AddDependency(server_exe, serverlaunch)
 
 	-- Client
-	settings.link.frameworks:Add("OpenGL")
 	settings.link.frameworks:Add("AGL")
 	-- FIXME: the SDL config is applied in BuildClient too but is needed here before so the launcher will compile
 	config.sdl:Apply(settings)
@@ -207,7 +207,7 @@ function GenerateLinuxSettings(settings, conf, arch, compiler)
 
 	-- Client
 	settings.link.libs:Add("X11")
-	settings.link.libs:Add("GL")
+	settings.link.flags:Add("-ldl")
 	BuildClient(settings)
 
 	-- Content
@@ -270,7 +270,6 @@ function GenerateWindowsSettings(settings, conf, target_arch, compiler)
 	-- Client
 	settings.link.extrafiles:Add(icons.client)
 	settings.link.extrafiles:Add(manifests.client)
-	settings.link.libs:Add("opengl32")
 	settings.link.libs:Add("winmm")
 	BuildClient(settings)
 
@@ -355,7 +354,7 @@ function BuildClient(settings, family, platform)
 	local game_client = Compile(settings, CollectRecursive("src/game/client/*.cpp"), SharedClientFiles())
 	local game_editor = Compile(settings, Collect("src/game/editor/*.cpp"))
 	
-	Link(settings, "teeworlds", libs["zlib"], libs["md5"], libs["wavpack"], libs["png"], libs["json"], client, game_client, game_editor)
+	Link(settings, "teeworlds", libs["zlib"], libs["md5"], libs["wavpack"], libs["png"], libs["json"], libs["glad"], client, game_client, game_editor)
 end
 
 function BuildServer(settings, family, platform)

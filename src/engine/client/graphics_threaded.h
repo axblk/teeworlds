@@ -30,13 +30,13 @@ class CCommandBuffer
 			m_Used = 0;
 		}
 
-		void *Alloc(unsigned Requested)
+		int Alloc(unsigned Requested)
 		{
 			if(Requested + m_Used > m_Size)
-				return 0;
-			void *pPtr = &m_pData[m_Used];
+				return -1;
+			int Offset = m_Used;
 			m_Used += Requested;
-			return pPtr;
+			return Offset;
 		}
 
 		unsigned char *DataPtr() { return m_pData; }
@@ -51,6 +51,7 @@ public:
 	enum
 	{
 		MAX_TEXTURES=1024*4,
+		MAX_VERTEX_BUFFERS=1024*4,
 	};
 
 	enum
@@ -73,6 +74,11 @@ public:
 		CMD_TEXTURE_CREATE,
 		CMD_TEXTURE_DESTROY,
 		CMD_TEXTURE_UPDATE,
+
+		// vertex buffer commands
+		CMD_VERTEX_BUFFER_CREATE,
+		CMD_VERTEX_BUFFER_DESTROY,
+		CMD_VERTEX_BUFFER_UPDATE,
 
 		// rendering
 		CMD_CLEAR,
@@ -107,7 +113,7 @@ public:
 		//
 		PRIMTYPE_INVALID = 0,
 		PRIMTYPE_LINES,
-		PRIMTYPE_QUADS,
+		PRIMTYPE_TRIANGLES,
 	};
 
 	enum
@@ -115,17 +121,6 @@ public:
 		BLEND_NONE = 0,
 		BLEND_ALPHA,
 		BLEND_ADDITIVE,
-	};
-
-	struct CPoint { float x, y; };
-	struct CTexCoord { float u, v, i; };
-	struct CColor { float r, g, b, a; };
-
-	struct CVertex
-	{
-		CPoint m_Pos;
-		CTexCoord m_Tex;
-		CColor m_Color;
 	};
 
 	struct CCommand
@@ -142,10 +137,11 @@ public:
 		int m_WrapModeU;
 		int m_WrapModeV;
 		int m_Texture;
-		int m_TextureArrayIndex;
 		int m_Dimension;
-		CPoint m_ScreenTL;
-		CPoint m_ScreenBR;
+		int m_VertexBuffer;
+		IGraphics::CPoint m_PositionOffset;
+		IGraphics::CPoint m_ScreenTL;
+		IGraphics::CPoint m_ScreenBR;
 
 		// clip
 		bool m_ClipEnable;
@@ -158,7 +154,7 @@ public:
 	struct CClearCommand : public CCommand
 	{
 		CClearCommand() : CCommand(CMD_CLEAR) {}
-		CColor m_Color;
+		IGraphics::CColor m_Color;
 	};
 
 	struct CSignalCommand : public CCommand
@@ -179,7 +175,7 @@ public:
 		CState m_State;
 		unsigned m_PrimType;
 		unsigned m_PrimCount;
-		CVertex *m_pVertices; // you should use the command buffer data to allocate vertices for this command
+		int m_Offset; // you should use the command buffer data to allocate vertices for this command
 	};
 
 	struct CScreenshotCommand : public CCommand
@@ -244,15 +240,59 @@ public:
 		int m_Slot;
 	};
 
+	struct CVertexBufferCreateCommand : public CCommand
+	{
+		CVertexBufferCreateCommand() : CCommand(CMD_VERTEX_BUFFER_CREATE) {}
+
+		// vertex buffer information
+		int m_Slot;
+
+		int m_Usage;
+		int m_Size;
+		int m_DataOffset;
+	};
+
+	struct CVertexBufferUpdateCommand : public CCommand
+	{
+		CVertexBufferUpdateCommand() : CCommand(CMD_VERTEX_BUFFER_UPDATE) {}
+
+		// vertex buffer information
+		int m_Slot;
+
+		int m_Offset;
+		int m_Size;
+		bool m_Recreate;
+		int m_DataOffset;
+	};
+
+
+	struct CVertexBufferDestroyCommand : public CCommand
+	{
+		CVertexBufferDestroyCommand() : CCommand(CMD_VERTEX_BUFFER_DESTROY) {}
+
+		// vertex buffer information
+		int m_Slot;
+	};
+
 	//
 	CCommandBuffer(unsigned CmdBufferSize, unsigned DataBufferSize)
 	: m_CmdBuffer(CmdBufferSize), m_DataBuffer(DataBufferSize)
 	{
 	}
 
-	void *AllocData(unsigned WantedSize)
+	int AllocData(unsigned WantedSize)
 	{
 		return m_DataBuffer.Alloc(WantedSize);
+	}
+
+	unsigned char *DataPtr()
+	{
+		return m_DataBuffer.DataPtr();
+	}
+
+	unsigned DataUsed() const
+	{
+		return m_DataBuffer.DataUsed();
 	}
 
 	template<class T>
@@ -262,9 +302,10 @@ public:
 		(void)static_cast<const CCommand *>(&Command);
 
 		// allocate and copy the command into the buffer
-		CCommand *pCmd = (CCommand *)m_CmdBuffer.Alloc(sizeof(Command));
-		if(!pCmd)
+		int Offset = m_CmdBuffer.Alloc(sizeof(Command));
+		if(Offset < 0)
 			return false;
+		CCommand *pCmd = (CCommand *)(&m_CmdBuffer.DataPtr()[Offset]);
 		mem_copy(pCmd, &Command, sizeof(Command));
 		pCmd->m_Size = sizeof(Command);
 		return true;
@@ -308,7 +349,6 @@ public:
 	virtual int Shutdown() = 0;
 
 	virtual int MemoryUsage() const = 0;
-	virtual int GetTextureArraySize() const = 0;
 
 	virtual int GetNumScreens() const = 0;
 
@@ -336,6 +376,7 @@ class CGraphics_Threaded : public IEngineGraphics
 
 		MAX_VERTICES = 32*1024,
 		MAX_TEXTURES = 1024*4,
+		MAX_VERTEX_BUFFERS = 1024*4,
 
 		DRAWING_QUADS=1,
 		DRAWING_LINES=2
@@ -353,13 +394,16 @@ class CGraphics_Threaded : public IEngineGraphics
 	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 
-	CCommandBuffer::CVertex m_aVertices[MAX_VERTICES];
+	IGraphics::CVertex m_aVertices[MAX_VERTICES];
 	int m_NumVertices;
 
-	CCommandBuffer::CColor m_aColor[4];
-	CCommandBuffer::CTexCoord m_aTexture[4];
+	IGraphics::CColor m_aColor[4];
+	IGraphics::CTexCoord m_aTexture[4];
 
 	bool m_RenderEnable;
+
+	int m_DrawCallCounter;
+	int m_LastFrameDrawCalls;
 
 	float m_Rotation;
 	int m_Drawing;
@@ -368,14 +412,15 @@ class CGraphics_Threaded : public IEngineGraphics
 
 	CTextureHandle m_InvalidTexture;
 
-	int m_TextureArrayIndex;
 	int m_aTextureIndices[MAX_TEXTURES];
 	int m_FirstFreeTexture;
-	int m_TextureMemoryUsage;
+
+	int m_aVertexBufferIndices[MAX_VERTEX_BUFFERS];
+	int m_FirstFreeVertexBuffer;
 
 	void FlushVertices();
 	void AddVertices(int Count);
-	void Rotate4(const CCommandBuffer::CPoint &rCenter, CCommandBuffer::CVertex *pPoints);
+	void Rotate6(const CPoint &rCenter, CVertex *pPoints);
 
 	void KickCommandBuffer();
 
@@ -395,7 +440,10 @@ public:
 	virtual void WrapClamp();
 	virtual void WrapMode(int WrapU, int WrapV);
 
+	virtual void SetPositionOffset(float x, float y);
+
 	virtual int MemoryUsage() const;
+	virtual int LastFrameDrawCalls() const { return m_LastFrameDrawCalls; };
 
 	virtual void MapScreen(float TopLeftX, float TopLeftY, float BottomRightX, float BottomRightY);
 	virtual void GetScreen(float *pTopLeftX, float *pTopLeftY, float *pBottomRightX, float *pBottomRightY);
@@ -412,11 +460,26 @@ public:
 	virtual IGraphics::CTextureHandle LoadTexture(const char *pFilename, int StorageType, int StoreFormat, int Flags);
 	virtual int LoadPNG(CImageInfo *pImg, const char *pFilename, int StorageType);
 
+	virtual int UnloadVertexBuffer(CVertexBufferHandle *pVertexBuffer);
+	virtual CVertexBufferHandle LoadVertexBuffer(int NumVertices, const IGraphics::CVertex *pVertices, int Usage);
+	virtual int LoadVertexBufferSub(CVertexBufferHandle *pVertexBuffer, int Offset, int NumVertices, const IGraphics::CVertex *pVertices, bool Recreate);
+
 	void ScreenshotDirect(const char *pFilename);
 
 	virtual void TextureSet(CTextureHandle TextureID);
 
 	virtual void Clear(float r, float g, float b);
+
+	void RenderVertices(const IGraphics::CVertex *pVertices, int PrimCount, unsigned PrimType);
+	virtual void RenderTriangles(const IGraphics::CVertex *pVertices, int PrimCount)
+	{
+		RenderVertices(pVertices, PrimCount, CCommandBuffer::PRIMTYPE_TRIANGLES);
+	}
+	void RenderVertexBuffer(IGraphics::CVertexBufferHandle VertexBuffer, int Offset, int PrimCount, unsigned PrimType);
+	virtual void RenderTrianglesVertexBuffer(IGraphics::CVertexBufferHandle VertexBuffer, int Offset, int PrimCount)
+	{
+		RenderVertexBuffer(VertexBuffer, Offset, PrimCount, CCommandBuffer::PRIMTYPE_TRIANGLES);
+	}
 
 	virtual void QuadsBegin();
 	virtual void QuadsEnd();
@@ -426,7 +489,6 @@ public:
 	virtual void SetColor(float r, float g, float b, float a);
 	virtual void SetColor4(const vec4 &TopLeft, const vec4 &TopRight, const vec4 &BottomLeft, const vec4 &BottomRight);
 
-	void TilesetFallbackSystem(int TextureIndex);
 	virtual void QuadsSetSubset(float TlU, float TlV, float BrU, float BrV, int TextureIndex = -1);
 	virtual void QuadsSetSubsetFree(
 		float x0, float y0, float x1, float y1,

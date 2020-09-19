@@ -81,6 +81,24 @@ public:
 		WRAP_CLAMP,
 	};
 
+	enum
+	{
+		VERTEX_BUFFER_STATIC=0,
+		VERTEX_BUFFER_DYNAMIC,
+		VERTEX_BUFFER_STREAM
+	};
+
+	struct CPoint { float x, y; };
+	struct CTexCoord { float u, v, i; };
+	struct CColor { float r, g, b, a; };
+
+	struct CVertex
+	{
+		CPoint m_Pos;
+		CTexCoord m_Tex;
+		CColor m_Color;
+	};
+
 	class CTextureHandle
 	{
 		friend class IGraphics;
@@ -92,6 +110,22 @@ public:
 
 		bool IsValid() const { return Id() >= 0; }
 		int Id() const { return m_Id; }
+		void Invalidate() { m_Id = -1; }
+	};
+
+	class CVertexBufferHandle
+	{
+		friend class IGraphics;
+		int m_Id;
+		int m_NumVertices;
+	public:
+		CVertexBufferHandle()
+		: m_Id(-1), m_NumVertices(0)
+		{}
+
+		bool IsValid() const { return Id() >= 0; }
+		int Id() const { return m_Id; }
+		int NumVertices() const { return m_NumVertices; }
 		void Invalidate() { m_Id = -1; }
 	};
 
@@ -117,7 +151,9 @@ public:
 	virtual void WrapNormal() = 0;
 	virtual void WrapClamp() = 0;
 	virtual void WrapMode(int WrapU, int WrapV) = 0;
+	virtual void SetPositionOffset(float x, float y) = 0;
 	virtual int MemoryUsage() const = 0;
+	virtual int LastFrameDrawCalls() const = 0;
 
 	virtual int LoadPNG(CImageInfo *pImg, const char *pFilename, int StorageType) = 0;
 
@@ -128,6 +164,10 @@ public:
 	virtual void TextureSet(CTextureHandle Texture) = 0;
 	void TextureClear() { TextureSet(CTextureHandle()); }
 
+	virtual int UnloadVertexBuffer(CVertexBufferHandle *pVertexBuffer) = 0;
+	virtual CVertexBufferHandle LoadVertexBuffer(int NumVertices, const IGraphics::CVertex *pVertices, int Usage = VERTEX_BUFFER_DYNAMIC) = 0;
+	virtual int LoadVertexBufferSub(CVertexBufferHandle *pVertexBuffer, int Offset, int NumVertices, const IGraphics::CVertex *pVertices, bool Recreate = false) = 0;
+
 	struct CLineItem
 	{
 		float m_X0, m_Y0, m_X1, m_Y1;
@@ -137,6 +177,10 @@ public:
 	virtual void LinesBegin() = 0;
 	virtual void LinesEnd() = 0;
 	virtual void LinesDraw(const CLineItem *pArray, int Num) = 0;
+
+	virtual void RenderTriangles(const CVertex *pVertices, int PrimCount) = 0;
+
+	virtual void RenderTrianglesVertexBuffer(IGraphics::CVertexBufferHandle VertexBuffer, int Offset, int PrimCount) = 0;
 
 	virtual void QuadsBegin() = 0;
 	virtual void QuadsEnd() = 0;
@@ -193,6 +237,14 @@ protected:
 		CTextureHandle Tex;
 		Tex.m_Id = Index;
 		return Tex;
+	}
+
+	inline CVertexBufferHandle CreateVertexBufferHandle(int Index, int NumVertices)
+	{
+		CVertexBufferHandle VertexBuffer;
+		VertexBuffer.m_Id = Index;
+		VertexBuffer.m_NumVertices = NumVertices;
+		return VertexBuffer;
 	}
 };
 
