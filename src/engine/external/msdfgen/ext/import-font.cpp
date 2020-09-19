@@ -19,19 +19,23 @@ namespace msdfgen {
 class FreetypeHandle {
     friend FreetypeHandle * initializeFreetype();
     friend void deinitializeFreetype(FreetypeHandle *library);
-    friend FontHandle * loadFont(FreetypeHandle *library, const char *filename);
+    friend FontHandle * loadFont(FreetypeHandle *library, const void *data, long size, int index);
 
     FT_Library library;
 
 };
 
 class FontHandle {
-    friend FontHandle * loadFont(FreetypeHandle *library, const char *filename);
+    friend FontHandle * loadFont(FreetypeHandle *library, const void *data, long size, int index);
     friend void destroyFont(FontHandle *font);
     friend bool getFontMetrics(FontMetrics &metrics, FontHandle *font);
     friend bool getFontWhitespaceWidth(double &spaceAdvance, double &tabAdvance, FontHandle *font);
-    friend bool loadGlyph(Shape &output, FontHandle *font, unicode_t unicode, double *advance);
+    friend bool loadGlyph(Shape &output, FontHandle *font, unsigned int index, double *advance);
     friend bool getKerning(double &output, FontHandle *font, unicode_t unicode1, unicode_t unicode2);
+    friend int unsigned getCharIndex(FontHandle *font, int chr);
+    friend int getNumFaces(FontHandle *font);
+    friend const char *getStyleName(FontHandle *font);
+    friend const char *getFamilyName(FontHandle *font);
 
     FT_Face face;
 
@@ -94,11 +98,11 @@ void deinitializeFreetype(FreetypeHandle *library) {
     delete library;
 }
 
-FontHandle * loadFont(FreetypeHandle *library, const char *filename) {
+FontHandle * loadFont(FreetypeHandle *library, const void *data, long size, int index) {
     if (!library)
         return NULL;
     FontHandle *handle = new FontHandle;
-    FT_Error error = FT_New_Face(library->library, filename, 0, &handle->face);
+    FT_Error error = FT_New_Memory_Face(library->library, (FT_Byte *)data, size, index, &handle->face);
     if (error) {
         delete handle;
         return NULL;
@@ -133,10 +137,10 @@ bool getFontWhitespaceWidth(double &spaceAdvance, double &tabAdvance, FontHandle
     return true;
 }
 
-bool loadGlyph(Shape &output, FontHandle *font, unicode_t unicode, double *advance) {
+bool loadGlyph(Shape &output, FontHandle *font, unsigned int index, double *advance) {
     if (!font)
         return false;
-    FT_Error error = FT_Load_Char(font->face, unicode, FT_LOAD_NO_SCALE);
+    FT_Error error = FT_Load_Glyph(font->face, index, FT_LOAD_NO_SCALE);
     if (error)
         return false;
     output.contours.clear();
@@ -169,6 +173,22 @@ bool getKerning(double &output, FontHandle *font, unicode_t unicode1, unicode_t 
     }
     output = F26DOT6_TO_DOUBLE(kerning.x);
     return true;
+}
+
+unsigned int getCharIndex(FontHandle *font, int chr) {
+    return FT_Get_Char_Index(font->face, (FT_ULong)chr);
+}
+
+int getNumFaces(FontHandle *font) {
+    return font->face->num_faces;
+}
+
+const char *getStyleName(FontHandle *font) {
+    return font->face->style_name;
+}
+
+const char *getFamilyName(FontHandle *font) {
+    return font->face->family_name;
 }
 
 }

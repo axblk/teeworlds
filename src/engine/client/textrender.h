@@ -3,14 +3,12 @@
 #ifndef ENGINE_CLIENT_TEXTRENDER_H
 #define ENGINE_CLIENT_TEXTRENDER_H
 
+#include <engine/external/msdfgen/msdfgen.h>
+#include <engine/external/msdfgen/msdfgen-ext.h>
+
 #include <base/tl/sorted_array.h>
 #include <base/vmath.h>
 #include <engine/textrender.h>
-
-// ft2 texture
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#include FT_STROKER_H
 
 enum
 {
@@ -27,7 +25,7 @@ struct CGlyph
 	int m_ID;
 	int m_AtlasIndex;
 	int m_PageID;
-	FT_Face m_Face;
+	msdfgen::FontHandle *m_pFace;
 
 	bool m_Rendered;
 	float m_Width;
@@ -89,41 +87,45 @@ public:
 
 class CGlyphMap
 {
+	static unsigned char ms_aGlyphData[64 * 64 * 3];
+
 	IGraphics *m_pGraphics;
 	IGraphics::CTextureHandle m_Texture;
 	CAtlas m_aAtlasPages[PAGE_COUNT*PAGE_COUNT];
 	int m_ActiveAtlasIndex;
 	sorted_array<CGlyphIndex> m_Glyphs;
 
+	msdfgen::Bitmap<float, 3> m_MSDF;
+
 	int m_NumTotalPages;
 
-	FT_Face m_DefaultFace;
-	FT_Face m_VariantFace;
-	FT_Face m_aFallbackFaces[MAX_FACES];
+	msdfgen::FontHandle *m_pDefaultFace;
+	msdfgen::FontHandle *m_pVariantFace;
+	msdfgen::FontHandle *m_apFallbackFaces[MAX_FACES];
 	int m_NumFallbackFaces;
 
-	FT_Face m_aFtFaces[MAX_FACES];
+	msdfgen::FontHandle *m_apFtFaces[MAX_FACES];
 	int m_NumFtFaces;
 
 	void InitTexture(int Width, int Height);
 	int FitGlyph(int Width, int Height, ivec2 *Position);
 	void UploadGlyph(int PosX, int PosY, int Width, int Height, const unsigned char *pData);
-	bool SetFaceByName(FT_Face *pFace, const char *pFamilyName);
-	int GetCharGlyph(int Chr, FT_Face *pFace);
+	bool SetFaceByName(msdfgen::FontHandle **ppFace, const char *pFamilyName);
+	int GetCharGlyph(int Chr, msdfgen::FontHandle **ppFace);
 public:
-	CGlyphMap(IGraphics *pGraphics, FT_Library FtLibrary);
+	CGlyphMap(IGraphics *pGraphics);
 	~CGlyphMap();
 
 	IGraphics::CTextureHandle GetTexture() { return m_Texture; }
-	FT_Face GetDefaultFace() { return m_DefaultFace; };
-	int AddFace(FT_Face Face);
+	msdfgen::FontHandle *GetDefaultFace() { return m_pDefaultFace; };
+	int AddFace(msdfgen::FontHandle *pFace);
 	void SetDefaultFaceByName(const char *pFamilyName);
 	void AddFallbackFaceByName(const char *pFamilyName);
 	void SetVariantFaceByName(const char *pFamilyName);
 	
 	bool RenderGlyph(CGlyph *pGlyph, bool Render);
 	CGlyph *GetGlyph(int Chr, bool Render);
-	vec2 Kerning(CGlyph *pLeft, CGlyph *pRight);
+	float Kerning(CGlyph *pLeft, CGlyph *pRight);
 
 	int NumTotalPages() { return m_NumTotalPages; }
 	void PagesAccessReset();
@@ -166,9 +168,9 @@ class CTextRender : public IEngineTextRender
 	// support regional variant fonts
 	int m_NumVariants;
 	int m_CurrentVariant;
-	CFontLanguageVariant *m_paVariants;
+	CFontLanguageVariant *m_apVariants;
 
-	FT_Library m_FTLibrary;
+	msdfgen::FreetypeHandle *m_pFT;
 
 	int LoadFontCollection(const void *pFilename, const void *pBuf, long FileSize);
 

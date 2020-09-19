@@ -129,7 +129,8 @@ static const GLchar *s_pFragmentMSDFShader120 =
 	"void main()\n"
 	"{\n"
 	"    float pxRange = 2.0;\n"
-	"    vec2 msdfUnit = pxRange/vec2(textureSize(s_Texture, 0));\n"
+	// TODO: texture size should not be hard-coded
+	"    vec2 msdfUnit = pxRange/vec2(1024);\n"
 	"    vec3 sample = texture2D(s_Texture, v_TexCoord.xy).rgb;\n"
 	"    float sigDist = median(sample.r, sample.g, sample.b) - 0.5;\n"
 	"    sigDist *= dot(msdfUnit, 0.5/fwidth(v_TexCoord.xy));\n"
