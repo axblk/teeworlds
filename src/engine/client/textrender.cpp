@@ -398,7 +398,7 @@ bool CGlyphMap::RenderGlyph(CGlyph *pGlyph, bool Render)
 		msdfgen::Vector2 ScaleVec = MSDFScale;
 
 		msdfgen::edgeColoringSimple(Shape, AngleThreshold);
-		msdfgen::generateMSDF(m_MSDF, Shape, 2, ScaleVec, Translate, ScanlinePass ? 0 : EdgeThreshold, OverlapSupport);
+		msdfgen::generateMSDF(m_MSDF, Shape, Range, ScaleVec, Translate, ScanlinePass ? 0 : EdgeThreshold, OverlapSupport);
 
 		if(ScanlinePass)
 		{
