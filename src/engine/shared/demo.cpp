@@ -6,8 +6,6 @@
 #include <engine/console.h>
 #include <engine/storage.h>
 
-#include <engine/shared/config.h>
-
 #include "compression.h"
 #include "datafile.h"
 #include "demo.h"
@@ -692,10 +690,6 @@ const char *CDemoPlayer::Load(class CConfig *pConfig, class IStorage *pStorage, 
 	// scan the file for interesting points
 	ScanFile();
 
-	// reset slice markers
-	pConfig->m_ClDemoSliceBegin = -1;
-	pConfig->m_ClDemoSliceEnd = -1;
-
 	// ready for playback
 	return 0;
 }
@@ -859,6 +853,12 @@ int CDemoPlayer::GetDemoType() const
 	return DEMOTYPE_INVALID;
 }
 
+bool CDemoPlayer::SaveSlice(const char *pOutput, int StartTick, int EndTick)
+{
+	return true;
+}
+
+/*
 void CDemoEditor::Init(const char *pNetVersion, class CSnapshotDelta *pSnapshotDelta, class IConsole *pConsole, class IStorage *pStorage)
 {
 	m_pNetVersion = pNetVersion;
@@ -867,7 +867,7 @@ void CDemoEditor::Init(const char *pNetVersion, class CSnapshotDelta *pSnapshotD
 	m_pStorage = pStorage;
 }
 
-void CDemoEditor::Slice(class CConfig *pConfig, const char *pDemo, const char *pDst, int StartTick, int EndTick)
+void CDemoEditor::Slice(const char *pDemo, const char *pDst, int StartTick, int EndTick)
 {
 	class CDemoPlayer DemoPlayer(m_pSnapshotDelta);
 	class CDemoRecorder DemoRecorder(m_pSnapshotDelta);
@@ -929,3 +929,4 @@ void CDemoEditor::OnDemoPlayerMessage(void *pData, int Size)
 	else if (m_SliceFrom == -1 || pInfo->m_Info.m_CurrentTick >= m_SliceFrom)
 		m_pDemoRecorder->RecordMessage(pData, Size);
 }
+*/

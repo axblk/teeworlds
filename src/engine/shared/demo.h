@@ -135,8 +135,11 @@ public:
 	const CPlaybackInfo *Info() const { return &m_Info; }
 	int IsPlaying() const { return m_File != 0; }
 	const CMapInfo *GetMapInfo() { return &m_MapInfo; };
+
+	bool SaveSlice(const char *pOutput, int StartTick, int EndTick);
 };
 
+/*
 class CDemoEditor : public IDemoEditor, public CDemoPlayer::IListener
 {
 	CDemoPlayer *m_pDemoPlayer;
@@ -157,5 +160,6 @@ public:
 	virtual void OnDemoPlayerSnapshot(void *pData, int Size);
 	virtual void OnDemoPlayerMessage(void *pData, int Size);
 };
+*/
 
 #endif

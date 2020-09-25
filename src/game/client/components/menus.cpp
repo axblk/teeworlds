@@ -70,6 +70,8 @@ CMenus::CMenus()
 	m_MenuActive = true;
 	m_SeekBarActivatedTime = 0;
 	m_SeekBarActive = true;
+	m_DemoSliceBegin = -1;
+	m_DemoSliceEnd = -1;
 	m_SkinModified = false;
 	m_KeyReaderWasActive = false;
 	m_KeyReaderIsActive = false;
@@ -96,7 +98,6 @@ CMenus::CMenus()
 	m_aFilterString[0] = 0;
 
 	m_ActiveListBox = ACTLB_NONE;
-	m_DemoPlayerState = DEMOPLAYER_NONE;
 
 	m_PopupSelection = -2;
 }
@@ -1480,7 +1481,7 @@ int CMenus::Render()
 		s_SoundCheck = true;
 	}
 
-	if(m_Popup == POPUP_NONE)
+	if(m_Popup == POPUP_NONE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
 	{
 		if(m_MenuPage == PAGE_START && Client()->State() == IClient::STATE_OFFLINE)
 			RenderStartMenu(Screen);
@@ -1581,7 +1582,7 @@ int CMenus::Render()
 		// do overlay popups
 		DoPopupMenu();
 	}
-	else
+	else if(m_Popup != POPUP_NONE)
 	{
 		// render full screen popup
 		char aTitleBuf[128];
@@ -1620,6 +1621,10 @@ int CMenus::Render()
 			pTitle = Localize("Rename demo");
 			pExtraText = Localize("Are you sure you want to rename the demo?");
 			NumOptions = 6;
+		}
+		else if(m_Popup == POPUP_SLICE_DEMO)
+		{
+			pTitle = Localize("Save demo slice");
 		}
 		else if(m_Popup == POPUP_SAVE_SKIN)
 		{
@@ -1931,6 +1936,43 @@ int CMenus::Render()
 				}
 			}
 		}
+		else if(m_Popup == POPUP_SLICE_DEMO)
+		{
+			Box.HSplitTop(27.0f, 0, &Box);
+
+			CUIRect EditBox;
+			//Box.HSplitBottom(Box.h/2.0f, 0, &Box);
+			Box.HSplitTop(20.0f, &EditBox, &Box);
+
+			static float s_OffsetSliceDemo = 0.0f;
+			DoEditBoxOption(m_aCurrentDemoFile, m_aCurrentDemoFile, sizeof(m_aCurrentDemoFile), &EditBox, Localize("Output name"), ButtonWidth, &s_OffsetSliceDemo);
+
+			// buttons
+			CUIRect Ok, Abort;
+			BottomBar.VSplitMid(&Abort, &Ok, SpacingW);
+
+			static CButtonContainer s_ButtonAbort;
+			if(DoButton_Menu(&s_ButtonAbort, Localize("Abort"), 0, &Abort) || m_EscapePressed)
+				m_Popup = POPUP_NONE;
+
+			static CButtonContainer s_ButtonSave;
+			if(DoButton_Menu(&s_ButtonSave, Localize("Save"), !m_aCurrentDemoFile[0], &Ok) || m_EnterPressed)
+			{
+				if(str_comp(m_lDemos[m_DemolistSelectedIndex].m_aFilename, m_aCurrentDemoFile) == 0)
+				{
+					PopupMessage(Localize("Error"), Localize("Please use a different name"), Localize("Ok"), POPUP_SLICE_DEMO);
+				}
+				else
+				{
+					char aPath[512];
+					str_format(aPath, sizeof(aPath), "%s/%s", m_aCurrentDemoFolder, m_aCurrentDemoFile);
+					bool Error = !DemoPlayer()->SaveSlice(aPath, m_DemoSliceBegin, m_DemoSliceEnd);
+
+					const char *pInfoStr = Error ? Localize("Failed to save demo slice") : Localize("Successfully saved demo slice");
+					PopupMessage(Error ? Localize("Error") : pTitle, pInfoStr, Localize("Ok"));
+				}
+			}
+		}
 		else if(m_Popup == POPUP_SAVE_SKIN)
 		{
 			Box.HSplitTop(24.0f, 0, &Box);
@@ -2121,6 +2163,11 @@ bool CMenus::OnInput(IInput::CEvent e)
 void CMenus::OnConsoleInit()
 {
 	CUIElementBase::Init(this);
+
+	Console()->Register("demo_slice_start", "", CFGFLAG_CLIENT, Con_DemoSliceBegin, this, "Set demo slice start to the current position");
+	Console()->Register("demo_slice_end", "", CFGFLAG_CLIENT, Con_DemoSliceEnd, this, "Set demo slice end to the current position");
+
+	Console()->Chain("play", ConchainResetDemoSlice, this);
 }
 
 void CMenus::OnShutdown()
@@ -2221,8 +2268,7 @@ void CMenus::OnRender()
 	UI()->Update(MouseX, MouseY, MouseX*3.0f, MouseY*3.0f);
 
 	// render
-	if(Client()->State() != IClient::STATE_DEMOPLAYBACK)
-		Render();
+	Render();
 
 	// render cursor
 	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_CURSOR].m_Id);
@@ -2266,7 +2312,7 @@ bool CMenus::CheckHotKey(int Key) const
 
 bool CMenus::IsBackgroundNeeded() const
 { 
-	return !m_pClient->m_InitComplete || (Client()->State() != IClient::STATE_ONLINE && !m_pClient->m_pMapLayersBackGround->MenuMapLoaded());
+	return !m_pClient->m_InitComplete || (Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK && !m_pClient->m_pMapLayersBackGround->MenuMapLoaded());
 }
 
 void CMenus::RenderBackground(float Time)

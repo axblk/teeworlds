@@ -290,6 +290,7 @@ private:
 		POPUP_LANGUAGE,
 		POPUP_COUNTRY,
 		POPUP_RENAME_DEMO,
+		POPUP_SLICE_DEMO,
 		POPUP_SAVE_SKIN,
 		POPUP_PASSWORD,
 		POPUP_QUIT,
@@ -319,10 +320,6 @@ private:
 		ACTLB_NONE=0,
 		ACTLB_LANG,
 		ACTLB_THEME,
-
-		// demo player states
-		DEMOPLAYER_NONE=0,
-		DEMOPLAYER_SLICE_SAVE,
 	};
 
 	int m_GamePage;
@@ -341,8 +338,6 @@ private:
 	bool m_SkinModified;
 	bool m_KeyReaderWasActive;
 	bool m_KeyReaderIsActive;
-	int m_DemoPlayerState;
-	char m_aDemoPlayerPopupHint[256];
 
 	// generic popups
 	typedef void (CMenus::*FPopupButtonCallback)();
@@ -554,10 +549,19 @@ private:
 	int m_DemolistStorageType;
 	int64 m_SeekBarActivatedTime;
 	bool m_SeekBarActive;
+	int m_DemoSliceBegin;
+	int m_DemoSliceEnd;
 
 	void DemolistOnUpdate(bool Reset);
 	void DemolistPopulate();
 	static int DemolistFetchCallback(const char *pName, time_t Date, int IsDir, int StorageType, void *pUser);
+
+	void SetDemoSlice(int Begin, int End);
+
+	static void Con_DemoSliceBegin(IConsole::IResult *pResult, void *pUserData);
+	static void Con_DemoSliceEnd(IConsole::IResult *pResult, void *pUserData);
+
+	static void ConchainResetDemoSlice(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 	// friends
 	class CFriendItem

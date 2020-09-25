@@ -59,6 +59,7 @@ public:
 	virtual void GetDemoName(char *pBuffer, int BufferSize) const = 0;
 	virtual bool GetDemoInfo(class IStorage *pStorage, const char *pFilename, int StorageType, CDemoHeader *pDemoHeader) const = 0;
 	virtual int GetDemoType() const = 0;
+	virtual bool SaveSlice(const char *pOutput, int StartTick, int EndTick) = 0;
 };
 
 class IDemoRecorder : public IInterface
@@ -69,14 +70,6 @@ public:
 	virtual bool IsRecording() const = 0;
 	virtual int Stop() = 0;
 	virtual int Length() const = 0;
-};
-
-class IDemoEditor : public IInterface
-{
-	MACRO_INTERFACE("demoeditor", 0)
-public:
-
-	virtual void Slice(class CConfig *pConfig, const char *pDemo, const char *pDst, int StartTick, int EndTick) = 0;
 };
 
 #endif

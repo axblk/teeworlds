@@ -36,71 +36,6 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 	const float Margins = 5.0f;
 
 	float TotalHeight;
-
-	// render popups
-	if(m_DemoPlayerState == DEMOPLAYER_SLICE_SAVE)
-	{
-		CUIRect Screen = *UI()->Screen();
-		CUIRect Box, Part;
-		Box = Screen;
-		Box.VMargin(150.0f, &Box);
-		Box.HMargin(150.0f, &Box);
-
-		// render the box
-		RenderTools()->DrawUIRect(&Box, vec4(0,0,0,0.5f), CUI::CORNER_ALL, 15.0f);
-
-		Box.HSplitTop(20.f, &Part, &Box);
-		Box.HSplitTop(24.f, &Part, &Box);
-		UI()->DoLabel(&Part, "Select a name", 24.f, CUI::ALIGN_CENTER);
-		Box.HSplitTop(20.f, &Part, &Box);
-		Box.HSplitTop(24.f, &Part, &Box);
-		Part.VMargin(20.f, &Part);
-		UI()->DoLabel(&Part, m_aDemoPlayerPopupHint, 24.f, CUI::ALIGN_LEFT);
-
-
-		CUIRect Label, TextBox, Ok, Abort;
-
-		Box.HSplitBottom(20.f, &Box, &Part);
-		Box.HSplitBottom(24.f, &Box, &Part);
-		Part.VMargin(80.0f, &Part);
-
-		Part.VSplitMid(&Abort, &Ok);
-
-		Ok.VMargin(20.0f, &Ok);
-		Abort.VMargin(20.0f, &Abort);
-
-		static CButtonContainer s_ButtonAbort;
-		if(DoButton_Menu(&s_ButtonAbort, Localize("Abort"), 0, &Abort) || m_EscapePressed)
-			m_DemoPlayerState = DEMOPLAYER_NONE;
-
-		static CButtonContainer s_ButtonOk;
-		if(DoButton_Menu(&s_ButtonOk, Localize("Ok"), 0, &Ok) || m_EnterPressed)
-		{
-			if(str_comp(m_lDemos[m_DemolistSelectedIndex].m_aFilename, m_aCurrentDemoFile) == 0)
-				str_copy(m_aDemoPlayerPopupHint, "Please use a different name", sizeof(m_aDemoPlayerPopupHint));
-			else
-			{
-				m_DemoPlayerState = DEMOPLAYER_NONE;
-
-				char aPath[512];
-				str_format(aPath, sizeof(aPath), "%s/%s", m_aCurrentDemoFolder, m_aCurrentDemoFile);
-				Client()->DemoSlice(aPath, Config());
-			}
-		}
-
-		Box.HSplitBottom(60.f, &Box, &Part);
-		Box.HSplitBottom(24.f, &Box, &Part);
-
-		Part.VSplitLeft(60.0f, 0, &Label);
-		Label.VSplitLeft(120.0f, 0, &TextBox);
-		TextBox.VSplitLeft(20.0f, 0, &TextBox);
-		TextBox.VSplitRight(60.0f, &TextBox, 0);
-		UI()->DoLabel(&Label, Localize("New name:"), 18.0f, CUI::ALIGN_LEFT);
-		static float Offset = 0.0f;
-		DoEditBox(&Offset, &TextBox, m_aCurrentDemoFile, sizeof(m_aCurrentDemoFile), 12.0f, &Offset);
-
-	}
-
 	if(m_MenuActive)
 		TotalHeight = SeekBarHeight+ButtonbarHeight+NameBarHeight+Margins*3;
 	else
@@ -183,9 +118,9 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 
 		// draw slice markers
 		// begin
-		if(Config()->m_ClDemoSliceBegin != -1)
+		if(m_DemoSliceBegin != -1)
 		{
-			float Ratio = (Config()->m_ClDemoSliceBegin-pInfo->m_FirstTick) / (float)TotalTicks;
+			float Ratio = (m_DemoSliceBegin - pInfo->m_FirstTick) / (float)TotalTicks;
 			Graphics()->TextureClear();
 			Graphics()->QuadsBegin();
 			Graphics()->SetColor(1.0f, 0.0f, 0.0f, 1.0f);
@@ -195,9 +130,9 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 		}
 
 		// end
-		if(Config()->m_ClDemoSliceEnd != -1)
+		if(m_DemoSliceEnd != -1)
 		{
-			float Ratio = (Config()->m_ClDemoSliceEnd-pInfo->m_FirstTick) / (float)TotalTicks;
+			float Ratio = (m_DemoSliceEnd - pInfo->m_FirstTick) / (float)TotalTicks;
 			Graphics()->TextureClear();
 			Graphics()->QuadsBegin();
 			Graphics()->SetColor(1.0f, 0.0f, 0.0f, 1.0f);
@@ -393,14 +328,14 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 		ButtonBar.VSplitLeft(ButtonbarHeight, &Button, &ButtonBar);
 		static CButtonContainer s_SliceBeginButton;
 		if(DoButton_SpriteID(&s_SliceBeginButton, IMAGE_DEMOSLICE, SPRITE_DEMOBUTTON_SLICE_BEGIN, false, &Button, CUI::CORNER_ALL))
-			Client()->DemoSliceBegin();
+			SetDemoSlice(pInfo->m_CurrentTick, m_DemoSliceEnd);
 
 		// slice end button
 		ButtonBar.VSplitLeft(Margins, 0, &ButtonBar);
 		ButtonBar.VSplitLeft(ButtonbarHeight, &Button, &ButtonBar);
 		static CButtonContainer s_SliceEndButton;
 		if(DoButton_SpriteID(&s_SliceEndButton, IMAGE_DEMOSLICE, SPRITE_DEMOBUTTON_SLICE_END, false, &Button, CUI::CORNER_ALL))
-			Client()->DemoSliceEnd();
+			SetDemoSlice(m_DemoSliceBegin, pInfo->m_CurrentTick);
 
 		// slice save button
 		ButtonBar.VSplitLeft(Margins, 0, &ButtonBar);
@@ -408,9 +343,17 @@ void CMenus::RenderDemoPlayer(CUIRect MainView)
 		static CButtonContainer s_SliceSaveButton;
 		if(DoButton_SpriteID(&s_SliceSaveButton, IMAGE_FILEICONS, SPRITE_FILE_DEMO2, false, &Button, CUI::CORNER_ALL))
 		{
-			str_copy(m_aCurrentDemoFile, m_lDemos[m_DemolistSelectedIndex].m_aFilename, sizeof(m_aCurrentDemoFile));
-			m_aDemoPlayerPopupHint[0] = '\0';
-			m_DemoPlayerState = DEMOPLAYER_SLICE_SAVE;
+			SetActive(true);
+			if(m_DemoSliceEnd > m_DemoSliceBegin)
+			{
+				str_copy(m_aCurrentDemoFile, m_lDemos[m_DemolistSelectedIndex].m_aFilename, sizeof(m_aCurrentDemoFile));
+				m_Popup = POPUP_SLICE_DEMO;
+			}
+			else
+			{
+				SetActive(true);
+				PopupMessage(Localize("Error"), Localize("No demo slice selected"), Localize("Ok"));
+			}
 		}
 
 		// close button
@@ -810,6 +753,8 @@ void CMenus::RenderDemoList(CUIRect MainView)
 				else
 				{
 					UI()->SetActiveItem(0);
+					m_DemoSliceBegin = -1;
+					m_DemoSliceEnd = -1;
 					return;
 				}
 			}
@@ -899,4 +844,43 @@ float CMenus::RenderDemoDetails(CUIRect View)
 
 	//unused
 	return 0.0f;
+}
+
+void CMenus::SetDemoSlice(int Begin, int End)
+{
+	const IDemoPlayer::CInfo *pInfo = DemoPlayer()->BaseInfo();
+
+	if(Begin < pInfo->m_FirstTick || Begin > pInfo->m_LastTick)
+		Begin = -1;
+
+	if(End < pInfo->m_FirstTick || End > pInfo->m_LastTick)
+		End = -1;
+
+	if(Begin != -1 && End != -1 && Begin > End)
+		tl_swap(Begin, End);
+
+	m_DemoSliceBegin = Begin;
+	m_DemoSliceEnd = End;
+}
+
+void CMenus::Con_DemoSliceBegin(IConsole::IResult *pResult, void *pUserData)
+{
+	CMenus *pSelf = (CMenus *)pUserData;
+	const IDemoPlayer::CInfo *pInfo = pSelf->DemoPlayer()->BaseInfo();
+	pSelf->SetDemoSlice(pInfo->m_CurrentTick, pSelf->m_DemoSliceEnd);
+}
+
+void CMenus::Con_DemoSliceEnd(IConsole::IResult *pResult, void *pUserData)
+{
+	CMenus *pSelf = (CMenus *)pUserData;
+	const IDemoPlayer::CInfo *pInfo = pSelf->DemoPlayer()->BaseInfo();
+	pSelf->SetDemoSlice(pSelf->m_DemoSliceBegin, pInfo->m_CurrentTick);
+}
+
+void CMenus::ConchainResetDemoSlice(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
+{
+	pfnCallback(pResult, pCallbackUserData);
+	CMenus *pMenus = static_cast<CMenus *>(pUserData);
+	pMenus->m_DemoSliceBegin = -1;
+	pMenus->m_DemoSliceEnd = -1;
 }
