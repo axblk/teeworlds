@@ -55,6 +55,19 @@ public:
 		virtual void OnDemoPlayerMessage(void *pData, int Size) = 0;
 	};
 
+	class CSliceRecorder : public IListener
+	{
+	public:
+		int m_SliceFrom;
+		int m_SliceTo;
+
+		CDemoRecorder m_DemoRecorder;
+		CDemoPlayer *m_pDemoPlayer;
+
+		void OnDemoPlayerSnapshot(void *pData, int Size);
+		void OnDemoPlayerMessage(void *pData, int Size);
+	};
+
 	struct CPlaybackInfo
 	{
 		CDemoHeader m_Header;
@@ -109,6 +122,7 @@ private:
 	void DoTick();
 	void ScanFile();
 	int NextFrame();
+	int SetTick(int WantedTick, int StartKeyframe);
 
 public:
 
@@ -130,35 +144,12 @@ public:
 	const char *GetDemoFileName() { return m_aFilename; };
 	int GetDemoType() const;
 
-	int Update(bool RealTime=true);
+	int Update();
 
 	const CPlaybackInfo *Info() const { return &m_Info; }
 	int IsPlaying() const { return m_File != 0; }
 
 	bool SaveSlice(const char *pOutput, int StartTick, int EndTick);
 };
-
-/*
-class CDemoEditor : public IDemoEditor, public CDemoPlayer::IListener
-{
-	CDemoPlayer *m_pDemoPlayer;
-	CDemoRecorder *m_pDemoRecorder;
-	IConsole *m_pConsole;
-	IStorage *m_pStorage;
-	class CSnapshotDelta *m_pSnapshotDelta;
-	const char *m_pNetVersion;
-
-	bool m_Stop;
-	int m_SliceFrom;
-	int m_SliceTo;
-
-public:
-	virtual void Init(const char *pNetVersion, class CSnapshotDelta *pSnapshotDelta, class IConsole *pConsole, class IStorage *pStorage);
-	virtual void Slice(class CConfig *pConfig, const char *pDemo, const char *pDst, int StartTick, int EndTick);
-
-	virtual void OnDemoPlayerSnapshot(void *pData, int Size);
-	virtual void OnDemoPlayerMessage(void *pData, int Size);
-};
-*/
 
 #endif

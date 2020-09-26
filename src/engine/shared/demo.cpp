@@ -704,14 +704,19 @@ int CDemoPlayer::Play()
 
 int CDemoPlayer::SetPos(float Percent)
 {
+	// -5 because we have to have a current tick and previous tick when we do the playback
+	int WantedTick = m_Info.m_Info.m_FirstTick + (int)((m_Info.m_Info.m_LastTick-m_Info.m_Info.m_FirstTick)*Percent) - 5;
+	int Keyframe = m_Info.m_SeekablePoints * Percent;
+
+	return SetTick(WantedTick, Keyframe);
+}
+
+int CDemoPlayer::SetTick(int WantedTick, int StartKeyframe)
+{
 	if(!m_File)
 		return -1;
 
-	// -5 because we have to have a current tick and previous tick when we do the playback
-	int WantedTick = m_Info.m_Info.m_FirstTick + (int)((m_Info.m_Info.m_LastTick-m_Info.m_Info.m_FirstTick)*Percent) - 5;
-
-	int Keyframe = clamp((int)(m_Info.m_SeekablePoints*Percent), 0, m_Info.m_SeekablePoints-1);
-
+	int Keyframe = clamp(StartKeyframe, 0, m_Info.m_SeekablePoints-1);;
 	// get correct key frame
 	if(m_pKeyFrames[Keyframe].m_Tick < WantedTick)
 		while(Keyframe < m_Info.m_SeekablePoints-1 && m_pKeyFrames[Keyframe].m_Tick < WantedTick)
@@ -741,7 +746,7 @@ void CDemoPlayer::SetSpeed(float Speed)
 	m_Info.m_Info.m_Speed = Speed;
 }
 
-int CDemoPlayer::Update(bool RealTime)
+int CDemoPlayer::Update()
 {
 	int64 Now = time_get();
 	int64 Deltatime = Now-m_Info.m_LastUpdate;
@@ -758,7 +763,7 @@ int CDemoPlayer::Update(bool RealTime)
 		int64 CurtickStart = (m_Info.m_Info.m_CurrentTick)*Freq/SERVER_TICK_SPEED;
 
 		// break if we are ready
-		if(RealTime && CurtickStart > m_Info.m_CurrentTime)
+		if(CurtickStart > m_Info.m_CurrentTime)
 			break;
 
 		// do one more tick
@@ -845,78 +850,61 @@ int CDemoPlayer::GetDemoType() const
 
 bool CDemoPlayer::SaveSlice(const char *pOutput, int StartTick, int EndTick)
 {
+	CSliceRecorder Slice;
+	Slice.m_DemoRecorder.Init(m_pConsole, m_pStorage, m_pSnapshotDelta);
+	Slice.m_pDemoPlayer = this;
+	Slice.m_SliceFrom = StartTick;
+	Slice.m_SliceTo = EndTick;
+
+	unsigned MapSize = bytes_be_to_uint(m_Info.m_Header.m_aMapSize);
+	unsigned MapCrc = bytes_be_to_uint(m_Info.m_Header.m_aMapCrc);
+	if(Slice.m_DemoRecorder.Start(pOutput, m_Info.m_Header.m_aNetversion, m_Info.m_Header.m_aMapName, MapCrc, MapSize, m_Info.m_Header.m_aType) != 0)
+		return false;
+
+	// copy map data
+	unsigned char *pMapData = (unsigned char *)mem_alloc(MapSize, 1);
+	io_seek(m_File, sizeof(CDemoHeader), IOSEEK_START);
+	io_read(m_File, pMapData, MapSize);
+	Slice.m_DemoRecorder.InsertMapFromMem(pMapData, MapSize);
+	mem_free(pMapData);
+
+	// save current playback data
+	IListener *pListener = m_pListener;
+	bool Paused = m_Info.m_Info.m_Paused;
+	int PrevTick = m_Info.m_PreviousTick;
+
+	// move to slice start
+	int StartKeyframe = m_Info.m_SeekablePoints * ((float)(m_Info.m_Info.m_LastTick - m_Info.m_Info.m_FirstTick)) / (Slice.m_SliceFrom - m_Info.m_Info.m_FirstTick);
+	m_pListener = 0;
+	m_Info.m_Info.m_Paused = false;
+	SetTick(Slice.m_SliceFrom - 5, StartKeyframe);
+	m_pListener = &Slice;
+
+	while(IsPlaying() && !m_Info.m_Info.m_Paused && m_Info.m_Info.m_CurrentTick < Slice.m_SliceTo)
+		DoTick();
+
+	Slice.m_DemoRecorder.Stop();
+	
+	// restore playback data
+	StartKeyframe = m_Info.m_SeekablePoints * ((float)(m_Info.m_Info.m_LastTick - m_Info.m_Info.m_FirstTick)) / (PrevTick - m_Info.m_Info.m_FirstTick);
+	m_pListener = 0;
+	m_Info.m_Info.m_Paused = Paused;
+	SetTick(PrevTick, StartKeyframe);
+	m_pListener = pListener;
+
 	return true;
 }
 
-/*
-void CDemoEditor::Init(const char *pNetVersion, class CSnapshotDelta *pSnapshotDelta, class IConsole *pConsole, class IStorage *pStorage)
+void CDemoPlayer::CSliceRecorder::OnDemoPlayerSnapshot(void *pData, int Size)
 {
-	m_pNetVersion = pNetVersion;
-	m_pSnapshotDelta = pSnapshotDelta;
-	m_pConsole = pConsole;
-	m_pStorage = pStorage;
+	int CurTick = m_pDemoPlayer->BaseInfo()->m_CurrentTick;
+	if(CurTick >= m_SliceFrom && CurTick <= m_SliceTo)
+		m_DemoRecorder.RecordSnapshot(CurTick, pData, Size);
 }
 
-void CDemoEditor::Slice(const char *pDemo, const char *pDst, int StartTick, int EndTick)
+void CDemoPlayer::CSliceRecorder::OnDemoPlayerMessage(void *pData, int Size)
 {
-	class CDemoPlayer DemoPlayer(m_pSnapshotDelta);
-	class CDemoRecorder DemoRecorder(m_pSnapshotDelta);
-
-	m_pDemoPlayer = &DemoPlayer;
-	m_pDemoRecorder = &DemoRecorder;
-
-	m_pDemoPlayer->SetListener(this);
-
-	m_SliceFrom = StartTick;
-	m_SliceTo = EndTick;
-	m_Stop = false;
-
-	const char *pError = m_pDemoPlayer->Load(pConfig, m_pStorage, m_pConsole, pDemo, IStorage::TYPE_ALL, m_pNetVersion);
-	if (pError)
-		return;
-
-	const CDemoPlayer::CMapInfo *pMapInfo = m_pDemoPlayer->GetMapInfo();
-	SHA256_DIGEST Fake;
-	for(unsigned i = 0; i < sizeof(Fake.data); i++)
-	{
-		Fake.data[i] = 0xff;
-	}
-	if(m_pDemoRecorder->Start(m_pStorage, m_pConsole, pDst, m_pNetVersion, pMapInfo->m_aName, Fake, pMapInfo->m_Crc, "client", true) == -1)
-		return;
-
-	m_pDemoPlayer->Play();
-	const CDemoPlayer::CPlaybackInfo *pInfo = m_pDemoPlayer->Info();
-
-	while(m_pDemoPlayer->IsPlaying() && !m_Stop)
-	{
-		m_pDemoPlayer->Update(false);
-
-		pInfo = m_pDemoPlayer->Info();
-
-		if(pInfo->m_Info.m_Paused)
-			break;
-	}
-
-	m_pDemoRecorder->Stop();
+	int CurTick = m_pDemoPlayer->BaseInfo()->m_CurrentTick;
+	if(CurTick >= m_SliceFrom && CurTick <= m_SliceTo)
+		m_DemoRecorder.RecordMessage(pData, Size);
 }
-
-void CDemoEditor::OnDemoPlayerSnapshot(void *pData, int Size)
-{
-	const CDemoPlayer::CPlaybackInfo *pInfo = m_pDemoPlayer->Info();
-
-	if(m_SliceTo != -1 && pInfo->m_Info.m_CurrentTick > m_SliceTo)
-		m_Stop = true;
-	else if (m_SliceFrom == -1 || pInfo->m_Info.m_CurrentTick >= m_SliceFrom)
-		m_pDemoRecorder->RecordSnapshot(pInfo->m_Info.m_CurrentTick, pData, Size);
-}
-
-void CDemoEditor::OnDemoPlayerMessage(void *pData, int Size)
-{
-	const CDemoPlayer::CPlaybackInfo *pInfo = m_pDemoPlayer->Info();
-
-	if(m_SliceTo != -1 && pInfo->m_Info.m_CurrentTick > m_SliceTo)
-		m_Stop = true;
-	else if (m_SliceFrom == -1 || pInfo->m_Info.m_CurrentTick >= m_SliceFrom)
-		m_pDemoRecorder->RecordMessage(pData, Size);
-}
-*/
