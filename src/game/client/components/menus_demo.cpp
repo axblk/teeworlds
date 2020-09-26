@@ -461,7 +461,7 @@ bool CMenus::FetchHeader(CDemoItem *pItem)
 	{
 		char aBuffer[IO_MAX_PATH_LENGTH];
 		str_format(aBuffer, sizeof(aBuffer), "%s/%s", m_aCurrentDemoFolder, pItem->m_aFilename);
-		pItem->m_Valid = DemoPlayer()->GetDemoInfo(Storage(), aBuffer, pItem->m_StorageType, &pItem->m_Info);
+		pItem->m_Valid = DemoPlayer()->GetDemoInfo(aBuffer, pItem->m_StorageType, &pItem->m_Info);
 		pItem->m_InfosLoaded = true;
 	}
 	return pItem->m_Valid;
@@ -831,14 +831,12 @@ float CMenus::RenderDemoDetails(CUIRect View)
 
 		CUIRect ButtonRight;
 		Button.VSplitMid(&Button, &ButtonRight);
-		float Size = float((m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapSize[0]<<24) | (m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapSize[1]<<16) |
-							(m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapSize[2]<<8) | (m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapSize[3]))/1024.0f;
+		float Size = bytes_be_to_uint(m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapSize) / 1024.0f;
 		str_format(aBuf, sizeof(aBuf), Localize("%.3f KiB"), Size);
 		DoInfoBox(&Button, Localize("Size"), aBuf);
 
-		unsigned Crc = (m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapCrc[0]<<24) | (m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapCrc[1]<<16) |
-					(m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapCrc[2]<<8) | (m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapCrc[3]);
-		str_format(aBuf, sizeof(aBuf), "%08x", Crc);
+		unsigned MapCrc = bytes_be_to_uint(m_lDemos[m_DemolistSelectedIndex].m_Info.m_aMapCrc);
+		str_format(aBuf, sizeof(aBuf), "%08x", MapCrc);
 		DoInfoBox(&ButtonRight, Localize("Crc"), aBuf);
 	}
 

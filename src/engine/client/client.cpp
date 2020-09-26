@@ -235,7 +235,7 @@ void CSmoothTime::Update(CGraph *pGraph, int64 Target, int TimeLeft, int AdjustD
 	m_BadnessScore -= 1+m_BadnessScore/100;
 }
 
-CClient::CClient() : m_DemoPlayer(&m_SnapshotDelta), m_DemoRecorder(&m_SnapshotDelta)
+CClient::CClient()
 {
 	m_pEditor = 0;
 	m_pInput = 0;
@@ -1841,6 +1841,8 @@ void CClient::InitInterfaces()
 	m_ServerBrowser.Init(&m_ContactClient, m_pGameClient->NetVersion());
 	m_Friends.Init();
 	m_Blacklist.Init();
+	m_DemoPlayer.Init(m_pConsole, m_pStorage, &m_SnapshotDelta);
+	m_DemoRecorder.Init(m_pConsole, m_pStorage, &m_SnapshotDelta);
 }
 
 bool CClient::LimitFps()
@@ -2294,28 +2296,35 @@ void CClient::Con_RconAuth(IConsole::IResult *pResult, void *pUserData)
 
 const char *CClient::DemoPlayer_Play(const char *pFilename, int StorageType)
 {
-	int Crc;
-
 	Disconnect();
 	m_NetClient.ResetErrorString();
 
 	// try to start playback
 	m_DemoPlayer.SetListener(this);
 
-	const char *pError = m_DemoPlayer.Load(Config(), Storage(), m_pConsole, pFilename, StorageType, GameClient()->NetVersion());
+	const char *pError = m_DemoPlayer.Load(pFilename, StorageType, GameClient()->NetVersion());
 	if(pError)
 		return pError;
 
 	// load map
-	Crc = (m_DemoPlayer.Info()->m_Header.m_aMapCrc[0]<<24)|
-		(m_DemoPlayer.Info()->m_Header.m_aMapCrc[1]<<16)|
-		(m_DemoPlayer.Info()->m_Header.m_aMapCrc[2]<<8)|
-		(m_DemoPlayer.Info()->m_Header.m_aMapCrc[3]);
-	pError = LoadMapSearch(m_DemoPlayer.Info()->m_Header.m_aMapName, 0, Crc);
+	unsigned MapCrc = bytes_be_to_uint(m_DemoPlayer.Info()->m_Header.m_aMapCrc);
+	const char *pMapName = m_DemoPlayer.Info()->m_Header.m_aMapName;
+
+	pError = LoadMapSearch(pMapName, 0, MapCrc);
 	if(pError)
 	{
-		DisconnectWithReason(pError);
-		return pError;
+		char aMapFilename[IO_MAX_PATH_LENGTH];
+		FormatMapDownloadFilename(pMapName, 0, MapCrc, false, aMapFilename, sizeof(aMapFilename));
+
+		pError = m_DemoPlayer.ExtractMap(aMapFilename);
+		if(!pError)
+			pError = LoadMap(pMapName, aMapFilename, 0, MapCrc);
+
+		if(pError)
+		{
+			DisconnectWithReason(pError);
+			return pError;
+		}
 	}
 
 	GameClient()->OnConnected();
@@ -2366,7 +2375,21 @@ void CClient::DemoRecorder_Start(const char *pFilename, bool WithTimestamp)
 		}
 		else
 			str_format(aFilename, sizeof(aFilename), "demos/%s.demo", pFilename);
-		m_DemoRecorder.Start(Storage(), m_pConsole, aFilename, GameClient()->NetVersion(), m_aCurrentMap, m_CurrentMapSha256, m_CurrentMapCrc, "client");
+		
+		IOHANDLE MapFile = Storage()->OpenFile(m_aCurrentMapPath, IOFLAG_READ, IStorage::TYPE_ALL, 0, 0, CDataFileReader::CheckSha256, &m_CurrentMapSha256);
+		if(MapFile)
+		{
+			unsigned MapSize = io_length(MapFile);
+			m_DemoRecorder.Start(aFilename, GameClient()->NetVersion(), m_aCurrentMap, m_CurrentMapCrc, MapSize, "client");
+			m_DemoRecorder.InsertMapFromFile(MapFile);
+			io_close(MapFile);
+		}
+		else
+		{
+			char aBuf[256];
+			str_format(aBuf, sizeof(aBuf), "Unable to open mapfile '%s'", m_aCurrentMap);
+			m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "demorec/record", aBuf);
+		}
 	}
 }
 

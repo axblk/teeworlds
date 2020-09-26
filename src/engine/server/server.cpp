@@ -268,7 +268,7 @@ void CServer::CClient::Reset()
 	m_MapChunk = 0;
 }
 
-CServer::CServer() : m_DemoRecorder(&m_SnapshotDelta)
+CServer::CServer()
 {
 	m_TickSpeed = SERVER_TICK_SPEED;
 
@@ -1309,6 +1309,8 @@ void CServer::InitInterfaces(CConfig *pConfig, IConsole *pConsole, IGameServer *
 	m_pGameServer = pGameServer;
 	m_pMap = pMap;
 	m_pStorage = pStorage;
+
+	m_DemoRecorder.Init(m_pConsole, m_pStorage, &m_SnapshotDelta);
 }
 
 int CServer::Run()
@@ -1588,7 +1590,8 @@ void CServer::DemoRecorder_HandleAutoStart()
 		char aDate[20];
 		str_timestamp(aDate, sizeof(aDate));
 		str_format(aFilename, sizeof(aFilename), "demos/%s_%s.demo", "auto/autorecord", aDate);
-		m_DemoRecorder.Start(Storage(), m_pConsole, aFilename, GameServer()->NetVersion(), m_aCurrentMap, m_CurrentMapSha256, m_CurrentMapCrc, "server");
+		m_DemoRecorder.Start(aFilename, GameServer()->NetVersion(), m_aCurrentMap, m_CurrentMapCrc, m_CurrentMapSize, "server");
+		m_DemoRecorder.InsertMapFromMem(m_pCurrentMapData, m_CurrentMapSize);
 		if(Config()->m_SvAutoDemoMax)
 		{
 			// clean up auto recorded demos
@@ -1606,16 +1609,20 @@ bool CServer::DemoRecorder_IsRecording()
 void CServer::ConRecord(IConsole::IResult *pResult, void *pUser)
 {
 	CServer* pServer = (CServer *)pUser;
-	char aFilename[128];
-	if(pResult->NumArguments())
-		str_format(aFilename, sizeof(aFilename), "demos/%s.demo", pResult->GetString(0));
-	else
+	if(pServer->m_pCurrentMapData)
 	{
-		char aDate[20];
-		str_timestamp(aDate, sizeof(aDate));
-		str_format(aFilename, sizeof(aFilename), "demos/demo_%s.demo", aDate);
+		char aFilename[128];
+		if(pResult->NumArguments())
+			str_format(aFilename, sizeof(aFilename), "demos/%s.demo", pResult->GetString(0));
+		else
+		{
+			char aDate[20];
+			str_timestamp(aDate, sizeof(aDate));
+			str_format(aFilename, sizeof(aFilename), "demos/demo_%s.demo", aDate);
+		}
+		pServer->m_DemoRecorder.Start(aFilename, pServer->GameServer()->NetVersion(), pServer->m_aCurrentMap, pServer->m_CurrentMapCrc, pServer->m_CurrentMapSize, "server");
+		pServer->m_DemoRecorder.InsertMapFromMem(pServer->m_pCurrentMapData, pServer->m_CurrentMapSize);
 	}
-	pServer->m_DemoRecorder.Start(pServer->Storage(), pServer->Console(), aFilename, pServer->GameServer()->NetVersion(), pServer->m_aCurrentMap, pServer->m_CurrentMapSha256, pServer->m_CurrentMapCrc, "server");
 }
 
 void CServer::ConStopRecord(IConsole::IResult *pResult, void *pUser)

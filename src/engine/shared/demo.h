@@ -12,6 +12,8 @@
 class CDemoRecorder : public IDemoRecorder
 {
 	class IConsole *m_pConsole;
+	class IStorage *m_pStorage;
+
 	CHuffman m_Huffman;
 	IOHANDLE m_File;
 	int m_LastTickMarker;
@@ -21,13 +23,16 @@ class CDemoRecorder : public IDemoRecorder
 	class CSnapshotDelta *m_pSnapshotDelta;
 	int m_NumTimelineMarkers;
 	int m_aTimelineMarkers[MAX_TIMELINE_MARKERS];
+	bool m_SavedMap;
 
 	void WriteTickMarker(int Tick, int Keyframe);
 	void Write(int Type, const void *pData, int Size);
 public:
-	CDemoRecorder(class CSnapshotDelta *pSnapshotDelta);
+	void Init(class IConsole *pConsole, class IStorage *pStorage, class CSnapshotDelta *pSnapshotDelta);
 
-	int Start(class IStorage *pStorage, class IConsole *pConsole, const char *pFilename, const char *pNetversion, const char *pMap, SHA256_DIGEST MapSha256, unsigned MapCrc, const char *pType, bool Insecure = false);
+	int Start(const char *pFilename, const char *pNetversion, const char *pMap, unsigned MapCrc, unsigned MapSize, const char *pType);
+	void InsertMapFromFile(IOHANDLE MapFile);
+	void InsertMapFromMem(const void *pMapData, int MapSize);
 	int Stop();
 	void AddDemoMarker();
 
@@ -68,13 +73,6 @@ public:
 		float m_TickTime;
 	};
 
-	struct CMapInfo
-	{
-		char m_aName[128];
-		int m_Crc;
-		int m_Size;
-	};
-
 private:
 	IListener *m_pListener;
 
@@ -93,12 +91,13 @@ private:
 	};
 
 	class IConsole *m_pConsole;
+	class IStorage *m_pStorage;
+
 	CHuffman m_Huffman;
 	IOHANDLE m_File;
 	char m_aFilename[256];
 	char m_aErrorMsg[256];
 	CKeyFrame *m_pKeyFrames;
-	CMapInfo m_MapInfo;
 
 	CPlaybackInfo m_Info;
 	int m_DemoType;
@@ -113,11 +112,12 @@ private:
 
 public:
 
-	CDemoPlayer(class CSnapshotDelta *m_pSnapshotDelta);
+	void Init(class IConsole *pConsole, class IStorage *pStorage, class CSnapshotDelta *pSnapshotDelta);
 
 	void SetListener(IListener *pListner);
 
-	const char *Load(class CConfig *pConfig, class IStorage *pStorage, class IConsole *pConsole, const char *pFilename, int StorageType, const char *pNetversion);
+	const char *Load(const char *pFilename, int StorageType, const char *pNetversion);
+	const char *ExtractMap(const char *pMapFilename);
 	int Play();
 	void Pause();
 	void Unpause();
@@ -126,7 +126,7 @@ public:
 	int SetPos(float Percent);
 	const CInfo *BaseInfo() const { return &m_Info.m_Info; }
 	void GetDemoName(char *pBuffer, int BufferSize) const;
-	bool GetDemoInfo(class IStorage *pStorage, const char *pFilename, int StorageType, CDemoHeader *pDemoHeader) const;
+	bool GetDemoInfo(const char *pFilename, int StorageType, CDemoHeader *pDemoHeader) const;
 	const char *GetDemoFileName() { return m_aFilename; };
 	int GetDemoType() const;
 
@@ -134,7 +134,6 @@ public:
 
 	const CPlaybackInfo *Info() const { return &m_Info; }
 	int IsPlaying() const { return m_File != 0; }
-	const CMapInfo *GetMapInfo() { return &m_MapInfo; };
 
 	bool SaveSlice(const char *pOutput, int StartTick, int EndTick);
 };
